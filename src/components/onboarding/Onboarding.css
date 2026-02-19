@@ -1,0 +1,239 @@
+/* Basic layout for onboarding pages to match provided screenshot */
+.onboarding-container{
+  display:flex;
+  min-height:100vh;
+  font-family: 'Inter', sans-serif;
+  background: #fff;
+  overflow-x: hidden; /* prevent horizontal scrolling caused by decorative backgrounds */
+}
+.onboarding-steps{
+  width:300px;
+  /* solid purple background for the whole sidebar column */
+  background: #E9EBFD; /* light purple */
+  padding:28px;
+  box-sizing:border-box;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  /* make the sidebar fill the viewport height so the purple runs full-length */
+  min-height:100vh;
+  margin:0;
+}
+.onboarding-steps .logo{ font-weight:700; margin-bottom:18px; font-size:14px }
+.onboarding-steps ol{ list-style:none; padding:14px; margin:0; width:100%; /* purple -> blue gradient matching design */ background: linear-gradient(180deg,#DDD7FF 0%, #BEDFFF 100%); border-radius:18px }
+.onboarding-steps li{ padding:14px; margin-bottom:12px; border-radius:8px; text-align:left; display:flex; align-items:center; justify-content:space-between; position:relative; transition:all .18s ease }
+.onboarding-steps li::after{ content:''; position:absolute; left:28px; top:64px; width:2px; height:60px; background:linear-gradient(180deg,#dfe7ff,#f0ecff); opacity:0.7 }
+.onboarding-steps li:last-child::after{ display:none }
+.onboarding-steps .step-num{ width:44px; height:44px; min-width:44px; min-height:44px; border-radius:9999px; background:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; color:#111827; box-shadow:0 4px 10px rgba(16,24,40,0.06); font-size:14px; line-height:1; flex:0 0 44px }
+.onboarding-steps .step-info{ margin-left:12px; flex:1 }
+.onboarding-steps .step-title{ font-size:13px; color:#111827; transition:color .15s ease }
+.onboarding-steps .step-arrow{ color:#94a3b8; font-size:20px; transition:color .15s ease }
+.onboarding-steps li.active{
+  /* frosted glass effect */
+  background: rgba(255,255,255,0.28);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.44);
+  padding:12px 18px;
+  border-radius:12px;
+  box-shadow: 0 6px 18px rgba(16,24,40,0.04);
+}
+.onboarding-steps li.active .step-title{ color:#2e1550; font-weight:800 }
+.onboarding-steps li.active .step-arrow{ color:#9590a6 }
+.onboarding-steps li.active .step-num{ background: rgba(243,233,255,0.9); box-shadow:0 6px 18px rgba(16,24,40,0.06) }
+.onboarding-steps li.completed .step-num{ background:#f3f6ff; opacity:0.95 }
+
+.onboarding-main{ display:flex; flex:1; gap:36px; align-items:flex-start; justify-content:center; padding:48px 56px }
+.onboarding-main{ display:flex; flex:1; gap:36px; align-items:flex-start; justify-content:center; padding:48px 56px; position:relative }
+/* center the card visually on top of the patterned background */
+.onboarding-card{ width:600px; background:#fff; border-radius:18px; padding:28px 28px 32px; box-shadow:0 12px 40px rgba(16,24,40,0.08); position:relative; margin:0; z-index:3; }
+.onboarding-card h2{ margin:0 0 6px 0; font-size:1.45rem; font-weight:800; color:#2e1550 }
+.onboarding-card .muted{ color:#6b7280; margin-bottom:18px; font-size:0.95rem }
+.onboarding-form{ display:flex; flex-direction:column; gap:7px }
+.onboarding-form label{ font-weight:700; font-size:13px; color:#111827 }
+.onboarding-form input{ padding:7px; border:1px solid #eef2f6; border-radius:8px; background:#fff; color:#374151 }
+.onboarding-form input::placeholder{ color:#cbd5e1 }
+.onboarding-form input::-webkit-input-placeholder{ color:#cbd5e1 }
+.onboarding-form input::-moz-placeholder{ color:#cbd5e1 }
+.onboarding-form input:-ms-input-placeholder{ color:#cbd5e1 }
+.onboarding-form input:-moz-placeholder{ color:#cbd5e1 }
+.onboarding-form textarea::placeholder{ color:#cbd5e1 }
+.onboarding-form textarea::-webkit-input-placeholder{ color:#cbd5e1 }
+.onboarding-form textarea::-moz-placeholder{ color:#cbd5e1 }
+.onboarding-form textarea:-ms-input-placeholder{ color:#cbd5e1 }
+.onboarding-form textarea:-moz-placeholder{ color:#cbd5e1 }
+.onboarding-form select{ appearance:none; -webkit-appearance:none; -moz-appearance:none; padding:10px 40px 10px 10px; border:1px solid #eef2f6; border-radius:8px; background:#fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='%23cbd5e1' d='M6 8L0 0h12z'/></svg>") no-repeat right 12px center; background-size:12px 8px; color:#374151 }
+.onboarding-form select:focus{ outline:none; box-shadow:0 0 0 3px rgba(37,99,235,0.08); border-color:#c7d2fe }
+.onboarding-form select:invalid{ color:#cbd5e1 }
+.onboarding-form select option[value=""]{ color:#cbd5e1 }
+
+/* Ensure options and selected text use the same dark color as inputs
+  but keep placeholder/disabled options light grey. Some browsers
+  don't let us style <option> consistently, so add explicit rules. */
+.onboarding-form select option{ color:#374151 }
+.onboarding-form select option[disabled]{ color:#cbd5e1 }
+
+.onboarding-form .field-note{ font-size:12px; color:#cbd5e1; font-weight:400 }
+.field-note .fetch-btn { color: #2563eb!important; cursor: pointer; text-decoration: underline;}
+.onboarding-form .row{ display:flex; gap:12px }
+.onboarding-form .row .col{ flex:1 }
+.divider-line{ height:1px; background:#eef2f7; margin:12px 0 12px 0 }
+.onboarding-actions{ display:flex; gap:12px; margin-top:18px; align-items:center }
+.btn{ padding:12px 20px; border-radius:10px; cursor:pointer; font-weight:700; display:inline-flex; align-items:center; justify-content:center }
+.onboarding-actions .btn-secondary{ flex:0 0 auto }
+.onboarding-actions .btn-primary{ background:#9ca3ad; color:#fff; border:none; flex:1 1 auto; min-width:0 }
+.onboarding-actions .btn-primary.enabled{ background:#2563eb }
+.btn-primary:disabled, .btn-primary[disabled]{ background:#d1d5db; color:#ffffff }
+.btn-secondary{ background:transparent; border:2px solid #e9dfff; color:#6b21a8; padding:10px 18px }
+.btn-secondary:disabled{ opacity:0.6 }
+
+/* upload box used in several onboarding steps */
+.upload-box{ border:1px dashed #e6e9f3; padding:22px; border-radius:8px; text-align:center; color:#6b7280; background:#fff }
+.upload-box small{ display:block; margin-top:8px; color:#cbd5e1 }
+
+/* MC tooltip button and subtext */
+.mc-info-btn{
+  background: transparent;
+  border: 1px solid #e6e9f3;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:700;
+  color:#374151;
+  cursor:help;
+  padding:0;
+}
+
+.mc-info-btn:focus, .mc-info-btn:hover{
+  background:#f8fafc;
+  outline:none;
+}
+
+.mc-subtext{
+  font-size:12px;
+  color:#6b7280;
+  margin-bottom:8px;
+}
+
+/* Tooltip using ::after on the button */
+.mc-info-btn{
+  position: relative;
+}
+.mc-info-btn::after{
+  content: "We’ll verify your FMCSA data automatically to speed up approval.";
+  position: absolute;
+  white-space: nowrap;
+  background: #111827;
+  color: #fff;
+  padding: 8px 10px;
+  border-radius:6px;
+  font-size:12px;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 40;
+}
+.mc-info-btn:hover::after, .mc-info-btn:focus::after{
+  opacity: 1;
+  transform: translateX(-50%) translateY(-4px);
+  pointer-events: auto;
+}
+
+/* Make tooltip wrap on narrow screens */
+@media (max-width: 480px) {
+  .mc-info-btn::after{ white-space: normal; max-width: 220px; text-align:center }
+}
+
+/* simple toggle switch */
+.switch{ display:inline-block }
+.switch input{ display:none }
+.switch-slider{ display:inline-block; width:46px; height:26px; background:#e6e9f3; border-radius:999px; position:relative; cursor:pointer; vertical-align:middle }
+.switch-slider::after{ content:''; position:absolute; left:4px; top:4px; width:18px; height:18px; background:#fff; border-radius:999px; box-shadow:0 4px 10px rgba(16,24,40,0.08); transition:transform .18s ease }
+.switch input:checked + .switch-slider{ background:#2563eb }
+.switch input:checked + .switch-slider::after{ transform:translateX(20px) }
+
+.onboarding-side{ width:420px }
+.onboarding-visual{ position:relative; border-radius:12px; overflow:hidden; min-height:540px; background: linear-gradient(180deg,#f8fafc,#f3f6ff) }
+.onboarding-visual .signup-bg{ position:absolute; inset:0; opacity:0.22; background-image:url('../assets/verification_bg.svg'); background-repeat:no-repeat; background-position:center; background-size:cover }
+.onboarding-visual .img-block{ padding:48px; display:flex; align-items:center; justify-content:center }
+.onboarding-visual img{ max-width:92%; border-radius:10px; box-shadow:0 8px 24px rgba(16,24,40,0.08) }
+.onboarding-visual .img-indicators{ display:flex; gap:12px; padding-left:28px; position:absolute; left:28px; bottom:28px; align-items:center }
+.onboarding-visual .dot{ width:10px; height:10px; border-radius:999px; background:rgba(255,255,255,0.6); transition:all .2s }
+.onboarding-visual .dot-active{ width:36px; height:10px; border-radius:8px; background:#fff }
+.onboarding-visual .visual-text{ position:absolute; right:28px; bottom:28px; color:#0f172a; text-align:right }
+.onboarding-visual h2{ margin:0 0 8px 0; font-size:1.2rem; color:#0f172a }
+.onboarding-visual ul{ margin:8px 0 0 0; padding:0; list-style:none }
+.onboarding-visual li{ margin-bottom:6px; font-size:13px; color:#111827 }
+
+/* Chat bubble position styles (matches screenshot) */
+.hero-chat-bubble{ position:fixed; right:24px; bottom:24px; z-index:999 }
+.hero-chat-bubble img{ width:48px; height:48px; border-radius:12px; box-shadow:0 6px 16px rgba(16,24,40,0.12) }
+
+/* Pattern background used on signup — scoped to onboarding so it behaves like the signup page */
+.onboarding-main .carrier-signup-pattern-bg,
+.onboarding-main .onboarding-pattern-bg{
+  position:absolute;
+  left:50%;
+  top:48%;
+  transform:translate(-50%, -50%) scale(1);
+  width:100%;
+  max-width:1600px;
+  height:auto;
+  opacity:100; /* slightly stronger so it's visible but subtle */
+  pointer-events:none;
+  z-index:1;
+  display:block;
+  filter: contrast(105%) saturate(90%);
+}
+
+/* Responsive: collapse sidebar and right visual on smaller screens */
+@media (max-width: 900px) {
+  .onboarding-steps { display:none }
+  .onboarding-side { display:none }
+  .onboarding-main { padding:64px 24px 24px; }
+  /* stack the form above the pattern and center it */
+  .onboarding-card{ position:relative; left:0; transform:translateY(-36px); top:0; width:100%; max-width:640px; margin:0 auto; z-index:6 }
+  .onboarding-card h2{ font-size:1.25rem }
+  .onboarding-form .row{ flex-direction:column }
+  .onboarding-form .row .col{ width:100% }
+  .onboarding-actions{ flex-direction:row }
+  .onboarding-actions .btn-secondary{ order:0 }
+  .onboarding-actions .btn-primary{ order:1 }
+  /* hide the right visual area but keep the patterned background centered behind the card */
+  .onboarding-visual{ display:none }
+  .onboarding-main .carrier-signup-pattern-bg,
+  .onboarding-main .onboarding-pattern-bg,
+  .onboarding-visual .signup-bg{
+    display:none !important;
+  }
+
+  /* Make inputs and upload boxes stretch full width on small screens */
+  .onboarding-form input,
+  .onboarding-form select,
+  .onboarding-form textarea {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .upload-box {
+    width: 100%;
+    padding: 18px;
+  }
+
+  /* Make action buttons stack on very small screens */
+  .onboarding-actions { gap: 12px; }
+  .onboarding-actions .btn-primary { flex: 1 1 0; min-width: 0 }
+  .onboarding-actions .btn-secondary { flex: 0 0 auto }
+  @media (max-width: 480px) {
+    .onboarding-actions { flex-direction: column-reverse; align-items: stretch; }
+    .onboarding-actions .btn-primary, .onboarding-actions .btn-secondary { width: 100%; }
+    .onboarding-card { padding: 20px; }
+  }
+}
+

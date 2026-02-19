@@ -1,0 +1,70 @@
+
+.sh-stats-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:12px 0;}
+.sh-stat-card{padding:14px 16px;border-radius:10px; background-color: #fff; justify-content: space-between; display: flex; flex-direction: row;}
+.dark-root .sh-stat-card{background-color: #2c2c2c; color:#f1f5f9;}
+
+@media (max-width:900px){
+    .sh-stats-row{grid-template-columns:repeat(3,1fr);}
+}
+
+@media (max-width:480px){
+    .sh-stats-row{grid-template-columns:repeat(1,1fr);}
+}
+
+.support-tickets-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+.support-ticket-filters{display:flex;gap:12px;align-items:center;}
+
+/* Small-screen header adjustments — placed after the base rule so it overrides correctly */
+@media (max-width:480px){
+    .support-tickets-header{display:flex;flex-direction:column;align-items:flex-start;gap:12px;justify-content:flex-start;text-align:left}
+}
+
+/* Reuse tasks layout sizing */
+.tasks-main{display:flex;gap:16px}
+.tasks-table-wrap{flex:1;padding:0;overflow-x:auto}
+.tasks-table{min-width:850px;width:100%;border-collapse:collapse}
+.tasks-table thead th{padding:12px;text-align:left;color:#64748b;font-size:13px}
+.tasks-table tbody td{padding:12px;border-bottom:1px solid rgba(255,255,255,0.03);font-size:14px}
+
+.suggestion-pill{background-color: #f3f3f31d;
+    border: 1px solid #d1d5db62;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.dark-root .suggestion-pill{
+    background-color: #3a3a3a53;
+    border: 1px solid #353535;
+}
+
+/* Ensure the card/container doesn't clip the scroll */
+.card.tickets-card{overflow:visible}
+
+@media (max-width:1000px){
+    .tasks-main{flex-direction:column}
+    .tasks-right{width:100%;order:2}
+    .tasks-table-wrap{order:1}
+}
+
+/* Communication card styles */
+.communication-card{background:var(--card-bg,#f7fafc);border-radius:10px;padding:18px;display:flex;align-items:flex-start;gap:16px;margin-bottom:16px;border:1px solid rgba(0,0,0,0.04)}
+.dark-root .communication-card{background:#1f2933;border-color:rgba(255,255,255,0.03)}
+.comm-avatar{width:44px;height:44px;border-radius:50%;background:#e6eef9;color:#0b1220;display:flex;align-items:center;justify-content:center;font-weight:700}
+.comm-title{font-weight:700;margin-bottom:6px}
+.comm-ticket{color:#94a3b8;font-weight:600;margin-left:8px;font-size:13px}
+.comm-text{background:transparent;padding:14px;border-radius:8px;margin-bottom:8px;color:var(--muted,#334155)}
+.comm-actions{display:flex;gap:8px}
+.comm-time{margin-left:auto;color:#94a3b8;font-size:13px}
+
+/* New alignment for mc communication top row */
+.mc-comm-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.mc-comm-left{display:flex;align-items:center;gap:12px}
+.mc-comm-time{color:#94a3b8;font-size:13px}
+.mc-dispatcher-avatar{width:36px;height:36px;border-radius:50%;object-fit:cover}
+.btn-accent{background:#06b6d4;color:#fff;padding:8px 12px;border-radius:8px;border:none}
+.btn-purple{background:#7c3aed;color:#fff;padding:8px 12px;border-radius:8px;border:none}
+
+@media (max-width:640px){
+    .communication-card{flex-direction:column;align-items:flex-start}
+    .comm-time{margin-left:0;margin-top:8px}
+}

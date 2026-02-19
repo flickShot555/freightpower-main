@@ -1,0 +1,16 @@
+.ca-root{ display:flex; flex-direction:column; gap:18px }
+.ca-panel{ padding:14px }
+.comp-aud{ font-weight:700; font-size:18px; margin:0 0 12px 0 }
+.ca-stats{ display:flex; gap:12px;}
+.ca-box{ background:#ffffff; padding:16px; border-radius:8px; flex:1; text-align:center; box-shadow:0 6px 18px rgba(2,6,23,0.04); border:1px solid #eef2f7 }
+.ca-support{ padding:14px }
+.user-cells{font-size: 14px; font-weight: 600;}
+.num-cd{ font-size: 20px; font-weight: 700; margin-top: 4px; color:#0b1720 }
+.num-desc{ font-weight: 500; font-size: 14px; }
+.num-row, .num-type, .num-date, .num-assigned{font-size: 14px;}
+@media (max-width: 468px){
+  .ca-stats{ flex-direction:column; }
+}
+
+.dark-root .ca-box{ background:#2c2c2c; border-color:#353535; color:#f1f5f9 }
+.dark-root .num-cd{ color:#fff }

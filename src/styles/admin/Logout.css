@@ -1,0 +1,7 @@
+.logout-root { display:flex; align-items:center; justify-content:center; padding:40px 0; }
+.logout-card { max-width:640px; text-align:center; padding:28px; border-radius:12px; border:1px solid #eef2f7; box-shadow:0 8px 24px rgba(15,23,42,0.06); }
+.logout-icon { font-size:36px; color:red; margin-bottom:12px; }
+.logout-card h3 { margin:6px 0 8px 0; font-size:20px; }
+.logout-card .muted { color:#64748b; font-size:14px; margin-bottom:18px; }
+.logout-actions { display:flex; gap:12px; justify-content:center; }
+.logout-actions .btn { min-width:120px; }

@@ -1,0 +1,12 @@
+
+.fb-stats{display:flex;gap:12px;margin-bottom:16px; display: grid;grid-template-columns: repeat(3, 1fr);}
+.fb-stat{flex:1;padding:12px;border-radius:12px;background:rgba(255,255,255,0.02); display: flex; justify-content: space-between;}
+.fb-num{font-weight:700;font-size:20px}
+
+@media (max-width: 768px) {
+    .fb-stats{grid-template-columns:repeat(2,1fr);}
+}
+
+@media (max-width: 480px) {
+    .fb-stats{grid-template-columns:repeat(1,1fr);}
+}

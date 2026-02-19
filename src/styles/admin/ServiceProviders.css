@@ -1,0 +1,42 @@
+/* pulse cards area */
+.sp-root{ padding:8px 0 }
+.sp-cards{ display:flex; gap:18px; align-items:stretch; margin-bottom:18px }
+.sp-card{ background:transparent; border-radius:12px; flex:1 }
+.sp-card-inner{ background:rgba(255,255,255,0.02); padding:18px; border-radius:12px; display:flex; justify-content:space-between; align-items:center; }
+.dark-root .sp-card-inner{ background:#1f2933 }
+.sp-card-left{ display:flex; align-items:center; gap:12px }
+.sp-icon{ width:44px; height:44px; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#fff }
+.sp-overview{margin-top:20px; font-weight:700; font-size:1.25rem}
+.dark-root .sp-overview{ color:#fff }
+.sp-value{ font-size:24px; font-weight:700 }
+.sp-label{ font-size:13px; color:#94a3b8 }
+.sp-meta{ color:#60a5fa; font-weight:600 }
+
+/* providers grid */
+.sp-providers{ margin-top:22px }
+.sp-providers-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:18px }
+.provider-card{ background:#fff; padding:18px; border-radius:12px; min-height:220px; display:flex; flex-direction:column; justify-content:space-between }
+.dark-root .provider-card{ background:#353535 }
+.pc-top{ display:flex; justify-content:space-between; align-items:center }
+.pc-icon{ width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; background-color: #f3f3f3;}
+.dark-root .pc-icon{ background-color: #3f3f3f; }
+.provider-card h4{ margin:8px 0; font-weight: 700; }
+.pc-desc{ font-size:13px; color:#94a3b8 }
+.pc-promo{ background:#f3f3f3; padding:8px; border-radius:8px; margin-top:10px; font-size:13px }
+.dark-root .pc-promo{ background:#3f3f3f; color:#d1d7db }
+.pc-meta{ margin-top:8px; font-size:12px; color:#94a3b8 }
+.pc-actions{ margin-top:12px; display:flex; gap:8px }
+.add-card{ border:2px dashed rgba(255,255,255,0.04); display:flex; align-items:center; justify-content:center }
+.add-inner{ text-align:center }
+.add-plus{ width:48px; height:48px; border-radius:8px; background:rgba(255,255,255,0.04); display:flex; align-items:center; justify-content:center; font-size:24px; margin:0 auto 8px }
+.add-text{ font-weight:700 }
+.add-sub{ font-size:13px; color:#94a3b8; margin-top:8px }
+
+@media (max-width:1100px){
+	.sp-providers-grid{ grid-template-columns:repeat(2,1fr) }
+}
+@media (max-width:640px){
+	.sp-providers-grid{ grid-template-columns:1fr }
+	.sp-cards{ flex-direction:column }
+}
+

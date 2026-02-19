@@ -1,0 +1,38 @@
+
+
+.footer-act-ss{
+  margin-top:12px;
+  font-size:13px;
+  font-weight:600;
+  color:#3B57A7;
+  cursor:pointer;
+}
+
+.dark-root .footer-act-ss{
+  color: #7FA4F6;
+}
+
+/* When the .sa-grid/.sa-card rules exist globally, we only need spacing tweaks here */
+.ss-grid {
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:16px;
+}
+
+.ai-card-actions-ss{
+    margin-top:16px;
+    display:flex;
+    gap:10px;
+    width: 100%;
+    flex-direction: column;
+}
+
+@media (max-width: 980px){
+  .ss-grid{grid-template-columns:repeat(2,1fr)}
+  .ai-card-actions-ss{flex-direction:row}
+}
+
+@media (max-width: 640px){
+  .ss-grid{grid-template-columns:1fr}
+  .ai-card-actions-ss{flex-direction:column;}
+}

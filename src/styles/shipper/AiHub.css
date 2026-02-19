@@ -1,0 +1,65 @@
+
+.ffahub-header{ display:flex; justify-content:space-between; align-items:center }
+.ffahub-controls{ display:flex; gap:12px; align-items:center }
+
+.ffahub-grid{ display:grid; grid-template-columns: 1fr 320px; gap:18px; margin-top:16px }
+.ffahub-left{ display:flex; flex-direction:column; gap:12px }
+.ffahub-topcards{ display:grid; grid-template-columns: repeat(4,1fr); gap:12px }
+.ffahub-card-ai{ padding:12px; border-radius:10px; border:1px solid #eef2f7; background:#fff; display:flex; flex-direction:column; gap:8px; box-shadow: 0 6px 18px rgba(15,23,42,0.03) }
+.dark-root .ffahub-card-ai{ background:#2c2c2c; border-color:#353535; box-shadow: 0 6px 18px rgba(0,0,0,0.2) }
+.ffahub-card-head{ display:flex; justify-content:space-between; align-items:center }
+.ffahub-icon{ width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; background-color: #f3f3f3; }
+.dark-root .ffahub-icon{ background-color: #353535; }
+.ffahub-card .card-number{ font-size:22px; font-weight:800 }
+.attention-icon{ background:#fffbeb; color:#f97316 }
+.alerts-icon{ background:#fff7ed; color:#f59e0b }
+.suggestions-icon{ background:#eef6ff; color:#06b6d4 }
+.ffahub-badge{ background:#fff; color:#0b1720; padding:6px 8px; border-radius:999px; font-weight:700; font-size:13px; box-shadow: 0 1px 0 rgba(15,23,42,0.04) }
+.block{ width:100% }
+.ffahub-card .card-title{ font-weight:700 }
+.ffahub-card .card-sub{ font-size:13px; color:#6b7280 }
+
+.ffahub-feed.card{ padding:14px }
+.feed-header h3{ margin:0 }
+.feed-list{ list-style:none; padding:0; margin:12px 0 0 0; display:flex; flex-direction:column; gap:12px }
+.feed-item{ display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px; border-radius:8px; background:#fff; border:1px solid #eef2f7 }
+.dark-root .feed-item{ background:#2c2c2c; border-color:#353535 }
+.feed-item .feed-title{ display:block }
+.feed-item button{ margin-left:12px }
+.feed-item .feed-left{ display:flex; gap:12px; align-items:center }
+.feed-left .pill-icon{ width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; background:#fff8f7 }
+.dark-root .feed-left .pill-icon{ background:#353535; }
+.feed-title{ font-weight:600 }
+.feed-meta{ font-size:13px; color:#6b7280 }
+
+.ffahub-right{ padding:16px; border-radius:10px; border:1px solid #eef2f7 }
+.assistant-input{ display:flex; gap:8px; margin-bottom:12px }
+.assistant-input input{ flex:1; padding:8px 10px; border-radius:100px; border:1px solid #e5e7eb; font-size:14px; }
+.assistant-quick .pill{ background:#f8fafc; padding:8px; border-radius:6px; display:flex; margin-top:8px; font-size: 14px; }
+.dark-root .ffahub-right.card{ background:#1f2937; border-color:#353535; box-shadow: 0 6px 18px rgba(0,0,0,0.2) }
+.dark-root .assistant-input input{ background:#2c2c2c; border-color:#3c3c3c; color:#f9fafb }
+.dark-root .assistant-input input::placeholder{ color:#9ca3af }
+.dark-root .assistant-quick .pill{ background:#353535; color:#f9fafb; border:1px solid #3c3c3c }
+
+@media (max-width:900px){ .ffahub-grid{ grid-template-columns: 1fr } .ffahub-topcards{ grid-template-columns: 1fr } .ffahub-topcards { grid-template-columns: repeat(2,1fr) } .ffahub-right{ width:100% } }
+@media (max-width:480px){ .ffahub-topcards { grid-template-columns: 1fr } }
+
+/* Dark mode - ensure card variants are overridden in dark theme (higher specificity) */
+.dark-root .ffahub-topcards .ffahub-card,
+.dark-root .ffahub-card.pending,
+.dark-root .ffahub-card.attention,
+.dark-root .ffahub-card.alerts,
+.dark-root .ffahub-card.suggestions,
+.dark-root .ffahub-feed.card,
+.dark-root .ffahub-right.card {
+	background: #2c2c2c !important;
+	border-color: #374151 !important;
+	box-shadow: 0 6px 18px rgba(0,0,0,0.2) !important;
+	color: #d1d5db;
+}
+
+.dark-root .ffahub-card .card-sub,
+.dark-root .feed-meta,
+.dark-root .muted{ color: #9ca3af !important }
+
+.dark-root .ffahub-badge{ background:#353535; color:#d1d5db; box-shadow:none }

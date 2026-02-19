@@ -1,0 +1,117 @@
+/* Reuse the admin theme and card styles from AdminDashboard.css by aligning colors and behavior */
+.adm-analytics-root { color: inherit; }
+
+/* Header */
+.adm-analytics-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+}
+.adm-analytics-controls{ display:flex; gap:12px; align-items:center; }
+
+/* Select pill uses same visual treatment as search input/other pills */
+.adm-select-pill select{
+  border-radius:999px;
+  padding:8px 14px;
+  border:1px solid #E5E5E5;
+  background: #ffffff;
+  color:#0b1720;
+}
+.dark-root .adm-select-pill select{
+  background: #2c2c2c;
+  border-color: #353535;
+  color: #e6eef7;
+}
+
+/* Top metric cards - reusing adm-card class appearance */
+.adm-analytics-topcards{ display:grid; grid-template-columns: repeat(4, 1fr); gap:16px; margin-top:12px; }
+.adm-analytics-topcards .adm-card{ background: #fff; border:1px solid #eef2f6; color:#0b1720; padding:18px }
+.dark-root .adm-analytics-topcards .adm-card{ background:#2c2c2c; border-color:#353535; color:#f1f5f9 }
+.metric-title{ color:#64748b; font-size:13px; margin-bottom:8px; }
+.metric-value{ font-size:16px; font-weight:700; margin-bottom:6px; }
+.metric-sub{ color:#64748b; font-size:13px; }
+.dark-root .metric-title, .dark-root .metric-sub{ color:#fff }
+
+/* Icon in top-left of metric card */
+.metric-icon{ display:block; }
+.metric-icon-inner{ width:38px; height:38px; border-radius:12px; display:flex; align-items:center; justify-content:center; background:#f3f3f3 }
+.metric-icon-inner i{ font-size:15px }
+.dark-root .metric-icon-inner{ background:#353535 }
+
+/* Ensure metric cards layout in a single vertical column */
+.adm-analytics-topcards .metric-card{ padding:18px; display:flex; flex-direction:column; align-items:flex-start; gap:6px }
+
+/* Mid section layout */
+.adm-analytics-mid{ display:grid; grid-template-columns: repeat(3, 1fr); gap:16px; margin-top:18px }
+.adm-analytics-summary, .adm-tenant-health, .adm-integrations{ background:#fff; border:1px solid #eef2f6; padding:18px; border-radius:12px }
+.dark-root .adm-analytics-summary, .dark-root .adm-tenant-health, .dark-root .adm-integrations{ background:#2c2c2c; border-color:#353535 }
+.perf-grid{ display:grid; grid-template-columns: minmax(0,1fr) auto; gap:8px; align-items:center }
+.perf-bar{ background:#f1f6f8; height:12px; border-radius:8px; width:100%; overflow:hidden }
+.dark-root .perf-bar{ background:#1f2937 }
+.perf-fill{ background: linear-gradient(90deg,#10b981,#34d399); height:100%; border-radius:8px }
+.perf-row-label{ font-weight:600; font-size:14px; color:#0b1720; white-space:nowrap; overflow-wrap:normal; word-break:normal; hyphens:none; margin-right: 10px; }
+.dark-root .perf-row-label{ color:#f1f5f9 }
+.perf-row-value{ display:flex; align-items:center; gap:12px; justify-content:flex-end; min-width:0; font-size: 14px; }
+.perf-percent{  color:#0b1720; font-size: 14px; }
+.adm-analytics-summary, .adm-analytics-summary *{ min-width:0 }
+.dark-root .perf-percent{ color:#f1f5f9 }
+.perf-row-value{display: flex; flex-direction: column; align-items: flex-end;}
+
+/* Make rows align left label, right value in a single line on wide screens; stack on small screens */
+@media (min-width: 700px){
+  .perf-grid{ grid-template-columns: minmax(0,1fr) 320px }
+}
+@media (max-width: 700px){
+  .perf-grid{ grid-template-columns: 1fr; }
+  .perf-row-value{ justify-content:flex-start }
+}
+
+.tenant-header{ display:grid; grid-template-columns: 1fr 84px 64px 64px; gap:12px; align-items:center; margin-bottom:8px }
+.tenant-col-type, .tenant-col-verified, .tenant-col-risk, .tenant-col-issues{ color:#0b1720; font-size: 11px!important; }
+.tenant-grid{ display:flex; flex-direction:column; gap:12px }
+.tenant-row{ display:grid; grid-template-columns: 1fr 84px 64px 64px; gap:12px; align-items:center }
+.tenant-type{ font-weight:600; color:#0b1720; font-size: 14px; }
+.dark-root .tenant-type{ color:#e6eef7 }
+
+.tenant-verified, .tenant-risk, .tenant-issues{ display:flex; align-items:center; justify-content:center; gap:8px }
+.verified-number{  color:#06a156; padding:6px 8px; border-radius:8px; font-weight:700 }
+.risk-number{  color:#c27800; padding:6px 8px; border-radius:8px; font-weight:700 }
+.issue-number{ color:#c92a2a; padding:6px 8px; border-radius:8px; font-weight:700 }
+
+.integration-list{ display:flex; flex-direction:column; gap:8px }
+.integration-item{ display:flex; justify-content:space-between; padding:8px; border-radius:8px; background:transparent; font-weight: 600; font-size: 14px;}
+.small-muted{ color:#64748b; font-size:12px }
+.dark-root .small-muted{ color:#828a94 }
+
+/* Insights area */
+.adm-analytics-insights{ margin-top:18px }
+.adm-insights{ background:#f8fafc; padding:18px; border-radius:12px; border:1px solid #eef2f6 }
+.dark-root .adm-insights{ background:#051124; border-color:rgba(255,255,255,0.03) }
+.insight-cards{ display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; margin-top:12px }
+.insight-card{ background:#fff; padding:18px; border-radius:10px; border:1px solid #eef2f6 }
+.dark-root .insight-card{ background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-color: rgba(255,255,255,0.03) }
+.insight-card h4{ margin:0 0 12px 0; font-weight:700; font-size:16px;}
+.insight-card p{ margin:0 0 12px 0; color:#64748b }
+
+/* Responsive rules matching admin layout */
+@media (max-width: 1100px){
+  .adm-analytics-topcards{ grid-template-columns: repeat(2, 1fr) }
+  .adm-analytics-mid{ grid-template-columns: 1fr }
+  .insight-cards{ grid-template-columns: 1fr }
+}
+
+@media (max-width: 600px){
+  .adm-analytics-topcards{ grid-template-columns: 1fr }
+  .adm-analytics-header{ flex-direction:column; align-items:flex-start }
+  .adm-analytics-controls{ width:100%; justify-content:flex-start }
+}
+
+/* Extra small screens: reduce tenant column gaps and badge sizes */
+@media (max-width: 400px){
+  .tenant-header, .tenant-row{ grid-template-columns: 1fr 64px 56px 56px }
+  .tenant-grid{ gap:8px }
+  .verified-number, .risk-number, .issue-number{ padding:4px 6px; font-size:13px }
+  .tenant-type{ font-size:12px }
+  .tenant-col-type, .tenant-col-verified, .tenant-col-risk, .tenant-col-issues{ font-size:11px }
+}

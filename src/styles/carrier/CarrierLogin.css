@@ -1,0 +1,322 @@
+/* Login-specific overrides to keep layout aligned and isolated from signup styles */
+.carrier-login-page.carrier-signup-container {
+  /* ensure container padding is identical but can be adjusted here if needed */
+  padding: 1rem;
+}
+
+.carrier-login-page .carrier-signup-form-bg {
+  padding-top: 2.5rem;
+  padding-bottom: 2.5rem;
+  max-width: 440px;
+}
+
+/* Input icon wrapper */
+.carrier-login-page .input-with-icon .input-icon-wrap{
+  position: relative;
+  display: flex;
+  align-items: center;
+  overflow: visible; /* allow overlapping adornments */
+}
+/* left icon sits directly on the input (no decorative box) */
+.carrier-login-page .input-with-icon .input-icon-wrap i{
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-block;
+  color: #475569;
+  font-size: 16px;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.carrier-login-page .input-with-icon .input-icon-wrap input{
+  padding-left: 44px; /* smaller padding now that box is removed */
+  height: 48px;
+  border-radius: 10px;
+  background: #ffffff;
+  z-index: 2;
+}
+
+/* move the icon into the small box */
+
+/* position password toggle at right inside input */
+.carrier-login-page .password-toggle{ right: -8px; top: 50%; transform: translateY(-50%); }
+
+.carrier-login-page .password-toggle{
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid #eef2f7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-sizing: border-box;
+  z-index: 3;
+}
+.carrier-login-page .password-toggle i{ font-size: 14px; color: #475569; }
+
+.carrier-login-page .carrier-signup-field label{
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.carrier-login-page .input-with-icon .input-icon-wrap input,
+.carrier-login-page .carrier-signup-field input,
+.carrier-login-page .carrier-signup-field select{
+  width: 100%;
+  padding: 12px 12px;
+  border-radius: 10px;
+  border: 1px solid #e6eefb;
+  background: #fff;
+  box-sizing: border-box;
+  color: #0f172a;
+}
+
+/* enforce left padding so the icon doesn't overlap input text */
+.carrier-login-page .input-with-icon .input-icon-wrap input{
+  padding-left: 44px !important;
+}
+
+.carrier-login-page .carrier-signup-field input::placeholder{
+  color: #9aa4b2;
+}
+
+.carrier-login-page .remember-ctrl{
+  display:flex; align-items:center; gap:8px; color:#374151; font-size:0.95rem;
+}
+
+.carrier-login-page .carrier-signup-login-text{ margin-top:12px; }
+
+
+/* Password toggle */
+.carrier-login-page .password-toggle{
+  position: absolute;
+  right: 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+}
+.carrier-login-page .password-toggle:focus{ outline: none; }
+
+/* Remember / forgot row */
+.carrier-login-page .remember-row{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 12px;
+}
+.carrier-login-page .remember-ctrl input{ margin-right: 8px; }
+.carrier-login-page .forgot-link{ color: #2563eb; text-decoration: none; font-size: 0.95rem; }
+
+/* Primary login button tweaks to match mock */
+.carrier-login-page .carrier-signup-btn{
+  background: linear-gradient(180deg,#2563eb,#1d4ed8);
+  padding: 12px 18px;
+  border-radius: 8px;
+  width: 100%;
+  font-size: 1rem;
+}
+
+/* Divider with text */
+.carrier-login-page .divider{
+  margin: 18px 0;
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+.carrier-login-page .divider span{ background: transparent; padding: 0 12px; }
+
+/* Google sign-in button */
+.carrier-login-page .google-signin{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #111827;
+  cursor: pointer;
+  font-weight: 600;
+}
+.carrier-login-page .google-signin img{ display: inline-block; }
+/* Font Awesome google icon sizing */
+.carrier-login-page .google-signin .google-icon{
+  font-size: 18px;
+  margin-right: 8px;
+  color: #D44638; /* google red accent */
+}
+
+/* Right panel: keep image at top and info anchored consistently */
+.carrier-login-page .carrier-signup-right-bg-simple {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start; /* image at top */
+  min-height: 100vh;
+  position: relative; /* ensure child absolute svg can cover it */
+  background: transparent; /* remove white background so svg shows through */
+  padding: 0; /* ensure full-bleed */
+  /* make the right panel wider specifically for login */
+  flex: 0 0 40%;
+  width: 60%;
+  max-width: none;
+  min-width: 360px;
+  overflow: hidden;
+}
+
+/* Use the SVG as a background image to avoid internal whitespace inside the SVG file */
+.carrier-login-page .carrier-signup-right-bg-simple {
+  background-image: url('/src/assets/blue_bg_signup.svg');
+  background-size: cover;
+  background-position: left center;
+  background-repeat: no-repeat;
+}
+
+/* hide the inline svg img when using background-image to ensure full-bleed */
+.carrier-login-page .carrier-signup-bg-svg {
+  display: none;
+}
+
+.carrier-login-page .carrier-signup-img-block {
+  /* Make the rotating onboarding image occupy ~40% of the right panel height
+     with sensible min/max fallbacks so it never becomes too small or too tall. */
+  height: 40%; /* primary: 40% of parent container height */
+  min-height: 220px; /* don't shrink too small on very short viewports */
+  max-height: 420px; /* don't grow excessively on very tall viewports */
+  overflow: hidden;
+  border-top-left-radius: 1rem;
+  border-top-right-radius: 1rem;
+  margin-bottom: 0; /* remove gap between image and blue panel */
+  z-index: 3; /* place above svg */
+}
+
+.carrier-login-page .carrier-signup-img-top-simple {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 1rem 1rem 0 0;
+}
+
+/* Make the blue background svg fill the right panel fully */
+.carrier-login-page .carrier-signup-bg-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: none; /* override centering transform from global css */
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  z-index: 1;
+}
+
+/* Push the info panel to the bottom but keep consistent spacing */
+.carrier-login-page .carrier-signup-info-bottom {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding-bottom: 24px;
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.06) 100%); /* subtle overlay to match design */
+  z-index: 3; /* ensure text sits above svg */
+}
+
+/* Make indicators sit nicely above the text */
+.carrier-login-page .carrier-signup-img-indicators {
+  padding-left: 24px;
+  margin-bottom: 8px;
+}
+
+/* Ensure indicator dots are visible on the blue right-panel: bring to front and increase contrast */
+.carrier-login-page .carrier-signup-img-indicators{
+  position: relative;
+  z-index: 20; /* above svg/bg */
+  align-items: center;
+  padding-left: 24px;
+}
+.carrier-login-page .carrier-signup-dot,
+.carrier-login-page .carrier-signup-dot-active{
+  margin-bottom: 0; /* keep them vertically centered */
+}
+.carrier-login-page .carrier-signup-dot{
+  width: 8px;
+  height: 8px;
+  background: rgba(255,255,255,0.7);
+  border-radius: 999px;
+  opacity: 0.9;
+  transition: all 0.24s ease;
+}
+.carrier-login-page .carrier-signup-dot-active{
+  width: 28px;
+  height: 8px;
+  background: rgba(255,255,255,0.95);
+  border-radius: 8px;
+  opacity: 1;
+}
+
+/* Slightly adjust title size for login */
+.carrier-login-page .carrier-signup-title {
+  font-size: 1.6rem;
+}
+
+/* Make the onboarding title in the right panel smaller and responsive on the login page */
+.carrier-login-page .carrier-signup-info-simple h2 {
+  /* smaller than signup's heading; scales with viewport */
+  font-size: clamp(1.25rem, 2.2vw + 0.6rem, 2rem);
+  line-height: 1.1;
+  margin-bottom: 10px;
+}
+
+@media (max-width: 700px) {
+  .carrier-login-page .carrier-signup-info-simple h2 {
+    font-size: 1.1rem;
+    line-height: 1.15;
+  }
+}
+
+/* reduce subtitle spacing for tighter layout */
+.carrier-login-page .carrier-signup-subtitle {
+  margin-bottom: 20px;
+}
+
+/* Responsive rules specific to login page */
+@media (min-width: 1400px) {
+  .carrier-login-page .carrier-signup-right-bg-simple {
+    flex: 0 0 40%;
+    width: 62%;
+    background-size: cover;
+  }
+}
+
+@media (min-width: 1000px) and (max-width: 1399px) {
+  .carrier-login-page .carrier-signup-right-bg-simple {
+    flex: 0 0 40%;
+    width: 62%;
+    background-size: cover;
+  }
+}
+
+@media (max-width: 999px) {
+  /* hide right panel on small screens and let left form take full width */
+  .carrier-login-page .carrier-signup-right-bg-simple {
+    display: none !important;
+  }
+  .carrier-login-page .carrier-signup-left {
+    width: 100%;
+    min-height: 100vh;
+  }
+}

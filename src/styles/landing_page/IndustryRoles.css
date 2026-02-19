@@ -1,0 +1,337 @@
+/* Industry Roles Component Styles */
+
+.industry-roles-section {
+  padding: 5rem 0;
+  background-color: white
+}
+
+.industry-roles-container {
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+@media (min-width: 640px) {
+  .industry-roles-container {
+    padding: 0 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .industry-roles-container {
+    padding: 0 2rem;
+  }
+}
+
+.industry-roles-grid {
+  display: grid;
+  gap: 3rem;
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .industry-roles-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 1023px) {
+  .industry-roles-grid {
+    text-align: center;
+    justify-items: center;
+    padding: 2rem 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .industry-roles-grid {
+    padding: 1.5rem 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .industry-roles-grid {
+    padding: 1rem 0.5rem;
+  }
+}
+
+/* Left Container Section */
+.industry-roles-container-section {
+  position: relative;
+}
+
+.industry-roles-image {
+  width: 85%;
+  height: auto;
+  max-width: 600px;
+  border-radius: 0.75rem;
+}
+
+@media (max-width: 1024px) {
+  .industry-roles-container-section {
+    display: none;
+  }
+}
+
+.industry-roles-container-card {
+  background: linear-gradient(to bottom, #2563EB,#1D4ED8);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.industry-roles-container-content {
+  height: 24rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.industry-roles-container-inner {
+  text-align: center;
+}
+
+.industry-roles-container-icon {
+  width: 6rem;
+  height: 6rem;
+  margin: 0 auto 1rem;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.industry-roles-container-icon svg {
+  width: 3rem;
+  height: 3rem;
+}
+
+.industry-roles-container-title {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+.industry-roles-container-subtitle {
+  color: #dbeafe;
+}
+
+/* Stats Overlays */
+.industry-roles-stat-bottom {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  background-color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  padding: 1rem;
+}
+
+.industry-roles-stat-top {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background-color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  padding: 1rem;
+}
+
+.industry-roles-stat-value-blue {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #2563eb;
+}
+
+.industry-roles-stat-value-green {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #059669;
+}
+
+.industry-roles-stat-label {
+  font-size: 0.875rem;
+  color: #4b5563;
+}
+
+/* Right Content Section */
+.industry-roles-content {
+  max-width: 100%;
+}
+
+@media (max-width: 1023px) {
+  .industry-roles-content {
+    max-width: 600px;
+    margin: 0 auto;
+    text-align: center;
+  }
+}
+
+.industry-roles-badge {
+  display: inline-block;
+  background-color: #F4F4F7;
+  color: #000;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.5rem 1rem;
+  border-radius: 1rem;
+  margin-bottom: 1rem;
+}
+
+.industry-roles-title {
+  font-size: 3.5rem;
+  font-weight: 700;
+  color: #000;
+  margin-bottom: 1rem;
+  line-height: 1.1;
+}
+
+.industry-roles-subtitle {
+  color: #6b7280;
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 640px) {
+  .industry-roles-title {
+    font-size: 2.5rem !important;
+    line-height: 1.1 !important;
+  }
+}
+
+.industry-roles-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@media (max-width: 1023px) {
+  .industry-roles-cards {
+    align-items: center;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+}
+
+/* Role Cards */
+.industry-roles-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  margin-bottom: 1rem;
+  width: 100%;
+  transition: background 180ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+@media (max-width: 1023px) {
+  .industry-roles-card {
+    max-width: 400px;
+    width: 100%;
+  }
+}
+
+.industry-roles-card-blue {
+  background: linear-gradient(to bottom, #2563EB,#1D4ED8);
+}
+
+.industry-roles-card-light {
+  background-color: #F4F4F7;
+}
+
+.industry-roles-card-icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.industry-roles-card-icon-white {
+  background-color: white;
+}
+
+.industry-roles-card-icon-blue {
+  background: linear-gradient(to bottom, #2563EB,#1D4ED8);
+}
+
+.industry-roles-card-icon svg {
+  width: 1rem;
+  height: 1rem;
+  color: white;
+}
+
+.industry-roles-card-icon-white svg {
+  color: #3b82f6;
+}
+
+/* Hover behavior: Carrier card inverts to white with blue icon container + white tick */
+.industry-roles-card-blue:hover {
+  background: #ffffff;
+  transform: translateY(-4px);
+  box-shadow: 0 10px 20px rgba(16,24,40,0.06);
+}
+.industry-roles-card-blue:hover .industry-roles-card-title-white {
+  color: #111827; /* black title */
+}
+.industry-roles-card-blue:hover .industry-roles-card-description-white {
+  color: #6b7280; /* gray body */
+}
+.industry-roles-card-blue:hover .industry-roles-card-icon {
+  background: linear-gradient(to bottom, #2563EB,#1D4ED8);
+}
+.industry-roles-card-blue:hover .industry-roles-card-icon svg {
+  color: #ffffff; /* white tick */
+}
+
+/* Hover behavior: light cards (drivers/shippers) become blue like carrier pre-hover */
+.industry-roles-card-light:hover {
+  background: linear-gradient(to bottom, #2563EB,#1D4ED8);
+  transform: translateY(-4px);
+  box-shadow: 0 10px 20px rgba(16,24,40,0.06);
+}
+.industry-roles-card-light:hover .industry-roles-card-title-dark {
+  color: #ffffff;
+}
+.industry-roles-card-light:hover .industry-roles-card-description-gray {
+  color: rgba(255,255,255,0.9);
+}
+.industry-roles-card-light:hover .industry-roles-card-icon {
+  background: #ffffff;
+}
+.industry-roles-card-light:hover .industry-roles-card-icon svg {
+  color: #3b82f6; /* blue tick */
+}
+
+.industry-roles-card-title-white {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 0.5rem;
+}
+
+.industry-roles-card-title-dark {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 0.5rem;
+}
+
+.industry-roles-card-description-white {
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.5;
+  font-size: 0.875rem;
+}
+
+.industry-roles-card-description-gray {
+  color: #6b7280;
+  line-height: 1.5;
+  font-size: 0.875rem;
+}

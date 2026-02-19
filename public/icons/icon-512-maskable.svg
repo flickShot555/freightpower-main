@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Maskable icon: keep safe area padding -->
+  <rect width="512" height="512" fill="#111827"/>
+  <rect x="64" y="64" width="384" height="384" rx="96" fill="#0b1220"/>
+  <path d="M160 308c0-40 32-72 72-72h80c40 0 72 32 72 72v16c0 14-10 24-24 24H184c-14 0-24-10-24-24v-16z" fill="#ffffff" opacity="0.92"/>
+  <path d="M202 214c0-28 22-50 50-50h8c28 0 50 22 50 50v12H202v-12z" fill="#22c55e"/>
+  <text x="256" y="394" text-anchor="middle" font-family="system-ui,Segoe UI,Arial" font-size="44" fill="#ffffff" opacity="0.9">FP</text>
+</svg>

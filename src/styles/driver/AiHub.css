@@ -1,0 +1,73 @@
+/* AiHub layout */
+.aihub-container { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
+
+.aihub-chat-area { background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(16,24,40,0.06); padding: 18px; display:flex; flex-direction:column; height: calc(100vh - 100px); }
+.dark-root .aihub-chat-area { background: #2c2c2c; }
+.aihub-chat-header { margin-bottom: 12px; }
+.aihub-title { font-size: 20px; font-weight:700; }
+.aihub-sub { color: #6b7280; font-size: 13px; }
+
+.aihub-messages { flex:1; padding: 8px 2px; display:flex; flex-direction:column; gap:12px; }
+.aihub-message { display:flex; }
+.aihub-message.bot { justify-content:flex-start; }
+.aihub-message.user { justify-content:flex-end; }
+.aihub-bubble { max-width:70%; padding:12px 14px; border-radius: 12px; background:#f3f4f6; color:#111827; box-shadow: 0 1px 2px rgba(16,24,40,0.04); }
+.dark-root .aihub-bubble { background:#353535; color:#d1d7db; }
+.aihub-bubble.user-bubble { background:linear-gradient(#7FA4F6 0%, #3B57A7 100%); color:white; }
+
+.aihub-input-row { display:flex; gap:8px; padding-top:8px; border-top:1px solid #e6e6e6; }
+.dark-root .aihub-input-row { border-top:1px solid #3a3a3a; }
+.aihub-input { flex:1; padding:10px 12px; border-radius:8px; border:1px solid #e5e7eb; font-size:14px; }
+.dark-root .aihub-input { background:#353535; border:1px solid #3a3a3a; color:#d1d7db; }
+.aihub-send-btn { background:linear-gradient(#7FA4F6 0%, #3B57A7 100%); color:white; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; }
+
+.aihub-right-rail { display:flex; flex-direction:column; gap:12px; position:relative; }
+.rail-card { background:#fff; border-radius:10px; padding:14px; box-shadow: 0 1px 3px rgba(16,24,40,0.06); }
+.dark-root .rail-card { background:#2c2c2c; }
+.rail-card-header { font-weight:700; margin-bottom:8px; }
+
+.active-trip .trip-id { font-weight:600; display:flex; align-items:center; gap:8px; }
+.trip-info { display:flex; flex-direction:column; gap:10px; }
+.trip-info-box { background: #f3f4f6; border-radius: 10px; padding:12px; }
+.dark-root .trip-info-box { background: #353535; color: white; }
+.trip-info-top { display:flex; justify-content:space-between; align-items:center; }
+.trip-info .trip-id strong { font-weight:700; }
+.trip-route { color:#3B57A7; margin-top:8px; font-weight:600; }
+.dark-root .trip-route { color: #7FA4F6; }
+.trip-meta { font-size:13px; margin-top:6px; }
+.trip-stats { margin-top:8px; font-size:14px; display:flex; flex-direction:column; gap:8px; }
+.trip-stat { display:flex; gap:10px; align-items:center; }
+.stat-icon { display:inline-flex; width:22px; height:22px; align-items:center; justify-content:center; font-size:16px; }
+.stat-text { color:#111827; }
+.dark-root .stat-text { color:#d1d7db; }
+
+.smart-alerts .alert { display:flex; justify-content:space-between; align-items:center; padding:8px; border-radius:8px; margin-top:8px;}
+.smart-alert { display:flex; justify-content:space-between; align-items:center; padding:12px; border-radius:10px; margin-top:12px; background-color: #f3f4f6; }
+.dark-root .smart-alert { background-color: #353535; }
+.alert-left { display:flex; gap:12px; align-items:center; }
+.alert-texts { display:flex; flex-direction:column; }
+.alert-title { font-weight:700; }
+.alert-sub { color:#6b7280; font-size:13px; margin-top:4px; }
+
+.quick-actions .qa-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.qa { padding:14px 12px; border-radius:12px; border:1px solid transparent; background:#f3f4f6; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; min-height:72px; }
+.dark-root .qa { background:#353535; }
+.qa-label { font-weight:600; }
+.btn.small-cd.emergency {width: 100%; background:linear-gradient(#ef4444, #c62828) ;margin-top: 10px;}
+
+.insights .insight { background:#f8fafc; padding:8px; border-radius:6px; margin-top:8px; color:#111827; }
+
+.insight-card { border-radius:10px; padding:12px; margin-top:10px; }
+.insight-row { display:flex; gap:12px; align-items:flex-start; }
+.insight-icon { width:36px; height:36px; display:flex; align-items:center; justify-content:center; border-radius:8px; font-size:18px; }
+.insight-body { display:flex; flex-direction:column; }
+.insight-title { font-weight:700;  }
+.insight-title-grad { font-weight:700; }
+.insight-text { margin-top:6px; }
+.insight-text-grad { margin-top:6px;}
+
+@media (max-width: 900px) {
+  .aihub-container { grid-template-columns: 1fr; }
+  .aihub-chat-area { height: auto; }
+  .aihub-right-rail { order: 2; }
+}

@@ -1,0 +1,55 @@
+/* Namespaced Rate Confirmation panel styles (fp_rc-) */
+
+.fp_rc-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  z-index: 1200;
+  background: rgba(10,12,15,0.25);
+}
+
+.fp_rc-panel {
+  width: 420px;
+  max-width: 100%;
+  height: 100vh;
+  background: #fff;
+  box-shadow: -12px 0 30px rgba(16,24,40,0.08);
+  display: flex;
+  flex-direction: column;
+}
+
+.dark-root .fp_rc-panel { background: #2c2c2c; color: #d1d5db }
+
+.fp_rc-header {
+  display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px solid #eef2f5
+}
+.fp_rc-header h3 { margin:0; font-size:16px; font-weight:700 }
+.fp_rc-sub { color:#6b7280; font-size:13px }
+.fp_rc-close { background:transparent; border:none; font-size:20px }
+
+.fp_rc-body { padding:12px 16px; overflow:auto }
+.fp_rc-card { margin-bottom:12px; border-radius:8px; border:1px solid #f1f5f9; padding:12px; background:#fff }
+.dark-root .fp_rc-card { background: #3c3c3c; border: 1px solid #353535 }
+.fp_rc-card-title { margin:0 0 8px 0; font-weight:700 }
+.fp_rc-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px }
+.fp_rc-grid-col { display:flex; flex-direction:column; gap:8px }
+.fp_rc-row { display:flex; gap:8px }
+.fp_rc-label { font-size:12px; color:#6b7280; margin-bottom:6px }
+.fp_rc-input { width:100%; padding:8px 10px; border-radius:6px; border:1px solid #eef2f5 }
+.dark-root .fp_rc-input { background: #2c2c2c; border: 1px solid #353535; color: #f1f5f9 }
+
+.fp_rc-summary-inner { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; align-items:center }
+.fp_rc-summary-left { display:flex; flex-direction:column }
+.fp_rc-small { font-size:12px; color:#6b7280 }
+.fp_rc-strong { font-weight:700 }
+.fp_rc-total { font-weight:700; color:#059669 }
+.fp_rc-factoring { grid-column:1/-1; background:#fff; padding:8px; border-radius:6px; margin-top:8px; border: 1px solid #eef2f5; }
+.dark-root .fp_rc-factoring { background: #2c2c2c; border: 1px solid #3c3c3c }
+
+.fp_rc-actions { display:flex; gap:8px; justify-content:flex-end; padding:12px 4px 24px 4px }
+
+@media (max-width: 880px) {
+  .fp_rc-panel { width: 100%; height: 100vh }
+  .fp_rc-summary-inner { grid-template-columns:1fr }
+}

@@ -1,0 +1,45 @@
+
+.mp-stats{display:flex;gap:12px;margin-bottom:12px; display: grid;grid-template-columns: repeat(5, 1fr);}
+.mp-stat{flex:1;padding:12px;border-radius:12px;}
+.mp-stat .mp-num{font-weight:700;font-size:20px}
+.mp-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.mp-card{background-color: #fff;padding:12px;border-radius:10px;}
+.dark-root .mp-card{background-color: #2c2c2c;color:#e1e8ed;}
+.mp-card-top{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.mp-avatar{width:48px;height:48px;border-radius:8px}
+
+.mp-card-row{display:flex;justify-content:space-between;align-items:center}
+.mp-left{display:flex;align-items:center;gap:12px}
+.mp-meta{display:flex;flex-direction:column}
+.mp-card-title{font-weight:700}
+.mp-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.mp-rating strong{font-size:14px;}
+.mp-rating .muted{font-size:12px;}
+.mp-offer{background:#f3f3f3;padding:4px 8px;border-radius:8px;font-size:12px}
+.dark-root .mp-offer{background: #3a3a3a;color:#e1e8ed;}
+.mp-offer.muted{background:transparent;color:#94a3b8}
+.mp-tags{display:flex;gap:8px;margin:8px 0}
+.mp-tags span{background:rgba(255,255,255,0.04);padding:6px 8px;border-radius:6px;font-size:12px}
+.mp-compliance-row{display:flex;align-items:center;gap:8px;margin:10px 0}
+.mp-compliance-bar{flex:1;height:8px;background: #f3f3f3;border-radius:6px;overflow:hidden}
+.dark-root .mp-compliance-bar{background: #3a3a3a;}
+.mp-compliance-fill{height:100%;border-radius:6px; background: linear-gradient(to right, #7FA4F6 0%, #3B57A7 100%);;}
+.mp-compliance-label{font-size:12px}
+.mp-card-footer{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.mp-status .int-status-badge{margin-right:8px}
+.mp-actions button{margin-left:8px}
+.mp-badges .badge{margin-left:8px;padding:4px 8px;border-radius:8px;background:#111827;color:#fff}
+.add-card .add-inner{display:flex;flex-direction:column;align-items:flex-start}
+
+@media (max-width: 1200px) {
+    .mp-grid{grid-template-columns:1fr 1fr; }
+}
+
+@media (max-width: 768px) {
+    .mp-grid{grid-template-columns:1fr; }
+    .mp-stats{grid-template-columns:repeat(3,1fr);}
+}
+
+@media (max-width: 480px) {
+    .mp-stats{grid-template-columns:repeat(1,1fr);}
+}

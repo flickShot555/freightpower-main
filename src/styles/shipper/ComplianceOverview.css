@@ -1,0 +1,138 @@
+
+.co-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; gap:16px }
+.co-header .co-titles h2{ margin:0; font-size: clamp(1.6rem, 2vw, 1.9rem)!important; font-weight:700; color: #0b1720; margin: 0 0 6px 0;}
+.dark-root .co-header .co-titles h2{ color:#f9fafb }
+.co-header .co-titles .muted{ color:#6b7280; margin-top:6px; font-size:13px }
+.co-status-row{ display:flex; gap:10px; align-items:center; margin-top:8px }
+.co-legend{ display:flex; gap:12px; align-items:center; margin-top:10px }
+.co-legend .dot{ width:10px; height:10px; border-radius:50% }
+.co-legend .label{ font-size:13px; color:#374151 }
+.chip[role="status"]{ font-weight:600 }
+
+/* verified tiny circle */
+.verified{ display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:999px; background:#dcfce7; color:#065f46; font-weight:700 }
+.co-actions{ display:flex; gap:10px; align-items:center }
+.co-actions .btn{ height:36px; padding:8px 12px; font-size:14px }
+.co-main{ display:grid; grid-template-columns: 1fr 320px; gap:24px; align-items:start }
+.co-left{ grid-column:1 }
+.co-right{ grid-column:2 }
+.ffco-ai-actions{ padding:14px; border-radius:10px; border:1px solid #eef2f7; background:#ffffff }
+.ffco-ai-actions h4{ margin:0 0 10px 0; font-size:16px; font-weight:700 }
+.dark-root .ffco-ai-actions h4{ color:#f9fafb; }
+.ai-action-list{ display:flex; flex-direction:column; gap:10px }
+.ai-action-row{ display:flex; justify-content:space-between; align-items:center; gap:12px;  padding:10px; border-radius:8px; border: 1px solid #eef2f7; }
+.dark-root .ai-action-row{ background:#2c2c2c; color:#f9fafb; border:1px solid #3c3c3c }
+.ai-action-left{ font-weight:600; font-size:14px }
+.ai-action-right .btn{ margin-left:8px }
+.co-stats-grid{ margin-top:16px }
+.ffco-stat-row{ display:grid; grid-template-columns: repeat(3,1fr); gap:12px }
+.ffco-stat-card{ padding:14px; border-radius:10px; border:1px solid #eef2f7; background:#fff; display:flex; flex-direction:column; gap:6px }
+.dark-root .ffco-stat-card{ background:#2c2c2c; border:1px solid #3c3c3c }
+.ffco-stat-title{ font-weight:700;    font-size:13px; text-align: left; }
+.ffco-stat-sub{ font-weight:600; color:#374151; font-size:13px }
+.ffco-stat-meta{ color:#6b7280;  font-size:13px }
+.ffco-identity .identity-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px }
+.dark-root .ffco-identity .identity-grid > div strong{ color:#f9fafb }
+.ffco-identity h4{ margin:0 0 10px 0; font-size:16px; font-weight:700 }
+.dark-root .ffco-identity h4{ color:#f9fafb }
+.ffco-insurance h4, .ffco-right-card h4, .ffco-filings h4{ margin:0 0 10px 0; font-size:16px; font-weight:700 }
+.co-note{ margin-top:12px; padding:10px; border-radius:6px; font-size:13px; border: 1px solid #eef2f7; background-color: #fff!important; }
+.dark-root .co-note{ color:#f9fafb; background-color: #2c2c2c!important; border:1px solid #3c3c3c; }
+.co-table{ width:100%; border-collapse:collapse; margin-top:12px }
+.co-table th, .co-table td{ padding:16px 12px; border-bottom:1px solid #eef2f7; text-align:left; font-size:14px; vertical-align:middle }
+.dark-root .co-table th, .dark-root .co-table td{ border-bottom:1px solid #3c3c3c }
+.co-table thead th{ font-weight:700; color:#243142; letter-spacing:0.1px }
+.dark-root .co-table thead th{ color:#f9fafb }
+.co-table tr{ background:transparent }
+.card{ background:#ffffff; border:1px solid #eef2f7; border-radius:10px; box-shadow: 0 1px 0 rgba(15,23,42,0.02); padding:16px }
+.co-filings .status.green, .co-insurance .status.green{ color:#047857; font-weight:600 }
+.co-filings .status.yellow, .co-insurance .status.yellow{ color:#92400e; font-weight:600 }
+
+/* Verified check circle */
+.co-table td .verified{ display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; background:#dcfce7; border-radius:999px; color:#065f46; font-size:14px }
+
+/* AI note box */
+.co-ai-note{ display:flex; gap:10px; align-items:flex-start; margin-top:14px; background:#fff; border-radius:8px; padding:12px 14px; border:1px solid #eef2f7	 }
+.dark-root .co-ai-note{ background:#2c2c2c; border:1px solid #3c3c3c;}
+.dark-root .co-ai-note .ai-text {color: #f9fafb;}
+.co-ai-note .ai-text{ color:#1f2937; font-size:13px }
+.co-right-card{ padding:16px; border-radius:10px; border:1px solid #eef2f7; position:sticky; top:92px; background:#fff }
+
+/* Assistant stack styles (right rail) */
+.assistant-stack{ display:flex; flex-direction:column; gap:10px; margin-top:8px }
+.assistant-item{ display:flex; gap:10px; align-items:flex-start; padding:10px; border-radius:8px; border: 1px solid rgba(15,23,42,0.04); background:#fff }
+.dark-root .assistant-item{ background:#2c2c2c; border:1px solid rgba(255,255,255,0.04) }
+.assistant-item .assistant-emoji{ font-size:16px; margin-top:2px }
+.assistant-item .assistant-body{ font-size:13px; color:#0f1724 }
+.dark-root .assistant-item .assistant-body{ color:#f9fafb }
+
+.assistant-actions{ display:flex; flex-direction:column; gap:8px; margin-top:10px }
+@media (min-width:900px){
+	.assistant-actions{ flex-direction:column }
+}
+
+/* Recent activity styles */
+.ff-recent-activity{ list-style:none; padding:0; margin:8px 0 0 0 }
+.ff-activity-item{ margin-bottom:12px }
+.ff-activity-title{ font-weight:700; color:#0b1720 }
+.dark-root .ff-activity-title{ color:#f9fafb }
+.ff-activity-meta{ font-size:13px; color:#6b7280; margin-top:4px }
+.ff-activity-desc{ font-size:13px; color:#6b7280; margin-top:4px }
+@media (max-width:1100px){ .co-main{ grid-template-columns:1fr 300px } }
+@media (max-width:900px){
+	/* switch to column flow so right rail always renders after left content */
+	.co-main{ display:flex; flex-direction:column; gap:16px }
+	.co-left{ order:0; width: 100%}
+	.co-right{ order:1; width:100%; position:static; margin-top:6px }
+	.co-right-card{ position:static; top:auto }
+	.co-root{ padding:16px }
+	.ffco-stat-row{ grid-template-columns:1fr; }
+	.ffco-identity .identity-grid{ grid-template-columns:1fr }
+	.co-table th, .co-table td{ padding:10px 8px; font-size:13px }
+	.ai-action-left{ font-size:13px }
+}
+
+/* Mobile: make tables horizontally scrollable */
+@media (max-width:640px){
+	.co-table-wrap{ overflow:auto; -webkit-overflow-scrolling:touch; width:100% }
+	/* keep native table semantics so header stays aligned with body; allow horizontal scroll */
+	.co-table{ min-width:760px; table-layout:auto }
+	.co-table th, .co-table td{ white-space:nowrap }
+	.co-header .co-titles h2{ font-size:18px }
+	.co-actions .btn{ padding:8px 10px; font-size:13px }
+    .co-right-card .btn{ display:block; width:100%; margin-bottom:8px }
+}
+
+/* Responsive header: stack title/status and actions on small screens */
+@media (max-width:820px){
+	.co-header{ flex-direction:column; align-items:flex-start; gap:12px }
+	.co-actions{ width:100%; display:flex; gap:8px; justify-content:flex-end }
+	.co-status-row{ flex-wrap:wrap; gap:8px }
+    .co-main{flex-direction: column;}
+    .ai-action-row{ flex-direction:column; align-items:flex-start}
+}
+
+@media (max-width:520px){
+	.co-header{ align-items:flex-start }
+	.co-actions{ flex-direction:column; width:100%; gap:8px }
+	.co-actions .btn{ width:100%; text-align:center }
+	.co-status-row{ width:100%; display:flex; flex-direction:row; flex-wrap:wrap; gap:8px }
+	.chip{ font-size:13px; padding:6px 10px }
+}
+
+/* Ensure assistant card buttons stack on small screens */
+@media (max-width:480px){
+	.ai-action-right{ width:100%; display:flex; flex-direction:column; gap:8px }
+	.ai-action-right .btn{ width:100%; margin-left:0 }
+	.ai-action-row{ gap:8px }
+	.ai-action-left{ width:100% }
+	/* ensure the action buttons stack below the action text on very small screens */
+	.ai-action-row{ align-items:flex-start }
+}
+
+/* Business Identity precise typography */
+.ffco-identity h4{ font-size:16px; font-weight:700; margin-bottom:10px }
+.ffco-identity .identity-grid > div{ display:flex; flex-direction:column; gap:4px }
+.ffco-identity .identity-grid > div strong{ font-size:14px; font-weight:600; color:#0b1720 }
+.ffco-identity .identity-grid > div .muted{ font-size:13px; font-weight:400; color:#6b7280 }
+.co-note{ margin-top:12px; background:#f1f5f9; padding:10px; border-radius:6px; font-size:13px; font-weight:500; color:#374151 }

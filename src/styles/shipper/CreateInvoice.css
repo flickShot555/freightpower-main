@@ -1,0 +1,244 @@
+/* Styles for the Create Invoice screen - refined to match screenshot */
+.create-invoice-overlay { position:fixed; inset:0; background:rgba(2,6,23,0.45); display:flex; align-items:center; justify-content:center; padding:24px; z-index:300; }
+.create-invoice-modal { width:100%; max-width:1200px; position:relative; max-height:90vh; display:flex; }
+.create-invoice-modal .create-invoice-page { background:#fff; width:100%; overflow:auto; border-radius:10px; box-shadow:0 10px 30px rgba(2,6,23,0.08); }
+.dark-root .create-invoice-modal .create-invoice-page { background:#2c2c2c; color:#d1d7db; }
+/* Typography: inherit app font and use responsive scaling inside this modal */
+.create-invoice-modal .create-invoice-page {
+  font-family: inherit; /* use global Inter/system font */
+  font-size: clamp(14px, 1.2vw + 0.4rem, 16px);
+  line-height: 1.45;
+  color: var(--text-primary, #0f172a);
+}
+.create-close { position:absolute; right:12px; top:12px; background:#fff; border-radius:999px; border:1px solid #e6eef0; width:36px; height:36px; font-size:22px; cursor:pointer; box-shadow:0 6px 18px rgba(15,23,42,0.08); z-index:310; }
+.dark-root .create-close { background:#2c2c2c; border:1px solid #353535; color:#d1d7db; box-shadow:0 6px 18px rgba(0,0,0,0.2); }
+
+.create-invoice-main { display:flex; gap:20px; align-items:flex-start; padding:22px; }
+.create-invoice-left { flex:1; padding:20px; border-radius:10px; background:transparent; }
+.create-invoice-right { width:360px; }
+
+.create-header { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:12px; }
+.create-header h2 { margin:0; font-size: clamp(18px, 1.2vw + 0.6rem, 20px); }
+.create-subtitle { color:#64748b; margin-top:6px; font-size: clamp(12px, 0.8vw + 0.3rem, 13px); }
+.dark-root .create-subtitle { color:#94a3b8; }
+.create-actions { display:flex; gap:8px; align-items:center; }
+
+.ai-suggestion { margin-bottom:14px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; }
+.ai-suggestion-teal { background:linear-gradient(#7FA4F6 0%, #3B57A7 100%); border:1px solid #c6efea; padding:12px 16px; color: #fff;}
+.dark-root .ai-suggestion-teal { background:linear-gradient(#7FA4F6 0%, #3B57A7 100%); border:1px solid #353535; }
+.ai-suggestion-teal .ai-left { display:flex; gap:12px; align-items:center; }
+.ai-suggestion-teal .muted-ai-sugg { font-weight:700; color:#fff; font-size: clamp(12px,0.8vw,13px); }
+.ai-suggestion-teal .ai-box-small { color:#fff; margin-top:2px; font-size: clamp(12px,0.8vw,13px); }
+
+.form-section h4 { margin-top:18px; margin-bottom:8px; font-size:15px; }
+.grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+.grid-2 label { font-weight:700; color:#475569; display:block; margin-bottom:6px; font-size: clamp(12px,0.8vw + 0.1rem,13px); }
+.dark-root .grid-2 label { color:#d1d7db; }
+.grid-2 input, .grid-2 select, textarea { width:100%; padding:12px 14px; border:1px solid #e6edf2; border-radius:8px; background:#fbfdff; height:44px; font-size: clamp(13px,1vw + 0.1rem,14px); color:#0f172a; box-shadow:inset 0 1px 0 rgba(15,23,42,0.02); }
+.dark-root .grid-2 input, .dark-root .grid-2 select, .dark-root .grid-2 textarea { background:#2c2c2c; border:1px solid #353535; color:#d1d7db; }
+.grid-2 select { height:40px; }
+.grid-2 input::placeholder { color:#94a3b8; }
+
+textarea { min-height:80px; border-radius:8px; }
+.small-muted { color:#94a3b8; margin-top:8px; }
+
+.create-invoice-right .invoice-summary { padding:18px; border-radius:10px; background:#fff; box-shadow:0 6px 18px rgba(15,23,42,0.04); position:sticky; top:28px; 
+  /* Right column base font to match modal body */
+  font-size: clamp(13px, 0.9vw + 0.15rem, 14px);
+  line-height: 1.4;
+}
+.summary-row { display:flex; justify-content:space-between; padding:6px 0; font-size: inherit; }
+.summary-row .muted { font-size: 0.95em; color: var(--text-secondary, #64748b); }
+.summary-total { display:flex; justify-content:space-between; align-items:center; font-weight:800; font-size: clamp(16px, 1.2vw + 0.4rem, 18px); padding:8px 0; }
+.total-amount { color:#0f172a; }
+.dark-root .total-amount { color:#d1d7db; }
+.green-box { background:#fff; border:1px solid #e6edf2;padding:10px; border-radius:8px; margin-top:12px; }
+.dark-root .green-box { background:#2c2c2c; border:1px solid #353535; color:#d1d7db; }
+
+.checkbox-row { margin-top:8px; }
+.send-settings { margin-top:12px; display:flex; flex-direction:column; gap:6px; }
+
+/* Right column specific tweaks to match screenshot */
+.create-invoice-right .checkbox-row { display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+.checkbox-inline { display:flex; align-items:center; gap:10px; font-size: inherit; }
+.checkbox-inline input { position: absolute; opacity: 0; }
+.checkbox-inline span { padding-left: 24px; position: relative; font-size: inherit; }
+.checkbox-inline span::before { content: ''; position:absolute; left:0; top:50%; transform:translateY(-50%); width:16px; height:16px; border-radius:4px; border:1px solid #cbd5e1; background:#fff; }
+.checkbox-inline input:checked + span::before { background:#06b6d4; border-color:#06b6d4; }
+.checkbox-inline input:checked + span::after { content:'\2713'; position:absolute; left:3px; top:50%; transform:translateY(-50%); color:#fff; font-size:12px; }
+
+.send-settings label { display:flex; align-items:center; gap:8px; font-size: inherit; }
+.dark-root .send-settings label { color:#d1d7db; }
+.recipient { margin-top:12px; }
+.recipient-input { width:100%; padding:10px 12px; border-radius:8px; border:1px solid #e6edf2; font-size: inherit; }
+.dark-root .recipient-input { background:#2c2c2c; border:1px solid #353535; color:#d1d7db; }
+
+.success-inner { display:flex; gap:12px; align-items:center; }
+.success-icon { background:#06b6d4; color:#fff; width:34px; height:34px; display:flex; align-items:center; justify-content:center; border-radius:999px; font-weight:700; }
+.success-title { font-weight:700; }
+.success-body { font-size: 0.95em; margin-top:2px; }
+
+/* Payment method radio row */
+.heading-pay { font-weight: 600; font-size: 13px; color: #334155; }
+.dark-root .heading-pay { color: #d1d7db; } 
+.payment-method { display:flex; gap:18px; align-items:center; margin-top:6px; flex-wrap: wrap;}
+.payment-method label { display:inline-flex; align-items:center; gap:8px; color:#334155; font-weight:600; font-size:13px; }
+.dark-root .payment-method label { color:#d1d7db; }
+.payment-method input[type="radio"] { width:16px; height:16px; accent-color:#06b6d4; }
+
+/* Add line item link */
+.add-line { display:inline-block; margin-top:8px; color:#3B57A7; font-weight:700; cursor:pointer; }
+.dark-root .add-line { color:#7FA4F6; }
+
+/* search input with icon */
+.search-input { position:relative; }
+.search-input::placeholder { color:#94a3b8; }
+.search-input-wrapper { position:relative; }
+.search-input { padding-right:40px; }
+.search-input::placeholder { color:#94a3b8; }
+.search-input { background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="%2394a3b8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="3.5"/><path d="M11 11l4 4"/></svg>'); background-repeat:no-repeat; background-position:right 12px center; }
+
+.line-headers { margin-top:12px; color:#475569; font-weight:700; padding-bottom:6px; }
+.line-headers div { font-size:13px; }
+
+/* Two-column line items: left = descriptions, right = amounts */
+.line-items-grid { display: grid; grid-template-columns: 1fr 220px; gap:12px; align-items:start; margin-top:8px; }
+.line-items-left .line-headers-left { font-weight:700; color:#475569; margin-bottom:8px; }
+.dark-root .line-items-left .line-headers-left { color:#d1d7db; }
+.line-left-row { margin-bottom:12px; }
+.line-left-row input { width:100%; padding:10px 12px; border-radius:8px; border:1px solid #e6edf2; }
+.dark-root .line-left-row input { background:#2c2c2c; border:1px solid #353535; color:#d1d7db; }
+.line-items-right .amount-heading { text-align:right; font-weight:700; color:#475569; margin-bottom:8px; }
+.dark-root .line-items-right .amount-heading { color:#d1d7db; }
+.line-right-row { text-align:right; margin-bottom:12px; }
+.line-right-row .amount-input { width:200px; padding:10px 12px; border-radius:8px; border:1px solid #e6edf2; }
+.dark-root .line-right-row .amount-input { background:#2c2c2c; border:1px solid #353535; color:#d1d7db; }
+
+@media (max-width: 900px) {
+  /* Stack: left column first (line items + add), then amount heading and amounts */
+  .line-items-grid { grid-template-columns: 1fr; }
+  .line-items-right { order: 2; }
+  .line-items-left { order: 1; }
+  .line-items-right .amount-heading { text-align:left; margin-top:12px; }
+  .line-right-row .amount-input { width:100%; }
+}
+
+.attach-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top:12px; }
+.doc-card { display:flex; flex-direction:row; align-items:flex-start; padding:14px; border-radius:8px; background:#fff; border:1px solid #eef2f4; min-height:96px; position:relative; }
+.dark-root .doc-card { background:#2c2c2c; border:1px solid #353535; color:#d1d7db; }
+.doc-left { flex:1; display:flex; flex-direction:column; justify-content:space-between; align-items: flex-start; }
+.doc-left .doc-title { font-weight:700; font-size:14px; }
+.doc-left .doc-meta { color:#94a3b8; font-size:13px; margin-top:6px; align-items: flex-start; justify-content: flex-start; margin-left: 0;}
+.doc-right { display:flex; align-items:flex-start; justify-content:flex-end; }
+
+.vault-row { display:flex; gap:18px; align-items:center; margin-top:12px; }
+.vault-link { font-size: 12px; color:#3B57A7; text-decoration:none; font-weight:700; display:inline-flex; gap:8px; align-items:center; }
+.dark-root .vault-link { color:#7FA4F6; }
+.auto-link { color:#475569; font-weight:600; display:inline-flex; gap:8px; align-items:center; }
+
+/* Label-based checkbox visual: hide the native input (kept accessible) and
+   draw the box & checkmark using the span that follows the input. This
+   works even when global rules reset input appearance. */
+.auto-link, .checkbox-inline { position:relative; display:inline-flex; align-items:center; gap:8px; cursor:pointer; }
+.auto-link input, .checkbox-inline input { position:absolute; left:0; top:50%; transform:translateY(-50%); width:18px; height:18px; opacity:0; margin:0; z-index:2; }
+.auto-link span, .checkbox-inline span { padding-left:24px; position:relative; display:inline-block; }
+.auto-link span::before, .checkbox-inline span::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width:18px; height:18px; border-radius:4px;
+  border:1px solid #cbd5e1; background:#fff; box-sizing:border-box;
+}
+.auto-link input:checked + span::before, .checkbox-inline input:checked + span::before {
+  background: #3B57A7;
+  border-color: #3B57A7;
+}
+
+.dark-root .auto-link input:checked + span::before, .dark-root .checkbox-inline input:checked + span::before {
+  background: #7FA4F6;
+  border-color: #7FA4F6;
+}
+
+.auto-link input:checked + span::after, .checkbox-inline input:checked + span::after {
+  content: '\2713';
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  color:#fff;
+  font-size:12px;
+}
+
+/* Ensure native checkbox visuals inside the Create Invoice modal are visible.
+   Some global styles reset appearance for checkboxes; restore native look here
+   with sufficient contrast and sizing. */
+.create-invoice-page input[type="checkbox"] {
+  /* Prefer native/default rendering; 'auto' will restore browser default
+     while vendor-prefixed values help older engines. Use a scoped selector
+     so other pages keep their custom checkbox styles. */
+  -webkit-appearance: checkbox !important;
+  -moz-appearance: checkbox !important;
+  appearance: auto !important;
+  width: 18px !important;
+  height: 18px !important;
+  margin: 0 8px 0 0 !important; /* space between checkbox and label text */
+  vertical-align: middle !important;
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+}
+.create-invoice-page input[type="checkbox"]:checked {
+  background-color: #06b6d4 !important;
+  border-color: #06b6d4 !important;
+}
+
+/* Remove any pseudo-element decorations injected by global checkbox rules
+   (these draw checkmarks or tiles). Scoped to the modal so it doesn't affect
+   global components. */
+.create-invoice-page input[type="checkbox"]::after,
+.create-invoice-page input[type="checkbox"]::before {
+  display: none !important;
+  content: none !important;
+}
+
+.notes-textarea { width:100%; min-height:120px; border-radius:8px; border:1px solid #e6edf2; padding:14px; background:#fff; }
+.dark-root .notes-textarea { background:#2c2c2c; border:1px solid #353535; color:#d1d7db; }
+.internal-tags { width:100%; padding:12px 14px; border-radius:8px; border:1px solid #e6edf2; margin-top:8px; }
+.dark-root  .internal-tags { background:#2c2c2c; border:1px solid #353535; color:#d1d7db; }
+
+/* small tweaks for the View/Upload links to match screenshot */
+.doc-action { color:#3B57A7; font-weight:700; text-decoration:none; font-size: 12px;}
+.dark-root .doc-action { color:#7FA4F6; }
+.doc-action:hover { text-decoration:underline; }
+
+/* Small alignment tweaks for labels and placeholders */
+.grid-2 label, .form-section label { color:#475569; font-size:13px; }
+.muted.small { color:#94a3b8; font-size:12px; }
+
+/* helpers */
+.muted.small { color:#94a3b8; font-size:12px; }
+.link-pill { text-decoration:none; color:#06b6d4; background:#f1f5f9; padding:6px 8px; border-radius:8px; }
+.btn-create-now { background:#06b6d4; color:#fff; padding:8px 10px; border-radius:8px; border:none; }
+
+@media (max-width: 900px) {
+  .create-invoice-main { flex-direction:column; }
+  .create-invoice-right { width:100%; }
+  .grid-2 { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 600px) {
+  .create-close { right:12px; top:12px; }
+  .create-actions { flex-wrap: wrap;}
+  .ai-suggestion-teal { flex-direction: column; align-items: flex-start; gap:12px; }
+}
+
+@media (max-width: 786px) {
+  .attach-cards { grid-template-columns: 1fr; }
+  .create-header {flex-direction: column;}
+}
+
+.create-header-heading {font-weight: 700;}
+.sub-heading-create{font-weight: 700;}

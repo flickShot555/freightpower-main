@@ -1,0 +1,67 @@
+/* Use same sizing and responsive behavior as other dashboard pages */
+.sstat-row { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:12px; margin-bottom:14px }
+.sstat-card{ padding:14px 16px; border-radius:10px; background:var(--card-bg,#fff);   min-width:180px; display:flex; align-items:center; gap:12px; justify-content: space-between;}
+.sstat-card .sstat-label{ font-size:13px; color:var(--muted,#6b7280) }
+.sstat-card .sstat-value{ font-size:18px; font-weight:800 }
+
+.dark-root .admin-hiring-root { background:#1e1e1e; color:#f1f5f9 }
+
+.onboarding-table-core thead th{ color:#9aa4b2; font-size:13px; }
+.onboarding-table-core tbody td{ color:#d7e0ea }
+
+.missing-pill{ background:#ffedd5; color:#b45309; padding:6px 8px; border-radius:8px; font-weight:600 }
+.btn-ghost{ background:transparent; border:1px solid rgba(255,255,255,0.04); color:#cbd5e1; padding:8px 12px; border-radius:8px }
+.ai-summary-btn{ background:linear-gradient(90deg,#2563eb,#7c3aed); color:#fff; padding:8px 12px; border-radius:8px }
+.onboarding-table-core td .icon-btn i{ pointer-events:none }
+
+/* Small overrides to blend with Tasks layout */
+.onboarding-tasks-table thead th{ background: transparent; color:#64748b; font-size: 13px; font-weight: 600;}
+.hi{font-size: 13px;}
+.onboarding-tasks-table .task-title{ font-weight:700 ; }
+.type-badge{ padding:6px 8px; border-radius:9999px; font-size:12px; background-color: #f3f3f3; }
+.dark-root .type-badge{ background-color: #3a3a3a; color:#f1f5f9; }
+.onboarding-tasks-table .progress{ border-radius:8px; overflow:hidden }
+.onboarding-tasks-table .progress-fill{ height:8px; background: linear-gradient(to right,#7FA4F6 0%, #3B57A7 100%); }
+
+/* Use same sizing and responsive behavior as other dashboard pages */
+.sstat-row { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:12px; margin-bottom:14px }
+.sstat-card{ padding:14px 16px; border-radius:10px; background:var(--card-bg,#fff);   min-width:180px; display:flex; align-items:center; gap:12px; justify-content: space-between;}
+.sstat-card .sstat-label{ font-size:13px; color:var(--muted,#6b7280) }
+.sstat-card .sstat-value{ font-size:18px; font-weight:800 }
+
+@media (max-width: 780px){
+  .sstat-row{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+
+@media (max-width: 520px){
+  .sstat-row{ grid-template-columns: 1fr; }
+}
+
+.ai-card-content{
+    background-color: #f3f3f31d;
+    border: 1px solid #d1d5db62;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.dark-root .ai-card-content{
+    background-color: #3a3a3a53;
+    border: 1px solid #353535;
+}
+
+.ai-line{
+    font-size: 14px;
+}
+
+.ai-action{
+    margin-top: 12px;
+    display: flex;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #3B57A7;
+}
+
+.dark-root .ai-action{
+    color: #7FA4F6;
+}

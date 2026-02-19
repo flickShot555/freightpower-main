@@ -1,0 +1,196 @@
+.dv-root { display:block; min-height: calc(100vh - 120px); width:100%;  }
+/* theme variables to match sidebar and subheading colors */
+:root{
+  --fp-sidebar-bg: #ffffff;
+  --fp-muted-sub: #94a3a8;
+  --fp-divider: #f3f6f8;
+}
+.dark-root{
+  --fp-sidebar-bg: #2c2c2c;
+  --fp-muted-sub: #d1d7db;
+  --fp-divider: rgba(255,255,255,0.06);
+}
+/* left column removed - folders now inline above content */
+.dv-sidebar { display:none }
+
+/* Ensure header spans the full width above the folders + main columns */
+.dv-root > .fp-header { grid-column: 1 / -1;  }
+.dv-sidebar-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px }
+.dv-sidebar-head h3 { margin:0; font-size:18px; font-weight:600; color:#0b1820 }
+.btn.orange { background:#ff8a00; color:#fff; padding:10px 12px; border-radius:10px; font-weight:700 }
+.btn .btn-icon { margin-right:8px; display:inline-block; vertical-align:middle }
+.btn.orange .btn-icon { color: #ffffff; font-size:14px; line-height:1 }
+.dv-folders { display:flex; flex-direction:column; gap:14px; padding-right:4px }
+.dv-folder { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border-radius:10px; background:#ffffff; border:1px solid #eef3f6; margin-bottom:0; box-shadow: 0 1px 0 rgba(11,24,32,0.03) }
+.dv-folder-left { display:flex; align-items:center; gap:14px }
+.dv-folder-name { font-weight:600; color:#0b1820; font-size:14px }
+.dv-folder-count { color:#94a3a8; font-size:13px }
+
+/* Dark mode: sidebar should match fp-sidebar dark look */
+.dark-root .dv-sidebar { background:#2c2c2c; border-right-color: rgba(255,255,255,0.04) }
+.dark-root .dv-folder { background: transparent; border-color: rgba(255,255,255,0.04) }
+.dark-root .dv-folder-name { color:#fff }
+.dark-root .dv-folder-count { color:#9ca3af }
+
+.dv-main { width:100%; display:flex; flex-direction:column; gap:18px; max-width:1200px; margin:0 auto; box-sizing:border-box }
+/* ensure dv-main uses the available space inside the dashboard main area */
+.fp-main .dv-main { max-width: none; width: 100%; }
+
+/* allow dashboard main to shrink inside flex containers (prevents overflow when sidebar is hidden) */
+.fp-main { min-width: 0 }
+.dv-toprow { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px }
+
+/* New folder-card grid (replaces earlier sidebar list) */
+.dv-folders-grid { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:6px; width:100%; align-items:center }
+/* ensure grid doesn't add extra measured width from children */
+.dv-folders-grid, .folder-card { box-sizing: border-box }
+/* Each card tries to be at least 220px wide and grow; this creates a row of cards that wrap */
+.folder-card { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-radius:12px; background:var(--fp-sidebar-bg); box-shadow:0 0 0 1px #E5E5E5,0 4px 8px -5px rgba(0,0,0,0.15); flex: 1 1 200px; min-width:180px; max-width:320px; box-sizing:border-box }
+.folder-card-left { display:flex; align-items:center; gap:12px }
+.folder-card .fa-folder { color:#2B7CC4; font-size:18px }
+.folder-card-title { font-weight:700; color:var(--fp-muted-sub); font-size:15px }
+.folder-card-count { color:var(--fp-muted-sub); font-size:13px }
+
+/* --- Force folder card text dark in light mode --- */
+.folder-card-title, .folder-card-count {
+  color: #23272e;
+}
+
+/* On small screens, cards become full-width stack */
+@media (max-width: 640px) {
+  .folder-card { flex: 1 1 100%; min-width: auto; max-width: 100% }
+}
+
+/* When the global sidebar collapses (approx 1024px), show folders in one horizontal row with scroll */
+@media (max-width: 1024px) {
+  /* use higher specificity so this rule applies inside the dashboard main area */
+  .fp-main .dv-folders-grid,
+  .dv-folders-grid {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 12px;
+    padding: 8px 6px 6px 6px;
+  margin-left: -6px; /* visually align with main padding when scrolling */
+  }
+  .dv-folders-grid::-webkit-scrollbar { height: 8px }
+  .dv-folders-grid::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.08); border-radius: 8px }
+  .folder-card { flex: 0 0 auto; min-width: 160px; max-width: 300px }
+}
+
+/* Dark-mode adjustments: ensure folder chips match dark sidebar */
+.dark-root .folder-card{ background:var(--fp-sidebar-bg); box-shadow: 0 0 0 1px #353535, 0 4px 8px -5px rgba(255,255,255,0.12);}
+.dark-root .folder-card-title{ color:var(--fp-muted-sub) }
+.dark-root .folder-card-count{ color:#9ca3af }
+
+/* ensure fp-main can shrink on tablet so content doesn't overflow horizontally */
+@media (max-width: 1024px) {
+  .fp-main { min-width: 0 }
+  .fp-content-row { min-width: 0 }
+}
+
+/* stronger tablet adjustments and small-screen stacking */
+@media (max-width: 900px) {
+  /* Make folder row visually full-bleed within the fp-main area */
+  .fp-main .dv-folders-grid { margin-left: -12px; margin-right: -12px; padding-left: 12px; padding-right: 12px }
+  .dv-folders-grid { gap: 10px }
+
+  /* cards smaller on narrow tablets */
+  .folder-card { min-width: 140px; padding:10px 12px; font-size:14px }
+
+  /* top row stacks (already present at 900px but reinforce) */
+  .dv-toprow { flex-direction:column; align-items:flex-start; gap:10px }
+}
+
+@media (max-width: 640px) {
+  /* Keep folder cards compact on small screens: wrap chips instead of making them full-width */
+  .dv-folders-grid { display:flex; flex-wrap:wrap; gap:10px; margin-left:0; margin-right:0; padding:6px 0 }
+  .folder-card { flex: 0 0 auto; min-width:120px; max-width:220px; margin-bottom:8px }
+
+  /* make dropzone and table spacing a bit tighter on phones */
+  .dv-dropzone { padding:14px }
+  .dv-table { min-width: 100%; }
+}
+
+/* reduce table min-width for better wrapping on smaller laptops */
+@media (max-width: 1200px) {
+  .dv-table { min-width: 560px }
+}
+
+.dv-separator { height:1px; background: transparent; border-bottom:1px solid #eef3f6; margin:8px 0 14px 0 }
+.dv-breadcrumb { font-size:13px }
+.dv-actions { display:flex; gap:10px }
+.btn.blue { background:#0ea5e9; color:#fff }
+.btn.ghost { background:transparent; border:1px solid #e5e7eb }
+
+.dv-dropzone { border:2px dashed #dfe6ec; border-radius:8px; padding:28px; margin-bottom:18px; display:flex; align-items:center; justify-content:center; background: transparent }
+.dark-root .dv-dropzone { border-color: rgba(255,255,255,0.06); background: rgba(255,255,255,0.02) }
+.dv-drop-inner { text-align:center }
+.dv-cloud { font-size:28px; color:#9aa6b1 }
+.dv-drop-text { font-weight:700; margin-top:6px }
+.dv-drop-sub { color:#94a3a8; margin-top:6px }
+
+.dv-table-wrap { background:var(--fp-sidebar-bg); border-radius:8px; padding:12px; box-shadow:0 0 0 1px #E5E5E5,0 4px 8px -5px rgba(0,0,0,0.15); min-height:200px; overflow-x:auto }
+.dark-root .dv-table-wrap { background:var(--fp-sidebar-bg); box-shadow:0 0 0 1px #353535, 0 4px 8px -5px rgba(255,255,255,0.12); color:var(--fp-muted-sub) }
+.dv-table { width:100%; border-collapse:collapse; min-width:640px }
+.dv-table th, .dv-table td { padding:10px 8px; text-align:left; border-bottom:none }
+.dv-table thead th{font-size:11px;color:var(--fp-muted-sub);letter-spacing:0.8px;font-weight:700}
+.dv-table td{font-size:13px;color:var(--fp-muted-sub)}
+
+/* draw a single divider line per row inset from the left so it aligns with content */
+.dv-table tbody tr{position:relative}
+.dv-table tbody tr::after{content:'';position:absolute;left:56px;right:16px;height:1px;background:var(--fp-divider);bottom:0}
+.dv-table tbody tr:last-child::after{display:none}
+.dv-table th.c-check, .dv-table td.c-check { width:36px }
+.dv-table th.c-actions, .dv-table td.c-actions { width:110px; text-align:right }
+.dv-table td.c-actions{position:relative}
+.file-name { display:flex; align-items:center; gap:8px }
+.file-name span{font-weight:700;font-size:13px;color:var(--fp-muted-sub)}
+.cd-badge { padding:5px 8px; border-radius:999px; font-weight:700; font-size:11px }
+/* .cd-badge.green { background:#dff7ea; color:#0b7f60 } */
+.cd-badge.green { background:linear-gradient(#dff7ea, #b4e1d0); color:#0b7f60 }
+.dark-root .cd-badge.green { background:linear-gradient(rgba(15, 125, 94, 0.795), rgba(13, 110, 82, 0.312)); color:#9fe2c7 }
+.cd-badge.yellow { background:linear-gradient(#fff4d9, #fce99e); color:#b68100 }
+.dark-root .cd-badge.yellow { background:linear-gradient(rgba(185, 130, 0, 0.762), rgba(185, 129, 0, 0.425)); color:#f6e05e }
+.cd-badge.red { background:linear-gradient(#ffe6e6, #ffc9c9); color:#ef4444 }
+.dark-root .cd-badge.red { background:linear-gradient(rgba(239, 68, 68, 0.674),rgba(239, 68, 68, 0.312)); color:#ffb1b1 }
+.action { background:transparent; border:0; margin-left:6px; cursor:pointer; color: var(--fp-muted-sub)}
+
+/* Remove large focus circle on icon buttons when clicked with mouse, but keep an accessible
+  outline for keyboard users (focus-visible). */
+.action:focus { outline: none; box-shadow: none; }
+.action:focus:not(:focus-visible) { outline: none; box-shadow: none; }
+.action:focus-visible { outline: 2px solid rgba(11,107,154,0.12); outline-offset: 2px }
+
+/* Row actions: compact menu at tablet widths */
+.row-actions{position:relative;display:inline-flex;align-items:center}
+.row-actions-menu{background:transparent;border:0;padding:8px;border-radius:6px;cursor:pointer;color:#64748b}
+.row-actions-menu i{font-size:16px;color:#374151}
+.row-actions-menu:focus,
+.row-actions-menu:focus-visible{
+  outline: none;
+  box-shadow: none;
+  background: rgba(11,24,32,0.04);
+}
+.row-actions-menu:focus-visible{outline:2px solid rgba(11,107,154,0.14);outline-offset:2px}
+.row-actions-popover{position:absolute;right:0;top:32px;background:#fff;border:1px solid #eef3f6;padding:8px;border-radius:8px;box-shadow:0 8px 24px rgba(11,24,32,0.06);display:flex;flex-direction:column;gap:6px;z-index:90}
+.row-actions-popover .action{display:flex;align-items:center;gap:8px;padding:6px 8px;color:#0b1720}
+
+@media (max-width: 1024px) {
+  /* hide individual action icons in the table and use the compact menu instead */
+  .dv-table .c-actions .action{display:none}
+  .dv-table .c-actions .row-actions{display:inline-flex}
+}
+
+@media (min-width: 1025px) {
+  .dv-table .c-actions .row-actions{display:none}
+}
+
+.div-style-comp {
+background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.dark-root .div-style-comp {
+  background: var(--fp-sidebar-bg); box-shadow: 0 1px 3px rgba(255,255,255,0.1);
+}

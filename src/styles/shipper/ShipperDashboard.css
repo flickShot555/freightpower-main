@@ -1,0 +1,318 @@
+/* Shipper dashboard specific styles - header / brand / chips */
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.logo {
+  font-weight: 700;
+  font-size: 1.5rem;
+  color: var(--text-primary, #0f172a);
+}
+.brand-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-left: 4rem;
+}
+.brand-info .company-name {
+  font-weight: 800; /* bolder */
+  font-size: 1.2rem;
+  color: var(--text-secondary, #0b1220);/* center in its column */
+  width: 100%;
+  margin: 0; /* remove default margins */
+}
+.shipper-status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* make smaller on mobile */
+@media (max-width: 640px) {
+  .company-name { display: none; }
+  .shipper-status .chip { padding: 6px 8px; font-size: 0.8rem; }
+}
+
+/* Dark mode overrides (basic) */
+.dark-root .logo, .dark-root .company-name {
+  color: #e6eef7;
+}
+.dark-root .shipper-status .chip.success {
+  background: linear-gradient(180deg,#053e37,#034b42);
+  color: #dffbf5;
+  box-shadow: none;
+}
+.dark-root .shipper-status .chip.blue {
+  background: linear-gradient(180deg,#223a66,#1b2b58);
+  color: #dfe9ff;
+  box-shadow: none;
+}
+
+@media (max-width: 1024px) {
+  .brand-info { display: none; }
+  .icons { display: none }
+}
+
+/* Also ensure company name in the sidebar (when present) is centered and bold */
+.sidebar-header .chips .company-name, 
+.sidebar-header .company-name {
+  display: block;
+  text-align: center;
+  font-weight: 800;
+  width: 100%;
+}
+
+/* Top stats layout: 3 columns x 2 rows, AI summary spans full width */
+.top-stats{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  grid-auto-rows:minmax(110px,auto);
+  gap:16px;
+  margin-bottom:18px;
+}
+.top-stats .sd-small-card{padding:18px;display:flex;flex-direction:column;justify-content:space-between}
+.top-stats .shd-ai-summary{grid-column:1/-1;background:linear-gradient(#7FA4F6 0%, #3B57A7 100%) !important;border:1px solid rgba(14,165,164,0.12)}
+.shd-ai-summary .big, .shd-ai-summary h4 { color: #fff !important; }
+
+.sd-small-card-row{display:flex;justify-content:space-between;align-items:center}
+.sd-card-icon{font-size:22px;}
+.big{font-size:28px;font-weight:800;color:#0f1724;margin-top:6px}
+.dark-root .big{color:#e6eef7!important;}
+.small-sub-active, .small-sub-time, .small-sub-rating, .small-sub-revenue, .small-sub-compliance, .small-sub-task{font-size:13px;margin-top:8px;}
+
+@media (max-width:900px){
+  .top-stats{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:520px){
+  .top-stats{grid-template-columns:1fr}
+  .top-stats .shd-ai-summary{grid-column:1/-1}
+}
+
+/* Shipper main grid: style AI Insights, Active Loads, Top Carriers, Performance, Compliance */
+.fp-main .fp-grid{ /* ensure consistent grid look for shipper */
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+.fp-main .card{background:#fff;border-radius:12px;padding:18px;box-shadow:0 6px 18px rgba(16,32,39,0.06)}
+.fp-main .card h3{margin:0 0 12px 0;color:#0b3240;font-size:18px;font-weight:700}
+
+.card.active-loads .active-load-list{display:flex;flex-direction:column;gap:12px;padding:0;margin:0}
+.card.active-loads .active-load-list li{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:8px;background:#f7fafb;border:1px solid rgba(2,6,23,0.03)}
+.dark-root .card.active-loads .active-load-list li{background: #353535; border: 1px solid rgba(255,255,255,0.04);}
+.card.active-loads .load-left{display:flex;flex-direction:column}
+.card.active-loads .load-right{display:flex;flex-direction:column;align-items:flex-end}
+.card.active-loads .muted.small{font-size:12px;color:#94a3a8}
+
+.card.top-carriers ol.top-carriers{padding-left:0;margin:0}
+.card.top-carriers li{display:flex;justify-content:space-between;align-items:center;padding:8px 0}
+.card.top-carriers{counter-reset:rank}
+.card.top-carriers li::before{content:counter(rank);counter-increment:rank;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;font-weight:700;margin-right:6px;font-size:13px; background: #f7fafb; color: #0b1720; }
+.dark-root .card.top-carriers li::before{background: #353535; color: #e6eef7; }
+.card.top-carriers .carrier-left{display:flex;flex-direction:column}
+.card.top-carriers .carrier-right{text-align:right}
+.card.top-carriers .rating{font-weight:800;}
+.card.top-carriers .muted.small{font-size:13px;color:#6b7c82}
+
+/* Active Loads list */
+.active-load-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:12px}
+.active-load-list li{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:8px;background:#f8fafb}
+.active-load-list li .muted{color:#6b7c82}
+.active-load-list li .green{color:#10b981;font-weight:700}
+.active-load-list li .red{color:#f97316;font-weight:700}
+
+/* Top carriers: numbered badges and right-side small stats */
+.top-carriers{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px;counter-reset:rank}
+.top-carriers li{display:flex;justify-content:flex-start;align-items:center;gap:12px}
+.top-carriers li::before{content:counter(rank);counter-increment:rank;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:rgba(10,201,147,0.08);color:#0aa793;font-weight:800;margin:0 12px 0 0;font-size:15px}
+.top-carriers li .carrier-left{display:flex;flex-direction:column}
+.top-carriers li .carrier-left .name{font-weight:800;color:#0b1720;font-size:16px}
+.dark-root .top-carriers li .carrier-left .name{color:#e6eef7}
+.top-carriers li .carrier-left .sub{font-size:13px;color:#6b7c82;margin-top:4px}
+.top-carriers li .carrier-right{margin-left:auto;text-align:right}
+.top-carriers li .carrier-right .rating{font-weight:800}
+
+/* Performance Health: large empty card with bottom metrics */
+.performance-card{min-height:180px}
+.performance-card .muted{font-weight:700}
+
+/* Performance card layout: metrics sit near the bottom centered horizontally */
+.performance-card .performance-metrics{display:flex;flex-direction:row;justify-content:space-between;padding:0 12px;margin-bottom:10px}
+.performance-card .metric{display:flex;flex-direction:column;align-items:center}
+.performance-card .metric .muted{font-weight:700;margin-top:6px}
+
+/* Compliance card pills (colored backgrounds + subtle borders and icon space) */
+.compliance-card .sd-exp-item.pill{display:block;padding:12px;border-radius:8px;border:1px solid rgba(0,0,0,0.04);margin-bottom:12px; background-color: #f8fafb;}
+.dark-root .compliance-card .sd-exp-item.pill{border-color:rgba(255,255,255,0.04); background:#353535;} 
+.compliance-card .sd-exp-item .exp-title{font-weight:700;}
+.compliance-card .sd-exp-item .exp-sub{font-size:13px;margin-top:6px;color:#6b7c82}
+
+/* Compliance status small list styling */
+.expiring-list{display:flex;flex-direction:column;gap:12px}
+.sd-exp-item.pill{background:#fff;padding:12px;border-radius:8px;border:1px solid #f1f5f9}
+.sd-exp-item.pill.red{background:#fff5f5;border-color:#fecaca}
+.sd-exp-item.pill.yellow{background:#fffbeb;border-color:#fef3c7}
+
+@media (max-width:900px){
+  .fp-main .fp-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:520px){
+  .fp-main .fp-grid{grid-template-columns:1fr}
+}
+
+/* Make header action buttons expand and be responsive for shipper dashboard */
+.fp-header .fp-header-controls{
+  display:flex;
+  gap:12px;
+  align-items:center;
+  justify-content:flex-start;
+  width:100%;
+}
+.fp-header .fp-header-controls .btn{
+  flex:1 1 0;
+  min-width:0;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  overflow:hidden;
+    font-size:1rem;
+}
+
+@media (max-width:700px){
+  .fp-header .fp-header-controls{flex-wrap:wrap;gap:8px}
+  .fp-header .fp-header-controls .btn{flex:1 1 45%;font-size:0.8rem;padding:8px 10px}
+}
+
+/* Filter pills and search box */
+.fp-filters {
+  align-items: center;
+}
+.fp-filters .filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 100px;
+  background: var(--card-bg, #fff);
+  border: 1px solid rgba(16,24,40,0.06);
+  color: var(--text, #0f172a);
+  font-size: 14px;
+  box-shadow: 0 0 0 1px rgba(15,23,42,0.02) inset;
+  position: relative;
+}
+.fp-filters .filter i { color: rgba(15,23,42,0.6); }
+.fp-filters .filter .chevron { margin-left: 6px; color: rgba(15,23,42,0.4); }
+
+/* Apply MyCarriers select styles to filter selects so dropdowns behave/appear the same */
+.fp-filters .filter select, .fp-filters .filter .sb-carrier-filter-select {
+  padding:8px;border-radius:100px;border:1px solid rgba(2,6,23,0.06);background:#fff;appearance:none;min-width:160px
+}
+.fp-filters .filter select:focus{box-shadow:0 0 0 0.5px #3B57A7,0 4px 8px -5px rgba(0,0,0,0.15)!important}
+
+.ssd-search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: 1px solid rgba(16,24,40,0.06);
+  border-radius: 100px!important;
+}
+.ssd-search-box i { color: rgba(15,23,42,0.4); }
+.dark-root .ssd-search-box i { color: #cacaca; }
+.ssd-search-box input {
+  border: none;
+  border-radius: 100px!important;
+  outline: none;
+  background: transparent;
+  min-width: 140px;
+  font-size: 14px;
+  color: var(--text, #0f172a);
+}
+
+.ssd-search-box input:focus, .fp-filters .filter:focus {
+  box-shadow:0 0 0 0.5px #3B57A7,0 4px 8px -5px rgba(0,0,0,0.15)!important;
+}
+
+/* Dark theme overrides (component toggles `.dark-root` on root) */
+.dark-root .fp-filters .filter {
+  /* Pills show as light rounded tokens on dark background (matches attachment) */
+  background: #2c2c2c;
+  color: #cacaca;
+  box-shadow: none;
+}
+
+.dark-root .fp-filters .filter i { color: #cacaca }
+.dark-root .fp-filters .filter .chevron { color:#cacaca }
+
+/* Search box in dark should appear as dark inner area with white rounded outline */
+.dark-root .ssd-search-box {
+  background: #2c2c2c; /* inner dark surface */
+  border: 1px solid #2c2c2c; /* white thick outline like the attachment */
+}
+
+.ssd-search-box {
+  background: #ffffff; /* inner dark surface */
+  border: 1px solid #ffffff; /* white thick outline like the attachment */
+}
+
+.dark-root .ssd-search-box input { color: #cbd5e1; }
+
+/* Dropdowns in dark */
+.dark-root .fp-filters .dropdown{
+  background: #2c2c2c;
+  border: 1px solid rgba(255,255,255,0.04);
+}
+.dark-root .fp-filters .dropdown .dropdown-item{ color: #e6eef8 }
+
+@media (max-width: 768px) {
+  .search-wrapper { flex-basis: 100%; margin-top: 8px; min-width: unset; }
+  .fp-filters { gap: 8px; }
+}
+
+/* Dropdown menu for filter pills */
+.fp-filters .dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 200px;
+  background: var(--card-bg, #fff);
+  border: 1px solid rgba(15,23,42,0.06);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(2,6,23,0.12);
+  z-index: 60;
+  padding: 6px 6px;
+}
+.fp-filters .dropdown .dropdown-item{
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text, #0f172a);
+  cursor: pointer;
+}
+.fp-filters .dropdown .dropdown-item:hover{ background: rgba(2,6,23,0.04); }
+
+/* Dark mode for dropdown (dashboards toggle `.dark-root`) */
+.dark-root .fp-filters .dropdown{
+  background: #07121a;
+  border: 1px solid rgba(255,255,255,0.04);
+}
+.dark-root .fp-filters .dropdown .dropdown-item{ color: #e6eef8 }
+
+/* Ensure AI insight pill fills the card content width (shipper only) */
+.fp-dashboard-root .card.ai-insights .insight,
+.fp-dashboard-root .fp-main .card.ai-insights .insight {
+  display: block !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  margin: 0 0 18px 0 !important;
+  padding: 12px 14px !important;
+  border-radius: 8px !important;
+  background: #f7fafb !important;
+  border: 1px solid rgba(5,94,88,0.06) !important;
+}
+
+.dark-root .fp-dashboard-root .card.ai-insights .insight,
+.dark-root .fp-main .card.ai-insights .insight {
+  background: #353535 !important;
+  border-color: rgba(5,94,88,0.18) !important;
+}

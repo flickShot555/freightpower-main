@@ -1,0 +1,60 @@
+/* Sign Document modal styles (namespaced fpdd-) */
+/* ensure modal uses the same font-family and smoothing as global styles */
+.fpdd-sig-modal, .fpdd-sig-modal * { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+/* typography sizes/weights to match app */
+.fpdd-sig-modal{ font-size:14px; }
+.fpdd-sig-header .fpdd-sig-titles h3{ font-size:18px; font-weight:700; }
+.fpdd-sig-doctitle{ font-size:13px; font-weight:500; }
+.fpdd-section-title{ font-size:15px; font-weight:600 }
+.fpdd-preview-title{ font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:0.2px }
+.fpdd-preview-row{ font-size:13px; font-weight:400 }
+.fpdd-sig-field input{ font-size:14px }
+.fpdd-sig-meta, .fpdd-meta-item{ font-size:13px }
+.dark-root .fpdd-sig-field input{ background:#2c2c2c; color:#d1d5db; border-color:#4b5563 }
+.fpdd-sig-canvas-placeholder{ font-size:13px }
+.fpdd-sig-modal .btn{ font-size:14px; font-weight:600 }
+.fpdd-sig-modal .btn.small{ font-size:13px; font-weight:500 }
+
+.fpdd-sig-overlay{ position:fixed; inset:0; background:rgba(15,23,42,0.55); display:flex; align-items:center; justify-content:center; z-index:1200; padding:20px }
+.fpdd-sig-modal{ width:820px; max-width:100%; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 24px 60px rgba(13,27,40,0.45); max-height:92vh; display:flex; flex-direction:column }
+.dark-root .fpdd-sig-modal{ background:#2c2c2c; color:#d1d5db }
+.fpdd-sig-header{ display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background: linear-gradient(#7FA4F6 0%, #3B57A7 100%); color:#fff; position:sticky; top:0; z-index:3 }
+.fpdd-sig-header-left{ display:flex; gap:12px; align-items:center }
+.fpdd-sig-titles h3{ margin:0; font-size:16px }
+.fpdd-sig-doctitle{ font-size:12px; opacity:0.95 }
+.fpdd-sig-subsmall{ font-size:12px; opacity:0.9; margin-top:4px }
+.fpdd-sig-close{ background:transparent; border:none; color:#fff; font-size:18px }
+.fpdd-sig-body{ display:flex; gap:20px; padding:18px; overflow:auto }
+.fpdd-sig-left{ flex:1; min-width:0 }
+.fpdd-sig-right{ width:260px; display:flex; flex-direction:column; gap:12px }
+.fpdd-section-title{ margin:0 0 8px 0; font-size:14px }
+.fpdd-sig-preview{ background:#f8fafc; padding:14px; border-radius:8px; border:1px solid #eef2f7; margin-bottom:12px }
+.dark-root .fpdd-sig-preview{ background:#2c2c2c; border-color:#4b5563 }
+.fpdd-preview-title{ font-weight:700; margin-bottom:8px }
+.fpdd-preview-row{ color:#374151; margin-bottom:4px; font-size:13px }
+.dark-root .fpdd-preview-row{ color:#d1d5db }
+.fpdd-sig-view-full{ display:inline-block; margin-bottom:12px; color:#3B57A7  }
+.dark-root .fpdd-sig-view-full{ color:#7FA4F6 }
+.fpdd-sig-canvas{ border-radius:8px; background: linear-gradient(180deg,#ffffff,#fbfdff); border:1px solid #eef2f7; padding:12px; margin-bottom:8px; position:relative }
+.dark-root .fpdd-sig-canvas{ background: linear-gradient(180deg,#3b3b3b,#2c2c2c); border-color:#4b5563 }
+.fpdd-sig-canvas-lines{ position:absolute; left:12px; right:12px; top:18px }
+.fpdd-sig-canvas-lines .line{ height:1px; background:#eef2f7; margin:18px 0 }
+.fpdd-sig-canvas-placeholder{ padding:34px 12px; color:#9ca3af; text-align:center }
+.fpdd-sig-canvas-actions{ display:flex; gap:8px; margin-bottom:12px; ;flex-wrap: wrap; }
+.fpdd-sig-fields{ display:flex; gap:12px; margin-bottom:12px }
+.fpdd-sig-field label{ display:block; font-size:12px; color:#6b7280; margin-bottom:6px }
+.fpdd-sig-field input{ width:100%; padding:10px; border:1px solid #e6eef3; border-radius:8px }
+.fpdd-sig-meta{ display:flex; gap:12px; align-items:center; color:#6b7280; margin-top:6px }
+.fpdd-meta-item{ display:flex; align-items:center; gap:8px }
+.fpdd-sig-secondary{ display:flex; gap:8px; justify-content:space-between; margin-top:6px; flex-wrap: wrap; width: 100%;}
+.fpdd-sig-secondary .btn{ width:100%; display:flex; align-items:center; justify-content:center }
+/* info card around name/date */
+.fpdd-info-card{ background:#f3f4f6; border-radius:8px; padding:12px; margin-top:12px }
+.dark-root .fpdd-info-card{ background:#2c2c2c; color:#d1d5db }
+.fpdd-sig-footer{ padding:16px 18px; border-top:1px solid #eef2f7; display:flex; flex-direction:column; gap:10px }
+.dark-root .fpdd-sig-footer{ border-color:#4b5563 }
+.fpdd-sig-footer .fpdd-sig-secondary{ margin-top:0 }
+@media (max-width:820px){ .fpdd-sig-modal{ width:100%; height:100%; max-height:95vh } .fpdd-sig-right{ width:100%; } }
+
+/* helper to prevent background scroll while modal is open */
+.fpdd-modal-open { overflow: hidden; }

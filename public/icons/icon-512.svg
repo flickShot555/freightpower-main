@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#111827"/>
+  <path d="M128 310c0-48 39-86 86-86h148c48 0 86 39 86 86v18c0 16-12 28-28 28H156c-16 0-28-12-28-28v-18z" fill="#ffffff" opacity="0.92"/>
+  <path d="M182 198c0-34 28-62 62-62h24c34 0 62 28 62 62v18H182v-18z" fill="#22c55e"/>
+  <text x="256" y="412" text-anchor="middle" font-family="system-ui,Segoe UI,Arial" font-size="56" fill="#ffffff" opacity="0.9">FreightPower</text>
+</svg>

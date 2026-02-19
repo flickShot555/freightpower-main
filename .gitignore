@@ -1,0 +1,63 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+.vite/
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Env files (do NOT commit)
+.env
+.env.*
+!.env.example
+
+# Credentials / service accounts (do NOT commit)
+serviceAccountKey.json
+serviceAccountkey.json
+**/serviceAccountKey*.json
+**/*serviceAccount*.json
+*.pem
+*.p12
+*.pfx
+*.key
+*.crt
+
+# Firebase local tools
+.firebase/
+
+# Runtime/generated data (keep seed JSONs)
+data/documents/
+data/kb/
+apps/data/kb/
+
+# Coverage / tooling caches
+coverage/
+.coverage
+.cache/
