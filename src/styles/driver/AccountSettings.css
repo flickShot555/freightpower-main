@@ -219,6 +219,36 @@
     font-weight: 650;
 }
 
+/* Coming soon overlay (Integrations) */
+.fp-coming-soon-wrap {
+  position: relative;
+}
+
+.fp-coming-soon-content {
+  filter: blur(2px);
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
+}
+
+.fp-coming-soon-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  color: #6b7280;
+  background: rgba(255, 255, 255, 0.65);
+  border-radius: 12px;
+}
+
+.dark-root .fp-coming-soon-overlay {
+  color: #d1d5db;
+  background: rgba(0, 0, 0, 0.25);
+}
+
 /* Security & Accessibility Section */
 .security-accessibility-section {
   display: grid;
@@ -435,5 +465,80 @@
   .preferences-card {
     height: auto; /* don't force equal height on stacked cards */
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* High Contrast mode (accessibility)                                  */
+/* Enabled by adding class `fp-high-contrast` on <html>                 */
+/* ------------------------------------------------------------------ */
+html.fp-high-contrast .profile-card,
+html.fp-high-contrast .preferences-card,
+html.fp-high-contrast .security-card,
+html.fp-high-contrast .accessibility-card,
+html.fp-high-contrast .reports-card,
+html.fp-high-contrast .integrations-card,
+html.fp-high-contrast .support-card {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border: 1px solid #ffffff !important;
+  box-shadow: none !important;
+}
+
+html.fp-high-contrast .action-item,
+html.fp-high-contrast .integration-item {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border: 1px solid #ffffff !important;
+}
+
+html.fp-high-contrast .profile-field label,
+html.fp-high-contrast .preferences-field label,
+html.fp-high-contrast .access-field label,
+html.fp-high-contrast .profile-card-title,
+html.fp-high-contrast .preferences-card-title,
+html.fp-high-contrast .card-title,
+html.fp-high-contrast .preferences-section-label {
+  color: #ffffff !important;
+}
+
+html.fp-high-contrast .profile-field input,
+html.fp-high-contrast .profile-field textarea,
+html.fp-high-contrast .preferences-field select,
+html.fp-high-contrast .access-field select {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border: 1px solid #ffffff !important;
+}
+
+html.fp-high-contrast .preferences-link a,
+html.fp-high-contrast .change-photo-btn {
+  color: #00ffff !important;
+}
+
+html.fp-high-contrast .toggle-switch .slider {
+  background-color: #000000 !important;
+  border: 2px solid #ffffff !important;
+  box-shadow: none !important;
+}
+
+html.fp-high-contrast .toggle-switch .slider:before {
+  background-color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+html.fp-high-contrast .toggle-switch input:checked + .slider {
+  background: #ffff00 !important;
+  border-color: #ffff00 !important;
+}
+
+html.fp-high-contrast .toggle-switch input:checked + .slider:before {
+  background-color: #000000 !important;
+}
+
+html.fp-high-contrast .chev,
+html.fp-high-contrast .coming-soon,
+html.fp-high-contrast .download,
+html.fp-high-contrast .external {
+  color: #ffffff !important;
 }
 

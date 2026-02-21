@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getJson } from '../api/http';
+import { AUTO_REFRESH_MS } from '../constants/refresh';
 
-export default function useAdminManagementUsers({ role = 'all', limit = 250, refreshMs = 5000 } = {}) {
+export default function useAdminManagementUsers({ role = 'all', limit = 250, refreshMs = AUTO_REFRESH_MS } = {}) {
   const [items, setItems] = useState([]);
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -44,7 +45,7 @@ export default function useAdminManagementUsers({ role = 'all', limit = 250, ref
     setMetrics(null);
 
     fetchOnce();
-    const interval = Math.max(1500, Number(refreshMs || 5000));
+    const interval = Math.max(1500, Number(refreshMs || AUTO_REFRESH_MS));
     timer = setInterval(fetchOnce, interval);
 
     return () => {

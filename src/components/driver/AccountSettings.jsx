@@ -1,15 +1,19 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_URL } from '../../config';
 import { getJson, postJson } from '../../api/http';
 import { useUserSettings } from '../../contexts/UserSettingsContext';
 import { startRegistration } from '../../utils/webauthn';
 import '../../styles/driver/AccountSettings.css';
+import '../../styles/carrier/Marketplace.css';
+import { LANGUAGE_OPTIONS, t } from '../../i18n/translate';
 
-export default function AccountSettings({ onProfileUpdate }) {
+export default function AccountSettings({ onProfileUpdate, onNavigate }) {
   const { currentUser } = useAuth();
-  const { settings: userSettings, patchSettings } = useUserSettings();
+  const { settings: userSettings, patchSettings, setSettings: setUserSettings } = useUserSettings();
+  const language = userSettings?.language || 'English';
   const fileInputRef = useRef(null);
+  const userSettingsRef = useRef(userSettings);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -27,6 +31,15 @@ export default function AccountSettings({ onProfileUpdate }) {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [prefsSaving, setPrefsSaving] = useState(false);
 
+  // Calendar integration (OAuth + sync)
+  const [calendarStatus, setCalendarStatus] = useState({
+    google: { connected: false, updated_at: null },
+    outlook: { connected: false, updated_at: null },
+    last_synced_at: null,
+  });
+  const [calendarBusy, setCalendarBusy] = useState(false);
+  const didAutoSyncRef = useRef(false);
+
   // Reports + Support
   const [reportBusy, setReportBusy] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
@@ -39,6 +52,16 @@ export default function AccountSettings({ onProfileUpdate }) {
   const [securityBusy, setSecurityBusy] = useState(false);
   const [pwForm, setPwForm] = useState({ current_password: '', new_password: '' });
   const [profileUpdates, setProfileUpdates] = useState([]);
+
+  // Marketplace profile preview modal
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const [previewDriverCard, setPreviewDriverCard] = useState(null);
+
+  useEffect(() => {
+    userSettingsRef.current = userSettings;
+  }, [userSettings]);
 
   useEffect(() => {
     const detectDark = () => {
@@ -227,15 +250,293 @@ export default function AccountSettings({ onProfileUpdate }) {
   };
 
   const updateSettings = async (partial, label) => {
+    const before = userSettingsRef.current;
+
     try {
       setPrefsSaving(true);
+
+      // Optimistic UI update so accessibility/theming changes apply immediately.
+      setUserSettings((prev) => {
+        const safePrev = prev || {};
+        const next = { ...safePrev, ...partial };
+
+        if (partial?.notification_preferences && typeof partial.notification_preferences === 'object') {
+          next.notification_preferences = {
+            ...(safePrev.notification_preferences || {}),
+            ...partial.notification_preferences,
+          };
+        }
+
+        return next;
+      });
+
       await patchSettings(partial, { requestLabel: label || 'PATCH /auth/settings (driver settings)' });
       setMessage({ type: 'success', text: 'Preferences saved' });
       setTimeout(() => setMessage({ type: '', text: '' }), 2000);
     } catch (e) {
+      // Roll back optimistic update if the server rejects the change.
+      if (before) setUserSettings(before);
       setMessage({ type: 'error', text: e?.message || 'Failed to save preferences' });
     } finally {
       setPrefsSaving(false);
+    }
+  };
+
+  const selectedCalendarProvider = useMemo(() => {
+    const v = String(userSettings?.calendar_sync || '').toLowerCase();
+    if (v.includes('outlook')) return 'outlook';
+    return 'google';
+  }, [userSettings?.calendar_sync]);
+
+  const fetchCalendarStatus = useCallback(async () => {
+    if (!currentUser) return;
+    try {
+      const status = await getJson('/calendar/status', { requestLabel: 'GET /calendar/status' });
+      setCalendarStatus(status || {
+        google: { connected: false, updated_at: null },
+        outlook: { connected: false, updated_at: null },
+        last_synced_at: null,
+      });
+    } catch {
+      // ignore
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    fetchCalendarStatus();
+  }, [fetchCalendarStatus]);
+
+  const startCalendarConnect = useCallback(async () => {
+    if (!currentUser) return;
+    setCalendarBusy(true);
+    setMessage({ type: '', text: '' });
+    try {
+      const returnTo = `${window.location.pathname}${window.location.search || ''}`;
+      const data = await getJson(
+        `/calendar/oauth/${selectedCalendarProvider}/start?return_to=${encodeURIComponent(returnTo)}`,
+        { requestLabel: `GET /calendar/oauth/${selectedCalendarProvider}/start`, timeoutMs: 25000 }
+      );
+      const url = data?.auth_url;
+      if (!url) throw new Error('Failed to start calendar connection');
+      window.location.assign(url);
+    } catch (e) {
+      setMessage({ type: 'error', text: e?.message || 'Failed to connect calendar' });
+      setCalendarBusy(false);
+    }
+  }, [currentUser, selectedCalendarProvider]);
+
+  const disconnectCalendar = useCallback(async () => {
+    if (!currentUser) return;
+    setCalendarBusy(true);
+    setMessage({ type: '', text: '' });
+    try {
+      await postJson(
+        '/calendar/disconnect',
+        { provider: selectedCalendarProvider },
+        { requestLabel: 'POST /calendar/disconnect' }
+      );
+      await fetchCalendarStatus();
+    } catch (e) {
+      setMessage({ type: 'error', text: e?.message || 'Failed to disconnect calendar' });
+    } finally {
+      setCalendarBusy(false);
+    }
+  }, [currentUser, fetchCalendarStatus, selectedCalendarProvider]);
+
+  const buildUpcomingEvents = useCallback(async () => {
+    const parseDateOnly = (value) => {
+      const s = String(value || '').trim();
+      if (!s) return null;
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) {
+        const y = Number(m[1]);
+        const mo = Number(m[2]) - 1;
+        const d = Number(m[3]);
+        const dt = new Date(y, mo, d);
+        if (!Number.isNaN(dt.getTime())) return dt;
+      }
+      const dt = new Date(s);
+      if (!Number.isNaN(dt.getTime())) return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+      return null;
+    };
+
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const toYmd = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    const addDays = (d, days) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + Number(days || 0));
+
+    const today = new Date();
+    const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    const [loadsResp, docsResp] = await Promise.all([
+      getJson('/loads', { requestLabel: 'GET /loads (calendar sync)' }).catch(() => ({})),
+      getJson('/documents', { requestLabel: 'GET /documents (calendar sync)' }).catch(() => ({})),
+    ]);
+
+    const loads = Array.isArray(loadsResp?.loads) ? loadsResp.loads : [];
+    const docs = Array.isArray(docsResp?.documents) ? docsResp.documents : (Array.isArray(docsResp) ? docsResp : []);
+
+    const events = [];
+
+    for (const l of loads) {
+      const loadId = String(l?.load_id || l?.id || l?.loadId || '').trim();
+      const loadNumber = String(l?.load_number || '').trim() || loadId || '—';
+      const status = String(l?.status || '').trim();
+
+      const pickup = parseDateOnly(l?.pickup_date);
+      const delivery = parseDateOnly(l?.delivery_date);
+
+      if (pickup && pickup.getTime() >= todayDateOnly.getTime()) {
+        const start = toYmd(pickup);
+        const end = toYmd(addDays(pickup, 1));
+        events.push({
+          internal_id: `load:${loadId}:pickup:${start}`,
+          title: `Pickup: Load ${loadNumber}`,
+          all_day: true,
+          start,
+          end,
+          description: loadId ? `Load: ${loadId}\nStatus: ${status}` : undefined,
+        });
+      }
+
+      if (delivery && delivery.getTime() >= todayDateOnly.getTime()) {
+        const start = toYmd(delivery);
+        const end = toYmd(addDays(delivery, 1));
+        events.push({
+          internal_id: `load:${loadId}:delivery:${start}`,
+          title: `Delivery: Load ${loadNumber}`,
+          all_day: true,
+          start,
+          end,
+          description: loadId ? `Load: ${loadId}\nStatus: ${status}` : undefined,
+        });
+      }
+    }
+
+    for (const d of docs) {
+      const exp = parseDateOnly(d?.expiry_date || d?.extracted_fields?.expiry_date);
+      if (!exp) continue;
+      if (exp.getTime() < todayDateOnly.getTime()) continue;
+      const kind = String(d?.type || d?.document_type || 'Document').replace(/_/g, ' ').toUpperCase();
+      const docId = String(d?.id || d?.doc_id || '').trim();
+      const start = toYmd(exp);
+      const end = toYmd(addDays(exp, 1));
+      events.push({
+        internal_id: `doc:${docId}:expiry:${start}`,
+        title: `${kind} expires`,
+        all_day: true,
+        start,
+        end,
+        description: docId ? `Document: ${docId}` : undefined,
+      });
+    }
+
+    const seen = new Set();
+    const out = [];
+    for (const e of events) {
+      const id = String(e?.internal_id || '').trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      out.push(e);
+    }
+    return out;
+  }, []);
+
+  const syncUpcomingEvents = useCallback(async (opts = {}) => {
+    if (!currentUser) return;
+    setCalendarBusy(true);
+    setMessage({ type: '', text: '' });
+    try {
+      const events = await buildUpcomingEvents();
+      const remindersEnabled = Boolean(userSettingsRef.current?.calendar_reminders_enabled !== false);
+      const res = await postJson(
+        '/calendar/sync',
+        {
+          provider: selectedCalendarProvider,
+          events,
+          reminders_enabled: remindersEnabled,
+        },
+        { requestLabel: 'POST /calendar/sync', timeoutMs: 25000 }
+      );
+      await fetchCalendarStatus();
+      if (!opts?.silent) {
+        const synced = Number(res?.synced || 0);
+        setMessage({ type: 'success', text: synced ? `Synced ${synced} events to your calendar.` : 'No upcoming events to sync.' });
+        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      }
+    } catch (e) {
+      setMessage({ type: 'error', text: e?.message || 'Calendar sync failed' });
+    } finally {
+      setCalendarBusy(false);
+    }
+  }, [buildUpcomingEvents, currentUser, fetchCalendarStatus, selectedCalendarProvider]);
+
+  useEffect(() => {
+    // Redirect back from OAuth callback: /driver-dashboard?nav=settings&calendar_connected=1&calendar_auto_sync=1
+    try {
+      const qs = new URLSearchParams(window.location.search || '');
+      const connected = qs.get('calendar_connected') === '1';
+      const autoSync = qs.get('calendar_auto_sync') === '1';
+      if (!connected) return;
+      fetchCalendarStatus();
+      if (autoSync && !didAutoSyncRef.current) {
+        didAutoSyncRef.current = true;
+        setTimeout(() => {
+          syncUpcomingEvents({ silent: false }).catch(() => {});
+        }, 350);
+      }
+    } catch {
+      // ignore
+    }
+  }, [fetchCalendarStatus, syncUpcomingEvents]);
+
+  const formatDriverForMarketplaceCard = (driver) => {
+    const endorsements = [];
+    if (driver?.hazmat_endorsement) endorsements.push('Hazmat');
+    if (driver?.tanker_endorsement) endorsements.push('Tanker');
+    if (driver?.doubles_triples) endorsements.push('Double/Triple');
+    if (driver?.passenger_endorsement) endorsements.push('Passenger');
+    if (endorsements.length === 0) endorsements.push('None');
+
+    const equipmentTypes = [];
+    if (driver?.cdl_verified) equipmentTypes.push('CDL Valid');
+    if (driver?.medical_card_verified) equipmentTypes.push('Med Card Active');
+    if (driver?.drug_test_status === 'passed') equipmentTypes.push('MVR Clean');
+
+    const name = driver?.name || 'Unknown Driver';
+    const photo = driver?.profile_picture_url
+      || driver?.photo_url
+      || driver?.photo
+      || `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Driver')}&background=random`;
+
+    return {
+      id: driver?.id || driver?.driver_id,
+      name,
+      rating: driver?.rating || 0,
+      trips: driver?.total_deliveries || driver?.total_loads || 0,
+      class: driver?.cdl_class ? `${driver?.cdl_class} - ${driver?.cdl_state || ''}` : 'N/A',
+      location: driver?.current_location || driver?.current_city || 'Unknown',
+      lastActivity: 'Recently active',
+      endorsements,
+      safetyScore: driver?.safety_score || 0,
+      available: driver?.status === 'available',
+      equipmentTypes: equipmentTypes.length > 0 ? equipmentTypes : ['Pending Verification'],
+      photo,
+    };
+  };
+
+  const openPreviewMarketplaceProfile = async () => {
+    setPreviewOpen(true);
+    if (previewDriverCard || previewBusy) return;
+
+    setPreviewBusy(true);
+    setPreviewError('');
+    try {
+      const raw = await getJson('/drivers/me', { requestLabel: 'GET /drivers/me (driver preview)' });
+      setPreviewDriverCard(formatDriverForMarketplaceCard(raw || {}));
+    } catch {
+      setPreviewError('Failed to load marketplace profile preview.');
+    } finally {
+      setPreviewBusy(false);
     }
   };
 
@@ -626,7 +927,7 @@ export default function AccountSettings({ onProfileUpdate }) {
           >
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
-          <button className="btn small-cd" style={{ marginTop: '8px' }}>
+          <button className="btn small-cd" style={{ marginTop: '8px' }} onClick={openPreviewMarketplaceProfile}>
             Preview Marketplace Profile
           </button>
         </div>
@@ -637,14 +938,15 @@ export default function AccountSettings({ onProfileUpdate }) {
             Preferences
           </h2>
           <div className="preferences-field">
-            <label>Language</label>
+            <label>{t(language, 'settings.language', 'Language')}</label>
             <select
               value={userSettings?.language || 'English'}
               disabled={prefsSaving}
               onChange={(e) => updateSettings({ language: e.target.value }, 'PATCH /auth/settings (language)')}
             >
-              <option>English</option>
-              <option>Spanish</option>
+              {LANGUAGE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
             </select>
           </div>
           <div className="preferences-section-label">Notifications</div>
@@ -700,12 +1002,22 @@ export default function AccountSettings({ onProfileUpdate }) {
             </label>
           </div>
           <div className="preferences-link">
-            <a href="#" onClick={(e) => { e.preventDefault(); setMessage({ type: 'error', text: 'Notification history is not yet available.' }); }}>
-              View Notification History
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                if (typeof onNavigate === 'function') {
+                  onNavigate('alerts');
+                  return;
+                }
+                setMessage({ type: 'error', text: 'Unable to open notifications from this screen.' });
+              }}
+            >
+              {t(language, 'settings.notificationHistory', 'View Notification History')}
             </a>
           </div>
           <div className="preferences-field">
-            <label>Calendar Sync</label>
+            <label>{t(language, 'settings.calendarSync', 'Calendar Sync')}</label>
             <select
               value={userSettings?.calendar_sync || 'Google Calendar'}
               disabled={prefsSaving}
@@ -714,6 +1026,55 @@ export default function AccountSettings({ onProfileUpdate }) {
               <option>Google Calendar</option>
               <option>Outlook</option>
             </select>
+          </div>
+
+          <div className="preferences-checkbox" style={{ marginTop: 8 }}>
+            <label>Reminders</label>
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={Boolean(userSettings?.calendar_reminders_enabled !== false)}
+                disabled={prefsSaving}
+                onChange={(e) => updateSettings({ calendar_reminders_enabled: e.target.checked }, 'PATCH /auth/settings (calendar_reminders_enabled)')}
+              />
+              <span className="slider"></span>
+            </label>
+          </div>
+
+          <div className="preferences-section-label" style={{ marginTop: 12 }}>Connect Calendar</div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ fontSize: 13, color: asTheme.muted }}>
+              Status: {calendarStatus?.[selectedCalendarProvider]?.connected ? 'Connected' : 'Not connected'}
+            </div>
+            {!calendarStatus?.[selectedCalendarProvider]?.connected ? (
+              <button
+                className="btn small-cd"
+                type="button"
+                disabled={Boolean(calendarBusy)}
+                onClick={startCalendarConnect}
+              >
+                {selectedCalendarProvider === 'outlook' ? 'Connect Outlook' : 'Connect Google'}
+              </button>
+            ) : (
+              <>
+                <button
+                  className="btn small-cd"
+                  type="button"
+                  disabled={Boolean(calendarBusy)}
+                  onClick={() => syncUpcomingEvents({ silent: false })}
+                >
+                  Sync Upcoming Events
+                </button>
+                <button
+                  className="btn small-cd"
+                  type="button"
+                  disabled={Boolean(calendarBusy)}
+                  onClick={disconnectCalendar}
+                >
+                  Disconnect
+                </button>
+              </>
+            )}
           </div>
 
         </div>
@@ -972,32 +1333,37 @@ export default function AccountSettings({ onProfileUpdate }) {
           </button>
         </div>
 
-        <div className="integrations-card">
+        <div className="integrations-card fp-coming-soon-card">
           <h3 className="card-title">Integrations</h3>
-          <ul className="integration-list">
-            <li className="integration-item">
-              <div>
-                <div className="integration-title">ELD Device</div>
-                <div className="integration-desc">Garmin eLog 2.0 - Device ID: #GL2024567</div>
-              </div>
-              <div className="int-status-badge active">Connected</div>
-            </li>
-            <li className="integration-item">
-              <div>
-                <div className="integration-title">Fuel Services</div>
-                <div className="integration-desc">TVC Pro Driver - Fleet Card Integration</div>
-              </div>
-              <div className="int-status-badge active">Connected</div>
-            </li>
-            <li className="integration-item">
-              <div>
-                <div className="integration-title">Training Provider</div>
-                <div className="integration-desc">Connect training services for compliance tracking</div>
-              </div>
-              <div className="int-status-badge disconnected">Not Connected</div>
-            </li>
-          </ul>
-          <button className="btn small-cd" style={{marginTop: '20px'}}>Manage Permissions</button>
+          <div className="fp-coming-soon-wrap">
+            <div className="fp-coming-soon-overlay">Coming soon</div>
+            <div className="fp-coming-soon-content">
+              <ul className="integration-list">
+                <li className="integration-item">
+                  <div>
+                    <div className="integration-title">ELD Device</div>
+                    <div className="integration-desc">Garmin eLog 2.0 - Device ID: #GL2024567</div>
+                  </div>
+                  <div className="int-status-badge active">Connected</div>
+                </li>
+                <li className="integration-item">
+                  <div>
+                    <div className="integration-title">Fuel Services</div>
+                    <div className="integration-desc">TVC Pro Driver - Fleet Card Integration</div>
+                  </div>
+                  <div className="int-status-badge active">Connected</div>
+                </li>
+                <li className="integration-item">
+                  <div>
+                    <div className="integration-title">Training Provider</div>
+                    <div className="integration-desc">Connect training services for compliance tracking</div>
+                  </div>
+                  <div className="int-status-badge disconnected">Not Connected</div>
+                </li>
+              </ul>
+              <button className="btn small-cd" style={{marginTop: '20px'}}>Manage Permissions</button>
+            </div>
+          </div>
         </div>
       </div>
       {/* Support & Help Section */}
@@ -1032,6 +1398,143 @@ export default function AccountSettings({ onProfileUpdate }) {
           </ul>
         </div>
       </div>
+
+      {/* Marketplace profile preview modal */}
+      {previewOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2400,
+            padding: 16,
+          }}
+          onClick={() => setPreviewOpen(false)}
+        >
+          <div
+            style={{
+              width: 'min(860px, 100%)',
+              background: asTheme.surface,
+              borderRadius: 12,
+              padding: 16,
+              boxShadow: isDarkMode ? 'none' : '0 18px 40px rgba(16,24,40,0.25)',
+              border: `1px solid ${asTheme.border}`,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: asTheme.text }}>
+                Marketplace Profile Preview
+              </div>
+              <button className="btn small ghost-cd" onClick={() => setPreviewOpen(false)} disabled={previewBusy}>Close</button>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              {previewBusy && (
+                <div style={{ padding: 16, textAlign: 'center', color: asTheme.body }}>
+                  <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 10 }} /> Loading preview...
+                </div>
+              )}
+
+              {!previewBusy && previewError && (
+                <div style={{ padding: 16, color: asTheme.body }}>{previewError}</div>
+              )}
+
+              {!previewBusy && !previewError && previewDriverCard && (
+                <div className="marketplace-driver-card" style={{ margin: 0 }}>
+                  <div className="marketplace-driver-header">
+                    <div className="marketplace-driver-left">
+                      <div className="marketplace-driver-avatar">
+                        <img src={previewDriverCard.photo} alt={previewDriverCard.name} />
+                      </div>
+                      <div className="marketplace-driver-info">
+                        <div className="marketplace-driver-name-row">
+                          <h3 className="marketplace-driver-name">{previewDriverCard.name}</h3>
+                          <div className="marketplace-driver-rating">
+                            <i className="fa-solid fa-star" />
+                            <span>{previewDriverCard.rating}</span>
+                            <span className="marketplace-trips-count">• {previewDriverCard.trips} trips</span>
+                          </div>
+                        </div>
+
+                        <div className="marketplace-driver-details">
+                          <div className="marketplace-detail-item">
+                            <span className="marketplace-detail-label">CDL INFO</span>
+                            <span className="marketplace-detail-value">Class {previewDriverCard.class}</span>
+                            <span className="marketplace-detail-sub">Exp: 03/2025</span>
+                          </div>
+
+                          <div className="marketplace-detail-item">
+                            <span className="marketplace-detail-label">LOCATION</span>
+                            <span className="marketplace-detail-value">{previewDriverCard.location}</span>
+                            <span className="marketplace-detail-sub">{previewDriverCard.lastActivity}</span>
+                          </div>
+
+                          <div className="marketplace-detail-item">
+                            <span className="marketplace-detail-label">STATUS</span>
+                            <span className={`marketplace-detail-value marketplace-status-${previewDriverCard.available ? 'available' : 'unavailable'}`}>
+                              <i className="fa-solid fa-circle" />
+                              {previewDriverCard.available ? 'Available' : 'Not Available'}
+                            </span>
+                          </div>
+
+                          <div className="marketplace-detail-item">
+                            <span className="marketplace-detail-label">AI SAFETY SCORE</span>
+                            <span className="marketplace-detail-value marketplace-safety-score">
+                              {previewDriverCard.safetyScore}/100
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="marketplace-driver-tags">
+                          <div className="marketplace-endorsements">
+                            <span className="marketplace-tags-label">Endorsements:</span>
+                            {(previewDriverCard.endorsements || []).map((endorsement, index) => (
+                              <span key={index} className="marketplace-endorsement-tag">{endorsement}</span>
+                            ))}
+                          </div>
+
+                          <div className="marketplace-equipment-status">
+                            {(previewDriverCard.equipmentTypes || []).map((equipment, index) => (
+                              <span
+                                key={index}
+                                className={`marketplace-equipment-tag ${equipment.includes('Valid') || equipment.includes('Active') || equipment.includes('Clean') ? 'valid' : equipment.includes('Expiring') ? 'warning' : 'invalid'}`}
+                              >
+                                <i className={`fa-solid ${equipment.includes('Valid') || equipment.includes('Active') || equipment.includes('Clean') ? 'fa-check-circle' : equipment.includes('Expiring') ? 'fa-exclamation-triangle' : 'fa-times-circle'}`} />
+                                {equipment}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="marketplace-driver-actions">
+                      <button className={`marketplace-btn-hire ${previewDriverCard.available ? 'available' : 'unavailable'}`} disabled>
+                        <i className="fa-solid fa-plus" /> Hire Driver
+                      </button>
+                      <div className="marketplace-driver-menu">
+                        <button className="marketplace-menu-btn" title="View Details" disabled>
+                          <i className="fa-solid fa-file-text" />
+                        </button>
+                        <button className="marketplace-menu-btn" title="Message" disabled>
+                          <i className="fa-solid fa-message" />
+                        </button>
+                        <button className="marketplace-menu-btn" title="Favorite" disabled>
+                          <i className="fa-regular fa-heart" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Support modal */}
       {supportOpen && (

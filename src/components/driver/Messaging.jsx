@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import '../../styles/carrier/Messaging.css';
 import { getJson, openEventSource, postJson } from '../../api/http';
+import { AUTO_REFRESH_MS } from '../../constants/refresh';
 
 function initials(value) {
   const s = String(value || '').trim();
@@ -31,6 +32,11 @@ export default function Messaging({ initialThreadId = null } = {}) {
   const threadsStreamRef = React.useRef(null);
   const unreadRefreshTimerRef = React.useRef(null);
   const didInitSelectRef = React.useRef(false);
+  const loadSeqRef = React.useRef(0);
+
+  const messagesAreaRef = React.useRef(null);
+  const messagesEndRef = React.useRef(null);
+  const stickToBottomRef = React.useRef(true);
 
   const [showChatMobile, setShowChatMobile] = useState(false);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 900);
@@ -62,6 +68,27 @@ export default function Messaging({ initialThreadId = null } = {}) {
 
   const msgTheme = {
     muted: isDarkMode ? '#94a3b8' : '#64748b'
+  };
+
+  const scrollToBottom = (behavior = 'auto') => {
+    try {
+      messagesEndRef.current?.scrollIntoView({ block: 'end', behavior });
+    } catch {
+      // ignore
+    }
+  };
+
+  const mergeChronologicalUnique = (primary = [], secondary = []) => {
+    const map = new Map();
+    [...(primary || []), ...(secondary || [])].forEach((m) => {
+      if (!m) return;
+      const id = String(m.id || '');
+      if (!id) return;
+      map.set(id, m);
+    });
+    const out = Array.from(map.values());
+    out.sort((a, b) => Number(a?.created_at || 0) - Number(b?.created_at || 0));
+    return out;
   };
 
   async function refreshThreads() {
@@ -109,6 +136,7 @@ export default function Messaging({ initialThreadId = null } = {}) {
   }
 
   async function selectThread(thread) {
+    const seq = ++loadSeqRef.current;
     if (streamRef.current) {
       try { streamRef.current.close(); } catch { /* ignore */ }
       streamRef.current = null;
@@ -117,12 +145,28 @@ export default function Messaging({ initialThreadId = null } = {}) {
     setThreadLoading(true);
     setMessages([]);
 
+    // Reset scroll pin when opening a thread.
+    stickToBottomRef.current = true;
+
     if (thread.kind === 'admin_channel') {
       try {
-        const data = await getJson(`/messaging/notifications/channels/${thread.channel_id}/messages?limit=200`);
-        setMessages(data.messages || []);
-      } finally {
+        // Fast: load latest first, then fill.
+        const first = await getJson(`/messaging/notifications/channels/${thread.channel_id}/messages?limit=30`, { timeoutMs: 30000, requestLabel: 'GET /messaging/notifications/channel/messages?limit=30' });
+        if (loadSeqRef.current !== seq) return;
+        setMessages(first.messages || []);
         setThreadLoading(false);
+        requestAnimationFrame(() => scrollToBottom('auto'));
+
+        // Background fill (up to 200)
+        getJson(`/messaging/notifications/channels/${thread.channel_id}/messages?limit=200`, { timeoutMs: 30000, requestLabel: 'GET /messaging/notifications/channel/messages?limit=200' })
+          .then((full) => {
+            if (loadSeqRef.current !== seq) return;
+            setMessages((prev) => mergeChronologicalUnique(full?.messages || [], prev || []));
+            if (stickToBottomRef.current) requestAnimationFrame(() => scrollToBottom('auto'));
+          })
+          .catch(() => {});
+      } finally {
+        if (loadSeqRef.current === seq) setThreadLoading(false);
       }
       try {
         await postJson(`/messaging/notifications/channels/${thread.channel_id}/read`, {});
@@ -135,10 +179,22 @@ export default function Messaging({ initialThreadId = null } = {}) {
 
     let data;
     try {
-      data = await getJson(`/messaging/threads/${thread.id}/messages?limit=100`);
+      // Fast: latest messages first (small limit), then fill the rest (up to 200) in background.
+      data = await getJson(`/messaging/threads/${thread.id}/messages?limit=30`, { timeoutMs: 30000, requestLabel: 'GET /messaging/thread/messages?limit=30' });
+      if (loadSeqRef.current !== seq) return;
       setMessages(data.messages || []);
-    } finally {
       setThreadLoading(false);
+      requestAnimationFrame(() => scrollToBottom('auto'));
+
+      getJson(`/messaging/threads/${thread.id}/messages?limit=200`, { timeoutMs: 30000, requestLabel: 'GET /messaging/thread/messages?limit=200' })
+        .then((full) => {
+          if (loadSeqRef.current !== seq) return;
+          setMessages((prev) => mergeChronologicalUnique(full?.messages || [], prev || []));
+          if (stickToBottomRef.current) requestAnimationFrame(() => scrollToBottom('auto'));
+        })
+        .catch(() => {});
+    } finally {
+      if (loadSeqRef.current === seq) setThreadLoading(false);
     }
 
     try {
@@ -159,8 +215,10 @@ export default function Messaging({ initialThreadId = null } = {}) {
             setMessages((prev) => {
               const next = [...(prev || [])];
               if (!next.find(m => m.id === payload.message.id)) next.push(payload.message);
+              next.sort((a, b) => Number(a?.created_at || 0) - Number(b?.created_at || 0));
               return next;
             });
+            if (stickToBottomRef.current) requestAnimationFrame(() => scrollToBottom('smooth'));
             refreshThreads().catch(() => {});
             postJson(`/messaging/threads/${thread.id}/read`, {}).then(() => refreshUnread().catch(() => {})).catch(() => {});
           }
@@ -195,17 +253,24 @@ export default function Messaging({ initialThreadId = null } = {}) {
     let cancelled = false;
     (async () => {
       try {
-        setLoading(true);
+        let showedCached = false;
         setError('');
         // Instant UI: try cached threads first.
         try {
           const cached = JSON.parse(localStorage.getItem('messaging:driver:threads') || 'null');
-          if (cached?.threads?.length) setThreads(cached.threads);
+          if (cached?.threads?.length) {
+            setThreads(cached.threads);
+            showedCached = true;
+            setLoading(false);
+          } else {
+            setLoading(true);
+          }
         } catch {
           // ignore
+          setLoading(true);
         }
         // Ensure driver has their carrier direct thread available
-        await postJson('/messaging/driver/threads/my-carrier', {}, { timeoutMs: 30000, requestLabel: 'POST /messaging/driver/threads/my-carrier' });
+        postJson('/messaging/driver/threads/my-carrier', {}, { timeoutMs: 30000, requestLabel: 'POST /messaging/driver/threads/my-carrier' }).catch(() => {});
         // Fast initial render: list first (one retry for transient timeouts).
         const attempt = async () => {
           const results = await Promise.allSettled([refreshThreads(), refreshAdminThreads()]);
@@ -321,7 +386,7 @@ export default function Messaging({ initialThreadId = null } = {}) {
           .then((data) => { if (alive) setMessages(data.messages || []); })
           .catch(() => {});
       }
-    }, 15000);
+    }, AUTO_REFRESH_MS);
     return () => {
       alive = false;
       clearInterval(id);
@@ -500,7 +565,16 @@ export default function Messaging({ initialThreadId = null } = {}) {
               </div>
             </div>
 
-            <div className="messages-area">
+            <div
+              className="messages-area"
+              ref={messagesAreaRef}
+              onScroll={() => {
+                const el = messagesAreaRef.current;
+                if (!el) return;
+                const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+                stickToBottomRef.current = distance < 40;
+              }}
+            >
               {threadLoading && (
                 <div style={{ padding: 16, opacity: 0.85, fontWeight: 700, color: msgTheme.muted }}>
                   Loading conversation…
@@ -520,6 +594,7 @@ export default function Messaging({ initialThreadId = null } = {}) {
                   <div className="message-meta">{fmtTime(m.created_at)}</div>
                 </div>
               ))}
+              <div ref={messagesEndRef} />
             </div>
 
             {selectedThread.kind === 'admin_channel' ? (

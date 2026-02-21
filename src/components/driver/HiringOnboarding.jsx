@@ -2,10 +2,13 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../../styles/driver/HiringOnboarding.css';
 import { useAuth } from '../../contexts/AuthContext';
+import { useUserSettings } from '../../contexts/UserSettingsContext';
 import { API_URL } from '../../config';
 
 export default function HiringOnboarding({ onNavigate }) {
   const { currentUser } = useAuth();
+  const { settings: userSettings } = useUserSettings();
+  const aiTipsEnabled = Boolean(userSettings?.notification_preferences?.ai_tips);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -234,17 +237,19 @@ export default function HiringOnboarding({ onNavigate }) {
         </div>
       </section>
 
-      <div className="ho-info-card ho-ai-recommend">
-        <div className="ai-content">
-          <h4>AI Assistant Recommendations</h4>
-          <ul className="ai-list">
-            {aiSuggestions.map((txt, idx) => (
-              <li key={idx}><span className="ai-list-icon"><i className="fa-solid fa-lightbulb"></i></span>{txt}</li>
-            ))}
-          </ul>
-          <button className="btn small ghost-cd dd-btn">Chat with AI Assistant</button>
+      {aiTipsEnabled && (
+        <div className="ho-info-card ho-ai-recommend">
+          <div className="ai-content">
+            <h4>AI Assistant Recommendations</h4>
+            <ul className="ai-list">
+              {aiSuggestions.map((txt, idx) => (
+                <li key={idx}><span className="ai-list-icon"><i className="fa-solid fa-lightbulb"></i></span>{txt}</li>
+              ))}
+            </ul>
+            <button className="btn small ghost-cd dd-btn">Chat with AI Assistant</button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

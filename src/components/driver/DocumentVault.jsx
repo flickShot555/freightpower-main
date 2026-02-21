@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_URL } from '../../config';
+import { AUTO_REFRESH_MS } from '../../constants/refresh';
 import '../../styles/driver/DocumentVault.css';
 
 // Document type mapping for drivers
@@ -18,14 +19,21 @@ const DOCUMENT_TYPES = [
 export default function DocumentVault({ isPostHire, setIsPostHire, onNavigate }) {
   const { currentUser } = useAuth();
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [docs, setDocs] = useState([]);
+  const [tripDocs, setTripDocs] = useState([]);
+  const [tripDocsLoading, setTripDocsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showTripUploadModal, setShowTripUploadModal] = useState(false);
   const [selectedDocType, setSelectedDocType] = useState('other');
   const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedTripFile, setSelectedTripFile] = useState(null);
   const [uploadError, setUploadError] = useState('');
   const [uploadSuccess, setUploadSuccess] = useState('');
+  const [tripUploadError, setTripUploadError] = useState('');
+  const [tripUploadSuccess, setTripUploadSuccess] = useState('');
   const [complianceScore, setComplianceScore] = useState(null);
   const [showDocumentsModal, setShowDocumentsModal] = useState(false);
   const [viewingDocument, setViewingDocument] = useState(null);
@@ -163,6 +171,55 @@ export default function DocumentVault({ isPostHire, setIsPostHire, onNavigate })
 
   useEffect(() => { fetchDocuments(); }, [fetchDocuments]);
 
+  // Fetch trip documents (driver vault)
+  const fetchTripDocuments = useCallback(async () => {
+    if (!currentUser) return;
+    setTripDocsLoading(true);
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch(`${API_URL}/trip-documents`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const items = data?.documents || [];
+        setTripDocs(Array.isArray(items) ? items : []);
+      }
+    } catch (e) {
+      console.error('Error fetching trip documents:', e);
+    } finally {
+      setTripDocsLoading(false);
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (isPostHire) fetchTripDocuments();
+  }, [isPostHire, fetchTripDocuments]);
+
+  const refreshAll = useCallback(async ({ showSpinner = false } = {}) => {
+    if (!currentUser) return;
+    if (showSpinner) setRefreshing(true);
+    try {
+      const tasks = [
+        fetchDocuments(),
+        fetchComplianceScore(),
+        fetchRequiredDocs(),
+      ];
+      if (isPostHire) tasks.push(fetchTripDocuments());
+      await Promise.allSettled(tasks);
+    } finally {
+      if (showSpinner) setRefreshing(false);
+    }
+  }, [currentUser, fetchDocuments, fetchComplianceScore, fetchRequiredDocs, fetchTripDocuments, isPostHire]);
+
+  // Time-based auto-refresh (5 minutes) for Document Vault data.
+  useEffect(() => {
+    const id = setInterval(() => {
+      refreshAll({ showSpinner: false }).catch(() => {});
+    }, AUTO_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [refreshAll]);
+
   // Handle file upload
   const handleFileUpload = async (file) => {
     if (!currentUser || !file) return;
@@ -213,6 +270,101 @@ export default function DocumentVault({ isPostHire, setIsPostHire, onNavigate })
       setUploading(false);
     }
   };
+
+  const handleTripFileUpload = async (file) => {
+    if (!currentUser || !file) return;
+    if (file.size > 50 * 1024 * 1024) {
+      setTripUploadError('File size must be less than 50MB');
+      return;
+    }
+    setUploading(true);
+    setTripUploadError('');
+    setTripUploadSuccess('');
+    try {
+      const token = await currentUser.getIdToken();
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_URL}/trip-documents`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setTripUploadError(data?.detail || 'Failed to upload trip document');
+        return;
+      }
+      const record = data?.document;
+      if (record) {
+        setTripDocs((prev) => [record, ...(prev || [])]);
+      } else {
+        fetchTripDocuments();
+      }
+      setTripUploadSuccess('Trip document uploaded successfully!');
+      setShowTripUploadModal(false);
+      setSelectedTripFile(null);
+      setTimeout(() => setTripUploadSuccess(''), 5000);
+    } catch (e) {
+      console.error('Trip upload failed:', e);
+      setTripUploadError('Failed to upload trip document. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const UploadComplianceModal = () => (
+    showUploadModal ? (
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+        <div style={{ background: dvTheme.surface, borderRadius: '12px', padding: '30px', maxWidth: '500px', width: '90%', maxHeight: 'calc(100vh - 48px)', overflow: 'auto', boxShadow: isDarkMode ? 'none' : '0 20px 25px -5px rgba(0,0,0,0.1)', border: `1px solid ${dvTheme.border}` }}>
+          <h3 style={{ margin: '0 0 20px', color: dvTheme.text }}>{replacingDocId ? 'Replace Document' : 'Upload Document'}</h3>
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: dvTheme.text }}>Document Type *</label>
+            <select value={selectedDocType} onChange={(e) => setSelectedDocType(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${dvTheme.border}`, background: dvTheme.surfaceAlt, color: dvTheme.text }}>
+              {DOCUMENT_TYPES.map(dt => (<option key={dt.value} value={dt.value}>{dt.label}</option>))}
+            </select>
+          </div>
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: dvTheme.text }}>Select File *</label>
+            <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => { if (e.target.files[0]) setSelectedFile(e.target.files[0]); }} style={{ width: '100%' }} />
+            {selectedFile && <p style={{ margin: '8px 0 0', fontSize: '14px', color: '#059669' }}><i className="fa-solid fa-file" style={{ marginRight: '6px' }}></i>{selectedFile.name}</p>}
+            <p style={{ margin: '8px 0 0', fontSize: '12px', color: dvTheme.muted }}><i className="fa-solid fa-magic" style={{ marginRight: '6px' }}></i>Expiry date will be automatically extracted using AI.</p>
+          </div>
+          {uploadError && <div style={{ color: '#dc2626', marginBottom: '15px', fontSize: '14px' }}>{uploadError}</div>}
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+            <button onClick={() => { setShowUploadModal(false); setUploadError(''); setSelectedFile(null); setReplacingDocId(null); }} style={{ padding: '10px 20px', borderRadius: '8px', border: `1px solid ${dvTheme.border}`, background: dvTheme.surface, color: dvTheme.text, cursor: 'pointer' }}>Cancel</button>
+            <button onClick={() => { if (selectedFile) handleFileUpload(selectedFile); else setUploadError('Please select a file'); }} disabled={uploading || !selectedFile} style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', background: uploading || !selectedFile ? '#9ca3af' : '#3b82f6', color: '#fff', cursor: uploading || !selectedFile ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {uploading ? <><i className="fa-solid fa-spinner fa-spin"></i>Uploading...</> : <><i className="fa-solid fa-upload"></i>Upload</>}
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null
+  );
+
+  const UploadTripModal = () => (
+    showTripUploadModal ? (
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+        <div style={{ background: dvTheme.surface, borderRadius: '12px', padding: '30px', maxWidth: '520px', width: '90%', maxHeight: 'calc(100vh - 48px)', overflow: 'auto', boxShadow: isDarkMode ? 'none' : '0 20px 25px -5px rgba(0,0,0,0.1)', border: `1px solid ${dvTheme.border}` }}>
+          <h3 style={{ margin: '0 0 20px', color: dvTheme.text }}>Upload Trip Document</h3>
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: dvTheme.text }}>Select File *</label>
+            <input type="file" onChange={(e) => { if (e.target.files[0]) setSelectedTripFile(e.target.files[0]); }} style={{ width: '100%' }} />
+            {selectedTripFile && <p style={{ margin: '8px 0 0', fontSize: '14px', color: '#059669' }}><i className="fa-solid fa-file" style={{ marginRight: '6px' }}></i>{selectedTripFile.name}</p>}
+            <p style={{ margin: '8px 0 0', fontSize: '12px', color: dvTheme.muted }}>
+              Upload any document type (PDF, images, Word, spreadsheets, etc.) for your own vault.
+            </p>
+          </div>
+          {tripUploadError && <div style={{ color: '#dc2626', marginBottom: '15px', fontSize: '14px' }}>{tripUploadError}</div>}
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+            <button onClick={() => { setShowTripUploadModal(false); setTripUploadError(''); setSelectedTripFile(null); }} style={{ padding: '10px 20px', borderRadius: '8px', border: `1px solid ${dvTheme.border}`, background: dvTheme.surface, color: dvTheme.text, cursor: 'pointer' }}>Cancel</button>
+            <button onClick={() => { if (selectedTripFile) handleTripFileUpload(selectedTripFile); else setTripUploadError('Please select a file'); }} disabled={uploading || !selectedTripFile} style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', background: uploading || !selectedTripFile ? '#9ca3af' : '#3b82f6', color: '#fff', cursor: uploading || !selectedTripFile ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {uploading ? <><i className="fa-solid fa-spinner fa-spin"></i>Uploading...</> : <><i className="fa-solid fa-upload"></i>Upload</>}
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null
+  );
 
   const getDocStatus = (doc) => {
     if (!doc.expiry_date) return 'Valid';
@@ -553,6 +705,15 @@ export default function DocumentVault({ isPostHire, setIsPostHire, onNavigate })
             <i className="fa-solid fa-upload"></i>
             Upload Documents
           </button>
+          <button
+            className="btn small ghost-cd"
+            onClick={() => refreshAll({ showSpinner: true })}
+            disabled={refreshing}
+            title="Refresh"
+          >
+            <i className={`fa-solid ${refreshing ? 'fa-spinner fa-spin' : 'fa-rotate-right'}`}></i>
+            Refresh
+          </button>
           {/* <button className="btn small ghost-cd">
             <i className="fa-solid fa-camera"></i>
             Scan with Camera
@@ -572,6 +733,12 @@ export default function DocumentVault({ isPostHire, setIsPostHire, onNavigate })
         {uploadSuccess && (
           <div style={{ background: '#dcfce7', color: '#166534', padding: '12px 20px', borderRadius: '8px', margin: '20px 0', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <i className="fa-solid fa-check-circle"></i> {uploadSuccess}
+          </div>
+        )}
+
+        {tripUploadSuccess && (
+          <div style={{ background: '#dcfce7', color: '#166534', padding: '12px 20px', borderRadius: '8px', margin: '20px 0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <i className="fa-solid fa-check-circle"></i> {tripUploadSuccess}
           </div>
         )}
 
@@ -680,7 +847,7 @@ export default function DocumentVault({ isPostHire, setIsPostHire, onNavigate })
             <div className="dd-section-title-post">
               <h3>Trip Documents</h3>
             </div>
-            <span className="dd-section-count">{getFilteredDocuments().filter(d => (d.type || '').toLowerCase().includes('trip') || (d.type || '').toLowerCase().includes('load')).length} documents</span>
+            <span className="dd-section-count">{(tripDocs || []).length} documents</span>
           </div>
           
           <div className="dd-post-hire-grid">
@@ -692,14 +859,19 @@ export default function DocumentVault({ isPostHire, setIsPostHire, onNavigate })
               <h4 className="dd-card-title">Add Document</h4>
               <p className="dd-card-date">Upload delivery reports or any</p>
               <p className="dd-card-carrier">additional documents</p>
-              <button className="btn small-cd" onClick={() => setShowUploadModal(true)}>
+              <button className="btn small-cd" onClick={() => setShowTripUploadModal(true)}>
                 <i className="fa-solid fa-upload"></i>
                 Upload
               </button>
             </div>
             
             {/* Show trip documents or dummy card */}
-            {getFilteredDocuments().filter(d => (d.type || '').toLowerCase().includes('trip') || (d.type || '').toLowerCase().includes('load')).length === 0 ? (
+            {tripDocsLoading ? (
+              <div className="dd-post-hire-card" style={{opacity: 0.6}}>
+                <div className="dd-card-icon"><i className="fa-solid fa-spinner fa-spin"></i></div>
+                <h4 className="dd-card-title">Loading trip documents…</h4>
+              </div>
+            ) : (tripDocs || []).length === 0 ? (
               <div className="dd-post-hire-card" style={{opacity: 0.6}}>
                 <div className="dd-card-icon">
                   <i className="fa-solid fa-file-text"></i>
@@ -722,21 +894,21 @@ export default function DocumentVault({ isPostHire, setIsPostHire, onNavigate })
                 </div>
               </div>
             ) : (
-              getFilteredDocuments().filter(d => (d.type || '').toLowerCase().includes('trip') || (d.type || '').toLowerCase().includes('load')).map((doc) => (
-                <div key={doc.id} className="dd-post-hire-card">
+              (tripDocs || []).map((doc) => (
+                <div key={doc.id || doc.document_id || Math.random()} className="dd-post-hire-card">
                   <div className="dd-card-icon">
                     <i className="fa-solid fa-file-text"></i>
                   </div>
                   <div className="dd-card-status">
-                    <span className={`int-status-badge ${getDocStatus(doc) === 'Valid' ? 'active' : getDocStatus(doc) === 'Expired' ? 'revoked' : 'warning'}`}>
-                      {getDocStatus(doc)}
-                    </span>
+                    <span className="int-status-badge active">Saved</span>
                   </div>
                   <h4 className="dd-card-title">{doc.filename || 'Trip Document'}</h4>
-                  <p className="dd-card-date">Load #: {doc.extracted_fields?.load_number || 'N/A'}</p>
-                  <p className="dd-card-carrier">Carrier: {doc.extracted_fields?.carrier_name || 'N/A'}</p>
+                  <p className="dd-card-date">Updated: {formatDate(doc.uploaded_at)}</p>
+                  <p className="dd-card-carrier">Type: {(doc.content_type || 'file')}</p>
                   <div className="dd-card-actions">
-                    <button className="dd-action-btn" onClick={() => handleViewDocument(doc)}>
+                    <button className="dd-action-btn" onClick={() => {
+                      if (doc.download_url) window.open(doc.download_url, '_blank', 'noopener,noreferrer');
+                    }}>
                       <i className="fa-solid fa-eye"></i>
                       View
                     </button>
@@ -757,6 +929,9 @@ export default function DocumentVault({ isPostHire, setIsPostHire, onNavigate })
             )}
           </div>
         </div>
+
+        <UploadComplianceModal />
+        <UploadTripModal />
       </div>
     );
   }
@@ -771,7 +946,18 @@ export default function DocumentVault({ isPostHire, setIsPostHire, onNavigate })
       <div className="dd-vault-header">
         <h1>Document Vault</h1>
         <p className="dd-vault-subtitle">Manage and organize all your important documents</p>
-        <button onClick={() => setIsPostHire(true)} className="btn dd-post-hire-btn">Post Hire</button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button onClick={() => setIsPostHire(true)} className="btn dd-post-hire-btn">Post Hire</button>
+          <button
+            className="btn small ghost-cd"
+            onClick={() => refreshAll({ showSpinner: true })}
+            disabled={refreshing}
+            title="Refresh"
+          >
+            <i className={`fa-solid ${refreshing ? 'fa-spinner fa-spin' : 'fa-rotate-right'}`}></i>
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Compliance Score & Document Stats */}

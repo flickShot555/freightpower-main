@@ -3,14 +3,41 @@ import '../../styles/carrier/Marketplace.css'
 import '../../styles/carrier/ServicesPage.css'
 import { useAuth } from '../../contexts/AuthContext'
 import { API_URL } from '../../config'
+import { AUTO_REFRESH_MS } from '../../constants/refresh'
 import MapSnapshot from '../common/MapSnapshot'
 import RouteMap from '../common/RouteMap'
 
 // Minimum onboarding score required to access marketplace
 const MARKETPLACE_THRESHOLD = 60
+const ACCESS_CACHE_PREFIX = 'fp_carrier_marketplace_access_v1:'
+
+function readAccessCache(uid) {
+  if (!uid) return null
+  try {
+    const raw = sessionStorage.getItem(`${ACCESS_CACHE_PREFIX}${uid}`)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return null
+    const ts = Number(parsed.ts || 0)
+    if (!ts || (Date.now() - ts) > AUTO_REFRESH_MS) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function writeAccessCache(uid, data) {
+  if (!uid) return
+  try {
+    sessionStorage.setItem(`${ACCESS_CACHE_PREFIX}${uid}`, JSON.stringify({ ts: Date.now(), ...(data || {}) }))
+  } catch {
+    // ignore
+  }
+}
 
 export default function Marketplace({ activeSection, setActiveSection }) {
   const { currentUser } = useAuth()
+  const cachedAccess = readAccessCache(currentUser?.uid)
   const [activeTab, setActiveTab] = useState(activeSection || 'loads') // loads | drivers | services
   const [searchQuery, setSearchQuery] = useState('')
   const [equipmentType, setEquipmentType] = useState('')
@@ -23,13 +50,13 @@ export default function Marketplace({ activeSection, setActiveSection }) {
   const [isMobile, setIsMobile] = useState(false)
 
   // Marketplace gating state
-  const [isMarketplaceReady, setIsMarketplaceReady] = useState(true)
-  const [onboardingScore, setOnboardingScore] = useState(100)
-  const [nextActions, setNextActions] = useState([])
-  const [checkingAccess, setCheckingAccess] = useState(true)
-  const [consentEligible, setConsentEligible] = useState(true)
-  const [missingConsents, setMissingConsents] = useState([])
-  const [gatingReason, setGatingReason] = useState('')
+  const [isMarketplaceReady, setIsMarketplaceReady] = useState(() => cachedAccess?.isMarketplaceReady ?? true)
+  const [onboardingScore, setOnboardingScore] = useState(() => cachedAccess?.onboardingScore ?? 100)
+  const [nextActions, setNextActions] = useState(() => cachedAccess?.nextActions ?? [])
+  const [checkingAccess, setCheckingAccess] = useState(() => (currentUser ? !cachedAccess : true))
+  const [consentEligible, setConsentEligible] = useState(() => cachedAccess?.consentEligible ?? true)
+  const [missingConsents, setMissingConsents] = useState(() => cachedAccess?.missingConsents ?? [])
+  const [gatingReason, setGatingReason] = useState(() => cachedAccess?.gatingReason ?? '')
 
   // Real-time marketplace loads from shippers
   const [loads, setLoads] = useState([])
@@ -71,8 +98,27 @@ export default function Marketplace({ activeSection, setActiveSection }) {
         return
       }
 
+      const fresh = readAccessCache(currentUser.uid)
+      if (fresh) {
+        setIsMarketplaceReady(Boolean(fresh.isMarketplaceReady))
+        setOnboardingScore(Number(fresh.onboardingScore ?? 0))
+        setNextActions(Array.isArray(fresh.nextActions) ? fresh.nextActions : [])
+        setConsentEligible(Boolean(fresh.consentEligible))
+        setMissingConsents(Array.isArray(fresh.missingConsents) ? fresh.missingConsents : [])
+        setGatingReason(String(fresh.gatingReason || ''))
+        setCheckingAccess(false)
+        return
+      }
+
+      setCheckingAccess(true)
+
       try {
         const token = await currentUser.getIdToken()
+
+        let scoreValue = 0
+        let nextActionsValue = []
+        let consentsEligibleValue = true
+        let missingConsentsValue = []
 
         // Check onboarding score
         const onboardingResponse = await fetch(`${API_URL}/onboarding/coach-status`, {
@@ -86,9 +132,11 @@ export default function Marketplace({ activeSection, setActiveSection }) {
         if (onboardingResponse.ok) {
           const data = await onboardingResponse.json()
           const score = data.total_score || 0
+          scoreValue = score
+          nextActionsValue = data.next_best_actions || []
           setOnboardingScore(score)
           scoreOk = score >= MARKETPLACE_THRESHOLD
-          setNextActions(data.next_best_actions || [])
+          setNextActions(nextActionsValue)
         }
 
         // Check consent eligibility
@@ -103,24 +151,40 @@ export default function Marketplace({ activeSection, setActiveSection }) {
         if (consentResponse.ok) {
           const consentData = await consentResponse.json()
           consentsOk = consentData.eligible
-          setConsentEligible(consentData.eligible)
-          setMissingConsents(consentData.missing_consents || [])
+          consentsEligibleValue = consentData.eligible
+          missingConsentsValue = consentData.missing_consents || []
+          setConsentEligible(consentsEligibleValue)
+          setMissingConsents(missingConsentsValue)
         }
 
         // Determine gating reason
-        if (!scoreOk && !consentsOk) {
-          setGatingReason('both')
-        } else if (!scoreOk) {
-          setGatingReason('score')
-        } else if (!consentsOk) {
-          setGatingReason('consent')
-        }
+        const gating = (!scoreOk && !consentsOk) ? 'both' : (!scoreOk ? 'score' : (!consentsOk ? 'consent' : ''))
+        if (gating) setGatingReason(gating)
 
-        setIsMarketplaceReady(scoreOk && consentsOk)
+        const ready = scoreOk && consentsOk
+        setIsMarketplaceReady(ready)
+
+        writeAccessCache(currentUser.uid, {
+          isMarketplaceReady: ready,
+          onboardingScore: Number(scoreValue || 0),
+          nextActions: Array.isArray(nextActionsValue) ? nextActionsValue : [],
+          consentEligible: Boolean(consentsEligibleValue),
+          missingConsents: Array.isArray(missingConsentsValue) ? missingConsentsValue : [],
+          gatingReason: gating,
+        })
       } catch (error) {
         console.error('Error checking marketplace access:', error)
         // Allow access if check fails (graceful degradation)
         setIsMarketplaceReady(true)
+
+        writeAccessCache(currentUser.uid, {
+          isMarketplaceReady: true,
+          onboardingScore: Number(onboardingScore || 0),
+          nextActions: Array.isArray(nextActions) ? nextActions : [],
+          consentEligible: true,
+          missingConsents: [],
+          gatingReason: '',
+        })
       } finally {
         setCheckingAccess(false)
       }

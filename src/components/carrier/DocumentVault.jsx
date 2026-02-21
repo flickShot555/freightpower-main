@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import useMediaQuery from '../../hooks/useMediaQuery';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_URL } from '../../config';
+import { AUTO_REFRESH_MS } from '../../constants/refresh';
 import Toast from '../common/Toast';
 import '../../styles/carrier/DocumentVault.css';
 
@@ -135,6 +136,7 @@ function RowActions({ doc, onRefresh }) {
 
 export default function DocumentVault() {
   const { currentUser } = useAuth();
+  const [refreshing, setRefreshing] = useState(false);
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -317,6 +319,27 @@ export default function DocumentVault() {
   useEffect(() => {
     fetchDocuments();
   }, [fetchDocuments]);
+
+  const refreshAll = useCallback(async ({ showSpinner = false } = {}) => {
+    if (!currentUser) return;
+    if (showSpinner) setRefreshing(true);
+    try {
+      await Promise.allSettled([
+        fetchDocuments(),
+        fetchComplianceScore(),
+      ]);
+    } finally {
+      if (showSpinner) setRefreshing(false);
+    }
+  }, [currentUser, fetchDocuments, fetchComplianceScore]);
+
+  // Time-based auto-refresh (5 minutes) for Document Vault data.
+  useEffect(() => {
+    const id = setInterval(() => {
+      refreshAll({ showSpinner: false }).catch(() => {});
+    }, AUTO_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [refreshAll]);
 
   // Handle file upload
   const handleFileUpload = async (file, options = {}) => {
@@ -600,6 +623,15 @@ export default function DocumentVault() {
             <button className="btn small-cd" onClick={() => setShowUploadModal(true)}>
               <i className="fa-solid fa-upload" style={{ marginRight: '8px' }}></i>
               Upload Documents
+            </button>
+            <button
+              className="btn small ghost-cd"
+              onClick={() => refreshAll({ showSpinner: true })}
+              disabled={refreshing}
+              title="Refresh"
+            >
+              <i className={`fa-solid ${refreshing ? 'fa-spinner fa-spin' : 'fa-rotate-right'}`} style={{ marginRight: '6px' }}></i>
+              Refresh
             </button>
             <button className="btn small ghost-cd" onClick={handleBulkDownload}>Bulk Download</button>
           </div>

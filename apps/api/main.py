@@ -60,6 +60,7 @@ from .finance import router as finance_router, init_finance_scheduler
 from .load_documents import router as load_documents_router, create_load_document_from_url, ensure_rate_confirmation_document
 from .load_ownership import normalized_fields_for_new_load, normalized_ownership_patch_for_load
 from .consents import router as consents_router
+from .calendar_integrations import router as calendar_router
 
 # Shared API models used by response_model=... and request bodies in this module.
 from .models import (
@@ -2093,6 +2094,97 @@ async def download_documents_package(user: Dict[str, Any] = Depends(get_current_
         "Content-Disposition": 'attachment; filename="documents.zip"'
     }
     return StreamingResponse(buf, media_type="application/zip", headers=headers)
+
+
+# --- Trip Documents (Driver Vault) ---
+@app.get("/trip-documents")
+async def list_trip_documents(user: Dict[str, Any] = Depends(get_current_user)):
+    """List driver-uploaded trip documents.
+
+    These are generic files (any type) and are NOT run through AI extraction.
+    Stored on the Firebase user doc under `trip_documents`.
+    """
+    uid = user.get("uid")
+    try:
+        user_ref = db.collection("users").document(uid)
+        snap = user_ref.get()
+        if not snap.exists:
+            return {"documents": [], "total": 0}
+        data = snap.to_dict() or {}
+        docs = data.get("trip_documents") or []
+        if not isinstance(docs, list):
+            docs = []
+        # newest first
+        try:
+            docs.sort(key=lambda d: float((d or {}).get("uploaded_at") or 0), reverse=True)
+        except Exception:
+            pass
+        return {"documents": docs, "total": len(docs)}
+    except Exception as e:
+        print(f"Error fetching trip documents: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch trip documents: {str(e)}")
+
+
+@app.post("/trip-documents")
+async def upload_trip_document(
+    file: UploadFile = File(...),
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Upload a generic trip document (any file type).
+
+    Intended for PostHire drivers to save delivery reports, receipts, photos, etc.
+    """
+    uid = user.get("uid")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # Basic limits
+    data = await file.read()
+    if data is None:
+        raise HTTPException(status_code=400, detail="Empty upload")
+    if len(data) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File size must be less than 50MB")
+
+    doc_id = str(uuid.uuid4())
+    filename = file.filename or f"trip_document_{doc_id}"
+    content_type = file.content_type or "application/octet-stream"
+    storage_path = f"trip_documents/{uid}/{doc_id}_{filename}"
+
+    download_url = None
+    try:
+        blob = bucket.blob(storage_path)
+        blob.upload_from_string(data, content_type=content_type)
+        blob.make_public()
+        download_url = blob.public_url
+        print(f"✅ Trip doc uploaded to Firebase Storage: {storage_path}")
+    except Exception as e:
+        print(f"❌ Error uploading trip doc to Firebase Storage: {e}")
+
+    record = {
+        "id": doc_id,
+        "filename": filename,
+        "content_type": content_type,
+        "size_bytes": len(data),
+        "storage_path": storage_path,
+        "download_url": download_url,
+        "uploaded_at": time.time(),
+    }
+
+    # Persist metadata on user doc
+    try:
+        user_ref = db.collection("users").document(uid)
+        snap = user_ref.get()
+        existing = snap.to_dict() or {} if snap.exists else {}
+        docs = existing.get("trip_documents") or []
+        if not isinstance(docs, list):
+            docs = []
+        docs.append(record)
+        user_ref.set({"trip_documents": docs, "updated_at": time.time()}, merge=True)
+        log_action(uid, "TRIP_DOCUMENT_UPLOAD", f"Trip document uploaded: {filename}")
+    except Exception as e:
+        print(f"Warning: Could not save trip document metadata to Firebase: {e}")
+
+    return {"document": record}
 
 @app.get("/compliance/tasks")
 async def get_compliance_tasks(user: dict = Depends(get_current_user)):
@@ -4351,6 +4443,36 @@ async def list_drivers(
         import traceback
         traceback.print_exc()
         return {"drivers": [], "total": 0}
+
+
+@app.get("/drivers/me")
+async def get_my_driver_profile(
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Return the current user's driver profile document (for driver self-preview).
+
+    Unlike /drivers, this does not apply marketplace availability/hired filters.
+    """
+    try:
+        if (user.get("role") or "").lower() != "driver":
+            raise HTTPException(status_code=403, detail="Only drivers can access their driver profile")
+
+        uid = user.get("uid")
+        if not uid:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        snap = db.collection("drivers").document(uid).get()
+        if not snap.exists:
+            raise HTTPException(status_code=404, detail="Driver profile not found")
+
+        data = snap.to_dict() or {}
+        data["id"] = uid
+        return data
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching driver profile for {user.get('uid')}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch driver profile")
 
 
 @app.post("/drivers/{driver_id}/hire")
@@ -7979,6 +8101,7 @@ app.include_router(messaging_router)
 app.include_router(finance_router)
 app.include_router(load_documents_router)
 app.include_router(consents_router)
+app.include_router(calendar_router)
 
 @app.on_event("startup")
 def startup_events():

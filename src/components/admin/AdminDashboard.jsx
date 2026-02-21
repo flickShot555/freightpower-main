@@ -25,6 +25,7 @@ import resp_logo from '/src/assets/logo_1.png';
 import { getJson, postJson } from '../../api/http';
 import { useAuth } from '../../contexts/AuthContext';
 import UserDetailsModal from './UserDetailsModal';
+import { AUTO_REFRESH_MS } from '../../constants/refresh';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -256,7 +257,7 @@ export default function AdminDashboard() {
       }
     };
     tick();
-    const id = setInterval(tick, 30000);
+    const id = setInterval(tick, AUTO_REFRESH_MS);
     return () => {
       alive = false;
       clearInterval(id);

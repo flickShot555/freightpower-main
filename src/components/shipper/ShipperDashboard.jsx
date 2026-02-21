@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_URL } from '../../config';
+import { AUTO_REFRESH_MS } from '../../constants/refresh';
 import TrackingVisibility from './TrackingVisibility';
 import DocumentVault from './DocumentVault';
 import Finance from './Finance';
@@ -301,7 +302,7 @@ export default function ShipperDashboard() {
     };
 
     tick();
-    const id = setInterval(tick, 15000);
+    const id = setInterval(tick, AUTO_REFRESH_MS);
     return () => {
       alive = false;
       clearInterval(id);

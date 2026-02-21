@@ -79,6 +79,42 @@ class Settings(BaseSettings):
     GEOAPIFY_API_KEY: str = Field(default=os.getenv("GEOAPIFY_API_KEY", ""))
 
     # ---------------------------------------------------------------------
+    # Calendar OAuth (Google Calendar + Microsoft Outlook/Graph)
+    #
+    # These are backend-only secrets (do NOT expose to frontend Vite env).
+    # ---------------------------------------------------------------------
+    # Used to sign OAuth state (CSRF + tamper protection). Generate yourself.
+    CALENDAR_OAUTH_STATE_SECRET: str = Field(default=os.getenv("CALENDAR_OAUTH_STATE_SECRET", ""))
+
+    # Google Calendar OAuth (Web application)
+    GOOGLE_CALENDAR_CLIENT_ID: str = Field(default=os.getenv("GOOGLE_CALENDAR_CLIENT_ID", ""))
+    GOOGLE_CALENDAR_CLIENT_SECRET: str = Field(default=os.getenv("GOOGLE_CALENDAR_CLIENT_SECRET", ""))
+    GOOGLE_CALENDAR_REDIRECT_URI: str = Field(default=os.getenv("GOOGLE_CALENDAR_REDIRECT_URI", ""))
+
+    # Microsoft Graph OAuth (Outlook)
+    MICROSOFT_CLIENT_ID: str = Field(default=os.getenv("MICROSOFT_CLIENT_ID", ""))
+    MICROSOFT_CLIENT_SECRET: str = Field(default=os.getenv("MICROSOFT_CLIENT_SECRET", ""))
+    MICROSOFT_REDIRECT_URI: str = Field(default=os.getenv("MICROSOFT_REDIRECT_URI", ""))
+    MICROSOFT_TENANT: str = Field(default=os.getenv("MICROSOFT_TENANT", "common") or "common")
+
+    # ---------------------------------------------------------------------
+    # Calendar integrations (OAuth)
+    #
+    # These enable connecting external calendars and pushing FreightPower events.
+    # Leave empty until you configure OAuth apps in Google + Microsoft.
+    # ---------------------------------------------------------------------
+    CALENDAR_OAUTH_STATE_SECRET: str = Field(default=os.getenv("CALENDAR_OAUTH_STATE_SECRET", ""))
+
+    GOOGLE_CALENDAR_CLIENT_ID: str = Field(default=os.getenv("GOOGLE_CALENDAR_CLIENT_ID", ""))
+    GOOGLE_CALENDAR_CLIENT_SECRET: str = Field(default=os.getenv("GOOGLE_CALENDAR_CLIENT_SECRET", ""))
+    GOOGLE_CALENDAR_REDIRECT_URI: str = Field(default=os.getenv("GOOGLE_CALENDAR_REDIRECT_URI", ""))
+
+    MICROSOFT_CLIENT_ID: str = Field(default=os.getenv("MICROSOFT_CLIENT_ID", ""))
+    MICROSOFT_CLIENT_SECRET: str = Field(default=os.getenv("MICROSOFT_CLIENT_SECRET", ""))
+    MICROSOFT_REDIRECT_URI: str = Field(default=os.getenv("MICROSOFT_REDIRECT_URI", ""))
+    MICROSOFT_TENANT: str = Field(default=os.getenv("MICROSOFT_TENANT", "common"))
+
+    # ---------------------------------------------------------------------
     # WebAuthn / Passkeys (Biometric auth)
     #
     # Notes:

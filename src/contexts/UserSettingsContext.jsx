@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getJson, patchJson } from '../api/http';
 import { useAuth } from './AuthContext';
+import { isRtlLanguage, normalizeLanguage } from '../i18n/translate';
 
 const UserSettingsContext = createContext(null);
 
@@ -18,11 +19,23 @@ const DEFAULT_SETTINGS = {
     ai_tips: false,
   },
   calendar_sync: 'Google Calendar',
+  calendar_reminders_enabled: true,
 
   font_size: 'Medium',
   high_contrast_mode: false,
   screen_reader_compatible: true,
 };
+
+function coerceBoolean(value, defaultValue = false) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const v = value.trim().toLowerCase();
+    if (v === 'true' || v === '1' || v === 'yes' || v === 'y' || v === 'on') return true;
+    if (v === 'false' || v === '0' || v === 'no' || v === 'n' || v === 'off' || v === '') return false;
+  }
+  return Boolean(defaultValue);
+}
 
 function normalizeSettings(raw) {
   const s = raw || {};
@@ -31,25 +44,33 @@ function normalizeSettings(raw) {
     : {};
 
   const notification_preferences = {
-    compliance_alerts: Boolean(notif?.compliance_alerts ?? notif?.complianceAlerts ?? true),
-    messages: Boolean(notif?.messages ?? true),
-    ai_tips: Boolean(notif?.ai_tips ?? notif?.aiTips ?? false),
+    compliance_alerts: coerceBoolean((notif?.compliance_alerts ?? notif?.complianceAlerts), true),
+    messages: coerceBoolean(notif?.messages, true),
+    ai_tips: coerceBoolean((notif?.ai_tips ?? notif?.aiTips), false),
+  };
+
+  const normalizeCalendarSync = (value) => {
+    const v = String(value || '').trim().toLowerCase();
+    if (v.includes('outlook')) return 'Outlook';
+    if (v.includes('google')) return 'Google Calendar';
+    return 'Google Calendar';
   };
 
   return {
-    language: s?.language || 'English',
+    language: normalizeLanguage(s?.language),
     time_zone: s?.time_zone || '',
     date_format: (s?.date_format === 'dmy' ? 'dmy' : 'mdy'),
     start_dashboard_view: s?.start_dashboard_view || 'dashboard',
-    auto_save_edits: s?.auto_save_edits !== false,
-    email_digest_enabled: s?.email_digest_enabled !== false,
+    auto_save_edits: coerceBoolean(s?.auto_save_edits, true),
+    email_digest_enabled: coerceBoolean(s?.email_digest_enabled, true),
 
     notification_preferences,
-    calendar_sync: s?.calendar_sync || 'Google Calendar',
+    calendar_sync: normalizeCalendarSync(s?.calendar_sync),
+    calendar_reminders_enabled: coerceBoolean(s?.calendar_reminders_enabled, true),
 
     font_size: (s?.font_size === 'Small' || s?.font_size === 'Large') ? s.font_size : 'Medium',
-    high_contrast_mode: Boolean(s?.high_contrast_mode ?? false),
-    screen_reader_compatible: s?.screen_reader_compatible !== false,
+    high_contrast_mode: coerceBoolean(s?.high_contrast_mode, false),
+    screen_reader_compatible: coerceBoolean(s?.screen_reader_compatible, true),
   };
 }
 
@@ -72,12 +93,16 @@ export function UserSettingsProvider({ children }) {
 
     root.classList.toggle('fp-high-contrast', Boolean(settings?.high_contrast_mode));
 
+    const language = normalizeLanguage(settings?.language);
+    root.setAttribute('lang', language === 'Arabic' ? 'ar' : language === 'Spanish' ? 'es' : 'en');
+    root.setAttribute('dir', isRtlLanguage(language) ? 'rtl' : 'ltr');
+
     root.classList.remove('fp-font-small', 'fp-font-medium', 'fp-font-large');
     const size = settings?.font_size;
     if (size === 'Small') root.classList.add('fp-font-small');
     else if (size === 'Large') root.classList.add('fp-font-large');
     else root.classList.add('fp-font-medium');
-  }, [settings?.high_contrast_mode, settings?.font_size]);
+  }, [settings?.high_contrast_mode, settings?.font_size, settings?.language]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -163,11 +188,14 @@ export function UserSettingsProvider({ children }) {
   }, [uid]);
 
   const setSettingsSafe = useCallback((next) => {
-    const normalized = normalizeSettings(next);
-    setSettings(normalized);
-    if (uid) {
-      try { localStorage.setItem(storageKey(uid), JSON.stringify(normalized)); } catch {}
-    }
+    setSettings((prev) => {
+      const resolved = (typeof next === 'function') ? next(prev) : next;
+      const normalized = normalizeSettings(resolved);
+      if (uid) {
+        try { localStorage.setItem(storageKey(uid), JSON.stringify(normalized)); } catch {}
+      }
+      return normalized;
+    });
   }, [uid]);
 
   const value = useMemo(() => ({

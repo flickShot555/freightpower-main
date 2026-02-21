@@ -2,22 +2,49 @@ import React, { useState, useEffect } from 'react';
 import '../../styles/driver/Marketplace.css';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_URL } from '../../config';
+import { AUTO_REFRESH_MS } from '../../constants/refresh';
 import { useGeolocation, sortServicesByDistance, calculateDistance } from '../../hooks/useGeolocation';
 import { db } from '../../firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, query, where, onSnapshot } from 'firebase/firestore';
 
 const MARKETPLACE_THRESHOLD = 60;
+const ACCESS_CACHE_PREFIX = 'fp_driver_marketplace_access_v1:';
+
+function readAccessCache(uid) {
+  if (!uid) return null;
+  try {
+    const raw = sessionStorage.getItem(`${ACCESS_CACHE_PREFIX}${uid}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const ts = Number(parsed.ts || 0);
+    if (!ts || (Date.now() - ts) > AUTO_REFRESH_MS) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeAccessCache(uid, data) {
+  if (!uid) return;
+  try {
+    sessionStorage.setItem(`${ACCESS_CACHE_PREFIX}${uid}`, JSON.stringify({ ts: Date.now(), ...(data || {}) }));
+  } catch {
+    // ignore
+  }
+}
 
 export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, onAvailabilityToggle, onNavigate }) {
   const { currentUser } = useAuth();
+  const cachedAccess = readAccessCache(currentUser?.uid);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [isMarketplaceReady, setIsMarketplaceReady] = useState(true);
-  const [onboardingScore, setOnboardingScore] = useState(100);
-  const [nextActions, setNextActions] = useState([]);
-  const [checkingAccess, setCheckingAccess] = useState(true);
-  const [consentEligible, setConsentEligible] = useState(true);
-  const [missingConsents, setMissingConsents] = useState([]);
-  const [gatingReason, setGatingReason] = useState('');
+  const [isMarketplaceReady, setIsMarketplaceReady] = useState(() => cachedAccess?.isMarketplaceReady ?? true);
+  const [onboardingScore, setOnboardingScore] = useState(() => cachedAccess?.onboardingScore ?? 100);
+  const [nextActions, setNextActions] = useState(() => cachedAccess?.nextActions ?? []);
+  const [checkingAccess, setCheckingAccess] = useState(() => (currentUser ? !cachedAccess : true));
+  const [consentEligible, setConsentEligible] = useState(() => cachedAccess?.consentEligible ?? true);
+  const [missingConsents, setMissingConsents] = useState(() => cachedAccess?.missingConsents ?? []);
+  const [gatingReason, setGatingReason] = useState(() => cachedAccess?.gatingReason ?? '');
 
   // Keep local dark-mode state in sync with the dashboard root class
   useEffect(() => {
@@ -123,8 +150,28 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
         return;
       }
 
+      // If we recently checked, don't re-run on quick remounts.
+      const fresh = readAccessCache(currentUser.uid);
+      if (fresh) {
+        setIsMarketplaceReady(Boolean(fresh.isMarketplaceReady));
+        setOnboardingScore(Number(fresh.onboardingScore ?? 0));
+        setNextActions(Array.isArray(fresh.nextActions) ? fresh.nextActions : []);
+        setConsentEligible(Boolean(fresh.consentEligible));
+        setMissingConsents(Array.isArray(fresh.missingConsents) ? fresh.missingConsents : []);
+        setGatingReason(String(fresh.gatingReason || ''));
+        setCheckingAccess(false);
+        return;
+      }
+
+      setCheckingAccess(true);
+
       try {
         const token = await currentUser.getIdToken();
+
+        let scoreValue = 0;
+        let nextActionsValue = [];
+        let consentsEligibleValue = true;
+        let missingConsentsValue = [];
 
         // Check onboarding score
         const onboardingResponse = await fetch(`${API_URL}/onboarding/coach-status`, {
@@ -138,9 +185,11 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
         if (onboardingResponse.ok) {
           const data = await onboardingResponse.json();
           const score = data.total_score || 0;
+          scoreValue = score;
+          nextActionsValue = data.next_best_actions || [];
           setOnboardingScore(score);
           scoreOk = score >= MARKETPLACE_THRESHOLD;
-          setNextActions(data.next_best_actions || []);
+          setNextActions(nextActionsValue);
         }
 
         // Check consent eligibility
@@ -155,26 +204,42 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
         if (consentResponse.ok) {
           const consentData = await consentResponse.json();
           consentsOk = consentData.eligible;
-          setConsentEligible(consentData.eligible);
-          setMissingConsents(consentData.missing_consents || []);
+          consentsEligibleValue = consentData.eligible;
+          missingConsentsValue = consentData.missing_consents || [];
+          setConsentEligible(consentsEligibleValue);
+          setMissingConsents(missingConsentsValue);
         }
 
         // Determine gating reason
-        if (!scoreOk && !consentsOk) {
-          setGatingReason('both');
-        } else if (!scoreOk) {
-          setGatingReason('score');
-        } else if (!consentsOk) {
-          setGatingReason('consent');
-        }
+        const gating = (!scoreOk && !consentsOk) ? 'both' : (!scoreOk ? 'score' : (!consentsOk ? 'consent' : ''));
+        if (gating) setGatingReason(gating);
 
-        setIsMarketplaceReady(scoreOk && consentsOk);
+        const ready = scoreOk && consentsOk;
+        setIsMarketplaceReady(ready);
+
+        writeAccessCache(currentUser.uid, {
+          isMarketplaceReady: ready,
+          onboardingScore: Number(scoreValue || 0),
+          nextActions: Array.isArray(nextActionsValue) ? nextActionsValue : [],
+          consentEligible: Boolean(consentsEligibleValue),
+          missingConsents: Array.isArray(missingConsentsValue) ? missingConsentsValue : [],
+          gatingReason: gating,
+        });
       } catch (error) {
         console.error('Error checking marketplace access:', error);
         setConsentEligible(false);
         setMissingConsents([]);
         setGatingReason('consent');
         setIsMarketplaceReady(false);
+
+        writeAccessCache(currentUser.uid, {
+          isMarketplaceReady: false,
+          onboardingScore: Number(onboardingScore ?? 0),
+          nextActions: Array.isArray(nextActions) ? nextActions : [],
+          consentEligible: false,
+          missingConsents: [],
+          gatingReason: 'consent',
+        });
       } finally {
         setCheckingAccess(false);
       }
@@ -255,7 +320,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
     };
 
     fetchNearbyServices();
-  }, [location, currentUser, method]);
+  }, [location, currentUser]);
 
   // Mock nearby services generator (for development/fallback)
   const getMockNearbyServices = (currentLocation) => {
@@ -791,15 +856,15 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                 <div className={`mp-status-icon ${isAvailable ? 'active' : 'inactive'}`}></div>
                 <span>
                   {isAvailable 
-                    ? 'You are visible to carriers in FreightPower\'s staffing pool' 
-                    : 'You are not visible to carriers. Toggle availability to enter the hiring pool.'}
+                    ? 'You are visible for your associated carrier' 
+                    : 'You are not visible for your associated carrier. Toggle availability to share your status.'}
                 </span>
               </div>
               <div className="mp-consent-info">
                 <p className="mp-consent-text">
                   {isAvailable 
-                    ? "By being available, you've agreed to share your CDL & compliance information with carriers through FreightPower." 
-                    : "Mark yourself as available to enter the carrier marketplace and receive job offers."}
+                    ? "By being available, you've agreed to share your CDL & compliance information with your associated carrier through FreightPower." 
+                    : "Mark yourself as available to share your status with your associated carrier."}
                 </p>
                 {isAvailable ? (
                   <button className='btn small-cd'>
@@ -821,14 +886,15 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
           </div>
 
           {/* Promote Myself Section */}
-          <div className="mp-promote-card">
+          <div className="mp-promote-card" style={{ opacity: 0.55 }}>
             <div className="mp-promote-content">
               <div className="mp-promote-header">
                 <i className="fa-solid fa-star"></i>
                 <h4>Promote Myself</h4>
               </div>
               <p className="mp-promote-text">Boost your profile to appear higher in carrier searches</p>
-              <button className="btn small-cd">Promote Profile - $9.99</button>
+                <div className="mp-coming-soon-tag">Coming Soon</div>
+              <button className="btn small-cd" disabled style={{ cursor: 'not-allowed' }}>Promote Profile</button>
             </div>
           </div>
 
@@ -866,28 +932,28 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
             </div>
             
             <div className="mp-services-grid">
-              <div className="mp-service-category">
+              <div className="mp-service-category" style={{ opacity: 0.55 }}>
                 <div>
                   <div className="mp-service-icon cdl-protection">
                   <i className="fa-solid fa-shield"></i>
                 </div>
                 <h4>CDL Protection (TVC)</h4>
                 <p>Protect your CDL with expert legal representation and violation defense services.</p>
-                <span className="int-status-badge warning">20% Off This Week</span>
+                <span className="mp-coming-soon-tag">Coming Soon</span>
                 </div>
-                <button className="btn small-cd" style={{marginTop: '20px', width: '100%'}}>Connect</button>
+                <button className="btn small-cd" disabled style={{marginTop: '20px', width: '100%', cursor: 'not-allowed'}}>Explore</button>
               </div>
 
-              <div className="mp-service-category">
+              <div className="mp-service-category" style={{ opacity: 0.55 }}>
                 <div>
                   <div className="mp-service-icon eld-solutions">
                   <i className="fa-solid fa-tablet-screen-button"></i>
                 </div>
                 <h4>ELD Solutions</h4>
                 <p>Advanced ELD integrations with real-time compliance monitoring and reporting.</p>
-                <span className="int-status-badge warning">Multiple Options</span>
+                <span className="mp-coming-soon-tag">Coming Soon</span>
                 </div>
-                <button className="btn small-cd" style={{marginTop: '20px', width: '100%'}}>Connect</button>
+                <button className="btn small-cd" disabled style={{marginTop: '20px', width: '100%', cursor: 'not-allowed'}}>Explore</button>
               </div>
 
               <div className="mp-service-category">
@@ -899,7 +965,13 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                 <p>Access exclusive fuel discounts and rewards programs nationwide.</p>
                 <span className="int-status-badge active">Save up to 15¢/gal</span>
                 </div>
-                <button className="btn small-cd" style={{marginTop: '20px', width: '100%'}}>Connect</button>
+                <button
+                  className="btn small-cd"
+                  style={{marginTop: '20px', width: '100%'}}
+                  onClick={() => handleServiceTypeClick('fuel')}
+                >
+                  Explore
+                </button>
               </div>
 
               <div className="mp-service-category">
@@ -911,31 +983,37 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                 <p>24/7 roadside assistance and repair network for emergency breakdowns.</p>
                 <span className="int-status-badge warning">24/7 Available</span>
                 </div>
-                <button className="btn small-cd" style={{marginTop: '20px', width: '100%'}}>Connect</button>
+                <button
+                  className="btn small-cd"
+                  style={{marginTop: '20px', width: '100%'}}
+                  onClick={() => handleServiceTypeClick('repair')}
+                >
+                  Explore
+                </button>
               </div>
 
-              <div className="mp-service-category">
+              <div className="mp-service-category" style={{ opacity: 0.55 }}>
                 <div>
                   <div className="mp-service-icon training">
                   <i className="fa-solid fa-graduation-cap"></i>
                 </div>
                 <h4>Training & Compliance</h4>
                 <p>Continuing education and compliance training to advance your career.</p>
-                <span className="int-status-badge warning">Earn Certifications</span>
+                <span className="mp-coming-soon-tag">Coming Soon</span>
                 </div>
-                <button className="btn small-cd" style={{marginTop: '20px', width: '100%'}}>Connect</button>
+                <button className="btn small-cd" disabled style={{marginTop: '20px', width: '100%', cursor: 'not-allowed'}}>Explore</button>
               </div>
 
-              <div className="mp-service-category">
+              <div className="mp-service-category" style={{ opacity: 0.55 }}>
                 <div>
                   <div className="mp-service-icon financial">
                   <i className="fa-solid fa-credit-card"></i>
                 </div>
                 <h4>Financial Services</h4>
                 <p>Banking, factoring, and financial planning services for drivers.</p>
-                <span className="int-status-badge warning">Multiple Partners</span>
+                <span className="mp-coming-soon-tag">Coming Soon</span>
                 </div>
-                <button className="btn small-cd" style={{marginTop: '20px', width: '100%'}}>Connect</button>
+                <button className="btn small-cd" disabled style={{marginTop: '20px', width: '100%', cursor: 'not-allowed'}}>Explore</button>
               </div>
             </div>
           </div>
@@ -944,8 +1022,137 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
     );
   }
 
+  function ServiceTypeModal() {
+    if (!showServiceModal) return null;
+    return (
+      <div className="modal-overlay" onClick={() => setShowServiceModal(false)}>
+        <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '80vh', overflowY: 'auto' }}>
+          <div className="modal-header">
+            <h2 style={{ textTransform: 'capitalize' }}>
+              {selectedServiceType === 'fuel' && <i className="fa-solid fa-gas-pump" style={{ marginRight: '10px', color: '#3b82f6' }}></i>}
+              {selectedServiceType === 'parking' && <i className="fa-solid fa-parking" style={{ marginRight: '10px', color: '#8b5cf6' }}></i>}
+              {selectedServiceType === 'repair' && <i className="fa-solid fa-wrench" style={{ marginRight: '10px', color: '#f59e0b' }}></i>}
+              {selectedServiceType === 'legal' && <i className="fa-solid fa-scale-balanced" style={{ marginRight: '10px', color: '#ef4444' }}></i>}
+              {selectedServiceType === 'training' && <i className="fa-solid fa-graduation-cap" style={{ marginRight: '10px', color: '#10b981' }}></i>}
+              {selectedServiceType === 'eld' && <i className="fa-solid fa-mobile-screen" style={{ marginRight: '10px', color: '#6366f1' }}></i>}
+              {selectedServiceType?.replace(/_/g, ' ')} Services
+            </h2>
+            <button className="modal-close" onClick={() => setShowServiceModal(false)}>
+              <i className="fa-solid fa-times"></i>
+            </button>
+          </div>
+          <div className="modal-body">
+            {locationLoading && (
+              <div style={{ padding: '40px', textAlign: 'center' }}>
+                <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: '2rem', color: '#3b82f6' }}></i>
+                <p style={{ marginTop: '10px', color: mpTheme.muted }}>Loading services...</p>
+              </div>
+            )}
+
+            {!locationLoading && getFilteredServices(selectedServiceType).length === 0 && (
+              <div style={{ padding: '40px', textAlign: 'center' }}>
+                <i className="fa-solid fa-circle-exclamation" style={{ fontSize: '2rem', color: '#f59e0b' }}></i>
+                <p style={{ marginTop: '15px', color: mpTheme.muted, fontWeight: '600' }}>
+                  No {selectedServiceType} services found nearby
+                </p>
+                <p style={{ color: '#94a3b8', fontSize: '0.875rem', marginTop: '8px' }}>
+                  Try expanding your search radius or check back later
+                </p>
+              </div>
+            )}
+
+            {!locationLoading && getFilteredServices(selectedServiceType).map((service) => (
+              <div key={service.id} style={{
+                background: mpTheme.surfaceAlt,
+                borderRadius: '12px',
+                padding: '20px',
+                marginBottom: '15px',
+                border: `1px solid ${mpTheme.border}`
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                      <h3 style={{ margin: 0, color: mpTheme.text }}>{service.name}</h3>
+                      {service.verified && (
+                        <span className="int-status-badge active" style={{ fontSize: '0.75rem' }}>
+                          <i className="fa-solid fa-check-circle" style={{ marginRight: '4px' }}></i>
+                          Verified
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '10px', flexWrap: 'wrap' }}>
+                      {service.distance && (
+                        <span style={{ color: '#3b82f6', fontWeight: '600', fontSize: '0.875rem' }}>
+                          <i className="fa-solid fa-location-arrow" style={{ marginRight: '4px' }}></i>
+                          {service.distance.toFixed(1)} miles away
+                        </span>
+                      )}
+                      <span style={{ color: mpTheme.muted, fontSize: '0.875rem' }}>
+                        <i className="fa-solid fa-clock" style={{ marginRight: '4px' }}></i>
+                        {service.openStatus}
+                      </span>
+                    </div>
+
+                    <p style={{ color: mpTheme.muted, marginBottom: '10px', fontSize: '0.9375rem' }}>
+                      {service.description}
+                    </p>
+
+                    {service.address && (
+                      <p style={{ color: mpTheme.muted, fontSize: '0.875rem', marginBottom: '8px' }}>
+                        <i className="fa-solid fa-location-dot" style={{ marginRight: '6px' }}></i>
+                        {service.address}
+                      </p>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '15px', flexWrap: 'wrap' }}>
+                      {service.phone && (
+                        <a
+                          href={`tel:${service.phone}`}
+                          className="btn small-cd"
+                          style={{ textDecoration: 'none' }}
+                        >
+                          <i className="fa-solid fa-phone" style={{ marginRight: '6px' }}></i>
+                          Call
+                        </a>
+                      )}
+                      {service.website && (
+                        <a
+                          href={service.website}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn small ghost-cd"
+                          style={{ textDecoration: 'none' }}
+                        >
+                          <i className="fa-solid fa-globe" style={{ marginRight: '6px' }}></i>
+                          Website
+                        </a>
+                      )}
+                      <button
+                        className="btn small ghost-cd"
+                        onClick={() => handleToggleFavorite(service)}
+                      >
+                        <i className={`fa-${favoriteServices.includes(service.id) ? 'solid' : 'regular'} fa-heart`} style={{ marginRight: '6px' }}></i>
+                        {favoriteServices.includes(service.id) ? 'Saved' : 'Save'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (isPostHire) {
-    return <PostHireMarketplaceView />;
+    return (
+      <>
+        <PostHireMarketplaceView />
+        <ServiceTypeModal />
+      </>
+    );
   }
 
   return (
@@ -1419,147 +1626,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
         </div>
       </section>
 
-      {/* Service Type Modal */}
-      {showServiceModal && (
-        <div className="modal-overlay" onClick={() => setShowServiceModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '80vh', overflowY: 'auto' }}>
-            <div className="modal-header">
-              <h2 style={{ textTransform: 'capitalize' }}>
-                {selectedServiceType === 'fuel' && <i className="fa-solid fa-gas-pump" style={{ marginRight: '10px', color: '#3b82f6' }}></i>}
-                {selectedServiceType === 'parking' && <i className="fa-solid fa-parking" style={{ marginRight: '10px', color: '#8b5cf6' }}></i>}
-                {selectedServiceType === 'repair' && <i className="fa-solid fa-wrench" style={{ marginRight: '10px', color: '#f59e0b' }}></i>}
-                {selectedServiceType === 'legal' && <i className="fa-solid fa-scale-balanced" style={{ marginRight: '10px', color: '#ef4444' }}></i>}
-                {selectedServiceType === 'training' && <i className="fa-solid fa-graduation-cap" style={{ marginRight: '10px', color: '#10b981' }}></i>}
-                {selectedServiceType === 'eld' && <i className="fa-solid fa-mobile-screen" style={{ marginRight: '10px', color: '#6366f1' }}></i>}
-                {selectedServiceType?.replace(/_/g, ' ')} Services
-              </h2>
-              <button className="modal-close" onClick={() => setShowServiceModal(false)}>
-                <i className="fa-solid fa-times"></i>
-              </button>
-            </div>
-            <div className="modal-body">
-              {locationLoading && (
-                <div style={{ padding: '40px', textAlign: 'center' }}>
-                  <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: '2rem', color: '#3b82f6' }}></i>
-                  <p style={{ marginTop: '10px', color: mpTheme.muted }}>Loading services...</p>
-                </div>
-              )}
-
-              {!locationLoading && getFilteredServices(selectedServiceType).length === 0 && (
-                <div style={{ padding: '40px', textAlign: 'center' }}>
-                  <i className="fa-solid fa-circle-exclamation" style={{ fontSize: '2rem', color: '#f59e0b' }}></i>
-                  <p style={{ marginTop: '15px', color: mpTheme.muted, fontWeight: '600' }}>
-                    No {selectedServiceType} services found nearby
-                  </p>
-                  <p style={{ color: '#94a3b8', fontSize: '0.875rem', marginTop: '8px' }}>
-                    Try expanding your search radius or check back later
-                  </p>
-                </div>
-              )}
-
-              {!locationLoading && getFilteredServices(selectedServiceType).map((service) => (
-                <div key={service.id} style={{
-                  background: mpTheme.surfaceAlt,
-                  borderRadius: '12px',
-                  padding: '20px',
-                  marginBottom: '15px',
-                  border: `1px solid ${mpTheme.border}`
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                        <h3 style={{ margin: 0, color: mpTheme.text }}>{service.name}</h3>
-                        {service.verified && (
-                          <span className="int-status-badge active" style={{ fontSize: '0.75rem' }}>
-                            <i className="fa-solid fa-check-circle" style={{ marginRight: '4px' }}></i>
-                            Verified
-                          </span>
-                        )}
-                      </div>
-                      
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '10px', flexWrap: 'wrap' }}>
-                        {service.distance && (
-                          <span style={{ color: '#3b82f6', fontWeight: '600', fontSize: '0.875rem' }}>
-                            <i className="fa-solid fa-location-arrow" style={{ marginRight: '4px' }}></i>
-                            {service.distance.toFixed(1)} miles away
-                          </span>
-                        )}
-                        <span style={{ color: mpTheme.muted, fontSize: '0.875rem' }}>
-                          <i className="fa-solid fa-clock" style={{ marginRight: '4px' }}></i>
-                          {service.openStatus}
-                        </span>
-                      </div>
-
-                      <p style={{ color: mpTheme.muted, marginBottom: '10px', fontSize: '0.9375rem' }}>
-                        {service.description}
-                      </p>
-
-                      {service.address && (
-                        <p style={{ color: mpTheme.muted, fontSize: '0.875rem', marginBottom: '8px' }}>
-                          <i className="fa-solid fa-location-dot" style={{ marginRight: '6px' }}></i>
-                          {service.address}
-                        </p>
-                      )}
-
-                      {service.offers && (
-                        <div style={{
-                          background: isDarkMode ? 'rgba(245,158,11,0.14)' : '#fef3c7',
-                          color: isDarkMode ? '#f59e0b' : '#92400e',
-                          padding: '8px 12px',
-                          borderRadius: '8px',
-                          fontSize: '0.875rem',
-                          fontWeight: '600',
-                          display: 'inline-block',
-                          marginTop: '8px'
-                        }}>
-                          <i className="fa-solid fa-tag" style={{ marginRight: '6px' }}></i>
-                          {service.offers}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '10px', marginTop: '15px', flexWrap: 'wrap' }}>
-                    <button 
-                      className="btn small-cd" 
-                      onClick={() => handleContact(service)}
-                      style={{ flex: 1, minWidth: '150px' }}
-                    >
-                      <i className="fa-solid fa-phone" style={{ marginRight: '6px' }}></i>
-                      Contact Now
-                    </button>
-                    
-                    {service.website && (
-                      <button 
-                        className="btn small"
-                        onClick={() => window.open(service.website, '_blank')}
-                        style={{ flex: 1, minWidth: '150px' }}
-                      >
-                        <i className="fa-solid fa-globe" style={{ marginRight: '6px' }}></i>
-                        Website
-                      </button>
-                    )}
-
-                    {service.latitude && service.longitude && (
-                      <button 
-                        className="btn small"
-                        onClick={() => {
-                          const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${service.latitude},${service.longitude}`;
-                          window.open(mapsUrl, '_blank');
-                        }}
-                        style={{ flex: 1, minWidth: '150px' }}
-                      >
-                        <i className="fa-solid fa-map-location-dot" style={{ marginRight: '6px' }}></i>
-                        Locate
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      <ServiceTypeModal />
 
       {/* Filter Modal */}
       {showFilterModal && (

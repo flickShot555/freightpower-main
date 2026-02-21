@@ -95,6 +95,7 @@ class UserSettings(BaseModel):
     # but biometric auth enforcement is separate and remains backend-only).
     notification_preferences: Dict[str, bool] = {}
     calendar_sync: Optional[str] = None
+    calendar_reminders_enabled: bool = True
 
     # Accessibility (explicitly excludes voice commands; that feature is not enabled here)
     font_size: str = "Medium"  # Small | Medium | Large
@@ -112,6 +113,7 @@ class UserSettingsUpdate(BaseModel):
 
     notification_preferences: Optional[Dict[str, bool]] = None
     calendar_sync: Optional[str] = None
+    calendar_reminders_enabled: Optional[bool] = None
     font_size: Optional[str] = None
     high_contrast_mode: Optional[bool] = None
     screen_reader_compatible: Optional[bool] = None

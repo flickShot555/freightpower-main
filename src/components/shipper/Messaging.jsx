@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import '../../styles/carrier/Messaging.css';
 import { getJson, openEventSource, postJson } from '../../api/http';
+import { AUTO_REFRESH_MS } from '../../constants/refresh';
 
 function initials(value) {
   const s = String(value || '').trim();
@@ -197,7 +198,7 @@ export default function Messaging({ initialThreadId = null } = {}) {
     const id = setInterval(() => {
       if (!alive) return;
       refreshUnread().catch(() => {});
-    }, 15000);
+    }, AUTO_REFRESH_MS);
     return () => {
       alive = false;
       clearInterval(id);

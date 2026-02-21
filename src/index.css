@@ -154,3 +154,11 @@ html.fp-high-contrast body {
   background-color: #000000;
   color: #ffffff;
 }
+
+html.fp-high-contrast a {
+  color: #00ffff;
+}
+
+html.fp-high-contrast a:visited {
+  color: #00ffff;
+}

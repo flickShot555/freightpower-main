@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useUserSettings } from '../../contexts/UserSettingsContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_URL } from '../../config';
+import { AUTO_REFRESH_MS } from '../../constants/refresh';
 
 import DocumentVault from './DocumentVault';
 import Marketplace from './Marketplace';
@@ -18,10 +19,14 @@ import HereMap from '../common/HereMap';
 import '../../styles/driver/DriverDashboard.css';
 import logo from '/src/assets/logo.png';
 import resp_logo from '/src/assets/logo_1.png';
+import { t } from '../../i18n/translate';
 
 export default function DriverDashboard() {
   const { currentUser, logout } = useAuth();
   const { settings: userSettings } = useUserSettings();
+  const language = userSettings?.language || 'English';
+  const messagesPrefEnabled = Boolean(userSettings?.notification_preferences?.messages);
+  const compliancePrefEnabled = Boolean(userSettings?.notification_preferences?.compliance_alerts);
   const navigate = useNavigate();
   const location = useLocation();
   const [activeNav, setActiveNav] = useState('home');
@@ -39,6 +44,11 @@ export default function DriverDashboard() {
   // Messaging unread badge
   const [messagingUnread, setMessagingUnread] = useState(0);
 
+  // Messaging tray previews (topbar dropdown in Post-Hire)
+  const [msgTrayLoading, setMsgTrayLoading] = useState(false);
+  const [msgTrayThreads, setMsgTrayThreads] = useState([]);
+  const [msgTrayUnreadSummary, setMsgTrayUnreadSummary] = useState({ total_unread: 0, threads: {}, channels: {} });
+
   // Notifications state
   const [notifUnread, setNotifUnread] = useState(0);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -50,6 +60,42 @@ export default function DriverDashboard() {
   // Lightweight toast for admin notifications
   const [toast, setToast] = useState(null);
   const lastAdminMsgAtRef = React.useRef(0);
+
+  const shouldHideNotificationForPrefs = useCallback((n) => {
+    const toText = (v) => String(v || '').toLowerCase();
+    const type = toText(n?.notification_type || n?.type);
+    const resource = toText(n?.resource_type);
+    const title = toText(n?.title);
+    const body = toText(n?.message || n?.body);
+
+    const isMessageLike = (
+      type.includes('message') ||
+      type.includes('messaging') ||
+      resource.includes('message') ||
+      resource.includes('thread') ||
+      title.includes('message') ||
+      title.includes('messaging')
+    );
+
+    const isComplianceLike = (
+      type.includes('compliance') ||
+      type.includes('document') ||
+      type.includes('safety') ||
+      resource.includes('document') ||
+      title.includes('compliance') ||
+      title.includes('document') ||
+      title.includes('cdl') ||
+      title.includes('medical') ||
+      body.includes('compliance') ||
+      body.includes('document') ||
+      body.includes('cdl') ||
+      body.includes('medical')
+    );
+
+    if (!messagesPrefEnabled && isMessageLike) return true;
+    if (!compliancePrefEnabled && isComplianceLike) return true;
+    return false;
+  }, [messagesPrefEnabled, compliancePrefEnabled]);
 
   const fetchNotifications = async () => {
     if (!currentUser) return;
@@ -64,14 +110,52 @@ export default function DriverDashboard() {
       });
       if (!res.ok) return;
       const data = await res.json();
-      setNotifItems(Array.isArray(data?.notifications) ? data.notifications : []);
-      setNotifUnread(Number(data?.unread_count || 0));
+      const raw = Array.isArray(data?.notifications) ? data.notifications : [];
+      const filtered = raw.filter((n) => !shouldHideNotificationForPrefs(n));
+      setNotifItems(filtered);
+      setNotifUnread(filtered.filter((n) => !n?.is_read).length);
     } catch {
       // ignore
     } finally {
       setNotifLoading(false);
     }
   };
+
+  const fetchMessageTray = useCallback(async () => {
+    if (!currentUser) return;
+    setMsgTrayLoading(true);
+    try {
+      const token = await currentUser.getIdToken();
+
+      // Ensure driver has their carrier direct thread available (best-effort)
+      try {
+        await fetch(`${API_URL}/messaging/driver/threads/my-carrier`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      } catch {
+        // ignore
+      }
+
+      const [threadsRes, summaryRes] = await Promise.all([
+        fetch(`${API_URL}/messaging/threads?limit=50`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_URL}/messaging/unread/summary`, { headers: { 'Authorization': `Bearer ${token}` } })
+      ]);
+
+      if (threadsRes.ok) {
+        const data = await threadsRes.json();
+        setMsgTrayThreads(Array.isArray(data?.threads) ? data.threads : []);
+      }
+      if (summaryRes.ok) {
+        const data = await summaryRes.json();
+        setMsgTrayUnreadSummary(data || { total_unread: 0, threads: {}, channels: {} });
+      }
+    } catch {
+      // ignore
+    } finally {
+      setMsgTrayLoading(false);
+    }
+  }, [currentUser]);
 
   const persistNotificationRead = async (notificationId) => {
     if (!currentUser || !notificationId) return;
@@ -360,6 +444,10 @@ export default function DriverDashboard() {
   useEffect(() => {
     let alive = true;
     if (!currentUser) return;
+    if (!messagesPrefEnabled) {
+      setMessagingUnread(0);
+      return;
+    }
 
     const tick = async () => {
       try {
@@ -372,10 +460,9 @@ export default function DriverDashboard() {
         if (!alive) return;
         setMessagingUnread(Number(data?.total_unread || 0));
 
-        // Admin notifications are tied to the Preferences -> Notifications -> Messages toggle.
+        // Admin toasts are tied to the Preferences -> Notifications -> Messages toggle.
         // We treat "admin_channels" (broadcast by admins) as the source of admin messages.
-        const notificationsEnabled = Boolean(userSettings?.notification_preferences?.messages);
-        if (notificationsEnabled) {
+        if (messagesPrefEnabled) {
           const channels = data?.channels || {};
           const chAll = channels?.all || {};
           const chRole = channels?.driver || {};
@@ -405,19 +492,19 @@ export default function DriverDashboard() {
     };
 
     tick();
-    const id = setInterval(tick, 15000);
+    const id = setInterval(tick, AUTO_REFRESH_MS);
     return () => {
       alive = false;
       clearInterval(id);
     };
-  }, [currentUser]);
+  }, [currentUser, messagesPrefEnabled]);
 
   // Reset admin notification watermark when the toggle is disabled.
   useEffect(() => {
-    if (!Boolean(userSettings?.notification_preferences?.messages)) {
+    if (!messagesPrefEnabled) {
       lastAdminMsgAtRef.current = 0;
     }
-  }, [userSettings?.notification_preferences?.messages]);
+  }, [messagesPrefEnabled]);
 
   // Fetch notification unread count on mount (no polling)
   useEffect(() => {
@@ -426,32 +513,54 @@ export default function DriverDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
 
+  const timeLeftLabel = useMemo(() => {
+    const load = activeLoad;
+    if (!load) return 'ETA TBD';
+    const raw = load.delivery_date || load.delivery_datetime || load.delivery_time || load.pickup_date || load.pickup_datetime || null;
+    if (!raw) return 'ETA TBD';
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return 'ETA TBD';
+    const diffMs = d.getTime() - Date.now();
+    const diffSec = Math.floor(diffMs / 1000);
+    if (diffSec <= 0) return 'Due';
+    const mins = Math.floor(diffSec / 60);
+    const hours = Math.floor(mins / 60);
+    const remMins = mins % 60;
+    if (hours >= 24) {
+      const days = Math.floor(hours / 24);
+      const remHours = hours % 24;
+      return `${days}d ${remHours}h left`;
+    }
+    if (hours <= 0) return `${Math.max(1, remMins)}m left`;
+    return `${hours}h ${remMins}m left`;
+  }, [activeLoad]);
+
   const navGroups = [
     {
-      title: 'OPERATIONS',
+      title: t(language, 'nav.operations', 'OPERATIONS'),
       items: [
-        { key: 'home', label: 'My Loads', icon: 'fa-solid fa-house' },
-        { key: 'docs', label: 'Document Vault', icon: 'fa-solid fa-folder' },
-        { key: 'marketplace', label: 'Marketplace', icon: 'fa-solid fa-store' },
+        { key: 'home', label: t(language, 'nav.myLoads', 'My Loads'), icon: 'fa-solid fa-house' },
+        { key: 'docs', label: t(language, 'nav.docs', 'Document Vault'), icon: 'fa-solid fa-folder' },
+        { key: 'marketplace', label: t(language, 'nav.marketplace', 'Marketplace'), icon: 'fa-solid fa-store' },
       ]
     },
     {
-      title: 'MANAGEMENT',
+      title: t(language, 'nav.management', 'MANAGEMENT'),
       items: [
-        { key: 'carrier', label: 'My Carrier', icon: 'fa-solid fa-building' },
-        { key: 'compliance', label: 'Compliance & Safety', icon: 'fa-solid fa-shield-halved' },
-        { key: 'hiring', label: 'Hiring & Onboarding', icon: 'fa-solid fa-user-plus' },
-        { key: 'esign', label: 'Consent & E-Signature', icon: 'fa-solid fa-pen-fancy' }
+        { key: 'carrier', label: t(language, 'nav.myCarrier', 'My Carrier'), icon: 'fa-solid fa-building' },
+        { key: 'compliance', label: t(language, 'nav.compliance', 'Compliance & Safety'), icon: 'fa-solid fa-shield-halved' },
+        { key: 'hiring', label: t(language, 'nav.hiring', 'Hiring & Onboarding'), icon: 'fa-solid fa-user-plus' },
+        { key: 'esign', label: t(language, 'nav.esign', 'Consent & E-Signature'), icon: 'fa-solid fa-pen-fancy' }
       ]
     },
     {
-      title: 'SUPPORT',
+      title: t(language, 'nav.support', 'SUPPORT'),
       items: [
-        { key: 'messaging', label: 'Messaging', icon: 'fa-solid fa-envelope' },
-        { key: 'alerts', label: 'Alerts & Notifications', icon: 'fa-solid fa-bell' },
-        { key: 'settings', label: 'Account & Settings', icon: 'fa-solid fa-gear' },
-        { key: 'help', label: 'AI Hub', icon: 'fa-solid fa-robot' },
-        { key: 'logout', label: 'Logout', icon: 'fa-solid fa-right-from-bracket' }
+        { key: 'messaging', label: t(language, 'nav.messaging', 'Messaging'), icon: 'fa-solid fa-envelope' },
+        { key: 'alerts', label: t(language, 'nav.alerts', 'Alerts & Notifications'), icon: 'fa-solid fa-bell' },
+        { key: 'settings', label: t(language, 'nav.settings', 'Account & Settings'), icon: 'fa-solid fa-gear' },
+        { key: 'help', label: t(language, 'nav.aiHub', 'AI Hub'), icon: 'fa-solid fa-robot' },
+        { key: 'logout', label: t(language, 'nav.logout', 'Logout'), icon: 'fa-solid fa-right-from-bracket' }
       ]
     }
   ];
@@ -481,6 +590,21 @@ export default function DriverDashboard() {
     setNotifOpen(false);
     setActiveNav('alerts');
     if (isSidebarOpen) setIsSidebarOpen(false);
+  };
+
+  const openMessaging = (threadId = null) => {
+    setNotifOpen(false);
+    if (threadId) setInitialThreadId(threadId);
+    setActiveNav('messaging');
+    if (isSidebarOpen) setIsSidebarOpen(false);
+  };
+
+  const fmtMsgWhen = (ts) => {
+    const n = Number(ts || 0);
+    if (!n) return '';
+    const d = new Date(n * 1000);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   const missingRequiredDocsCount = useMemo(() => {
@@ -1030,23 +1154,25 @@ export default function DriverDashboard() {
           </div>
 
           {/* AI Suggestions */}
-          <div className="card dd-ai-suggestions-card">
-            <div className="card-header">
-              <h3>AI Suggestions</h3>
+          {Boolean(userSettings?.notification_preferences?.ai_tips) && (
+            <div className="card dd-ai-suggestions-card">
+              <div className="card-header">
+                <h3>AI Suggestions</h3>
+              </div>
+              <div className="dd-ai-suggestion">
+                <div className="dd-suggestion-title">Medical Card Expiring</div>
+                <div className="dd-suggestion-text">Expires in 15 days</div>
+              </div>
+              <div className="dd-ai-suggestion">
+                <div className="dd-suggestion-title">Profile Tip</div>
+                <div className="dd-suggestion-text">Add experience details to attract carriers</div>
+              </div>
+              <div className="dd-ai-suggestion">
+                <div className="dd-suggestion-title">Marketplace Ready</div>
+                <div className="dd-suggestion-text">Turn on availability to be discovered</div>
+              </div>
             </div>
-            <div className="dd-ai-suggestion">
-              <div className="dd-suggestion-title">Medical Card Expiring</div>
-              <div className="dd-suggestion-text">Expires in 15 days</div>
-            </div>
-            <div className="dd-ai-suggestion">
-              <div className="dd-suggestion-title">Profile Tip</div>
-              <div className="dd-suggestion-text">Add experience details to attract carriers</div>
-            </div>
-            <div className="dd-ai-suggestion">
-              <div className="dd-suggestion-title">Marketplace Ready</div>
-              <div className="dd-suggestion-text">Turn on availability to be discovered</div>
-            </div>
-          </div>
+          )}
 
           {/* Service Providers */}
           <div className="card dd-service-providers-card">
@@ -1145,6 +1271,86 @@ export default function DriverDashboard() {
   }
 
   function PostHireView() {
+    const [homeComplianceLoading, setHomeComplianceLoading] = useState(false);
+    const [homeCompliance, setHomeCompliance] = useState(null);
+
+    const refreshHomeCompliance = useCallback(async () => {
+      if (!currentUser) return;
+      setHomeComplianceLoading(true);
+      try {
+        const token = await currentUser.getIdToken();
+        const res = await fetch(`${API_URL}/compliance/status`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) return;
+        setHomeCompliance(await res.json());
+      } catch {
+        // ignore
+      } finally {
+        setHomeComplianceLoading(false);
+      }
+    }, [currentUser]);
+
+    useEffect(() => {
+      refreshHomeCompliance();
+      // Prefer not to poll; update on known events.
+      const onDocsUpdated = () => refreshHomeCompliance();
+      window.addEventListener('fp:documents-updated', onDocsUpdated);
+      return () => window.removeEventListener('fp:documents-updated', onDocsUpdated);
+    }, [refreshHomeCompliance]);
+
+    useEffect(() => {
+      // Keep message previews in sync for Home cards.
+      fetchMessageTray();
+    }, [fetchMessageTray]);
+
+    const complianceCardItems = useMemo(() => {
+      const role = homeCompliance?.role_data || {};
+      const parseExpiry = (value) => {
+        if (!value) return null;
+        const d = new Date(value);
+        return Number.isNaN(d.getTime()) ? null : d;
+      };
+      const expiryStatus = (value) => {
+        const d = parseExpiry(value);
+        if (!d) return 'missing';
+        const days = Math.floor((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        if (days < 0) return 'expired';
+        if (days <= 30) return 'warning';
+        return 'ok';
+      };
+      const norm = (s) => String(s || '').toLowerCase().trim();
+      const simpleStatus = (s) => {
+        const v = norm(s);
+        if (!v || v === 'pending' || v === 'in_progress' || v === 'in-progress') return 'pending';
+        if (v === 'pass' || v === 'passed' || v === 'clear' || v === 'cleared' || v === 'complete' || v === 'completed' || v === 'ok' || v === 'approved') return 'ok';
+        if (v === 'fail' || v === 'failed' || v === 'rejected' || v === 'denied') return 'bad';
+        return 'pending';
+      };
+
+      const cdl = expiryStatus(role.cdl_expiry);
+      const medical = expiryStatus(role.medical_card_expiry);
+      const drug = simpleStatus(role.drug_test_status);
+      const mvr = simpleStatus(role.mvr_status);
+      const clearinghouse = simpleStatus(role.clearinghouse_status);
+
+      const bg = (mvr === 'ok' && clearinghouse === 'ok') ? 'ok' : ((mvr === 'bad' || clearinghouse === 'bad') ? 'bad' : 'pending');
+
+      return [
+        { key: 'cdl', label: 'CDL License', icon: 'fa-solid fa-id-card', status: cdl },
+        { key: 'medical', label: 'Medical Card', icon: 'fa-solid fa-file-medical', status: medical },
+        { key: 'drug', label: 'Drug Test', icon: 'fa-solid fa-search', status: drug },
+        { key: 'background', label: 'Background Check', icon: 'fa-solid fa-clipboard-check', status: bg },
+      ];
+    }, [homeCompliance]);
+
+    const complianceStatusIcon = (status) => {
+      if (status === 'ok') return <i className="fa-solid fa-check" />;
+      if (status === 'warning') return <i className="fa-solid fa-exclamation-triangle" />;
+      if (status === 'expired' || status === 'bad') return <i className="fa-solid fa-xmark" />;
+      return <i className="fa-solid fa-clock" />;
+    };
+
     // Calculate total distance and distance left for active load
     const getTotalDistance = () => {
       if (!activeLoad) return 0;
@@ -1584,69 +1790,68 @@ export default function DriverDashboard() {
                 <h3>Compliance Status</h3>
               </div>
               <div className="dd-compliance-items">
-                <div className="dd-compliance-item ">
-                  <i className="fa-solid fa-id-card"></i>
-                  <span>CDL License</span>
-                  <i className="fa-solid fa-check"></i>
-                </div>
-                <div className="dd-compliance-item ">
-                  <i className="fa-solid fa-file-medical"></i>
-                  <span>Medical Card</span>
-                  <i className="fa-solid fa-exclamation-triangle"></i>
-                </div>
-                <div className="dd-compliance-item">
-                  <i className="fa-solid fa-search"></i>
-                  <span>Drug Test</span>
-                  <i className="fa-solid fa-check"></i>
-                </div>
-                <div className="dd-compliance-item">
-                  <i className="fa-solid fa-clipboard-check"></i>
-                  <span>Background Check</span>
-                  <i className="fa-solid fa-check"></i>
-                </div>
+                {complianceCardItems.map((item) => (
+                  <div className="dd-compliance-item" key={item.key}>
+                    <i className={item.icon}></i>
+                    <span>{item.label}</span>
+                    {complianceStatusIcon(item.status)}
+                  </div>
+                ))}
               </div>
-              <button className="btn small-cd" style={{width: '100%'}}>View All Documents</button>
+              <button className="btn small-cd" style={{width: '100%'}} onClick={() => handleNavClick('compliance')}>
+                {homeComplianceLoading ? 'Loading…' : 'View All Documents'}
+              </button>
             </div>
 
             {/* Messages & Alerts Section */}
             <div className="dd-messages-alerts-section">
               <h3 className="dd-section-title">Messages & Alerts</h3>
-              
-              {/* Route Update Card */}
-              <div className="card dd-message-card dd-route-update-card">
-                <div className="dd-message-icon ">
-                  <i className="fa-solid fa-route"></i>
-                </div>
-                <div className="dd-message-content">
-                  <div className="dd-message-title">Route Update</div>
-                  <div className="dd-message-text">Traffic ahead on I-76. Alternative route suggested.</div>
-                </div>
-              </div>
 
-              {/* Medical Card Expiring Card */}
-              <div className="card dd-message-card dd-medical-warning-card">
-                <div className="dd-message-icon ">
-                  <i className="fa-solid fa-exclamation-triangle"></i>
+              {msgTrayLoading && (msgTrayThreads || []).length === 0 ? (
+                <div className="card dd-message-card" style={{ padding: 16, opacity: 0.9 }}>
+                  Loading messages…
                 </div>
-                <div className="dd-message-content">
-                  <div className="dd-message-title">Medical Card Expiring</div>
-                  <div className="dd-message-text">Expires in 15 days. Schedule renewal now.</div>
+              ) : (msgTrayThreads || []).length === 0 ? (
+                <div className="card dd-message-card" style={{ padding: 16, opacity: 0.9 }}>
+                  No messages yet.
                 </div>
-              </div>
-
-              {/* Carrier Message Card */}
-              <div className="card dd-message-card dd-carrier-message-card">
-                <div className="dd-message-icon ">
-                  <i className="fa-solid fa-comment"></i>
-                </div>
-                <div className="dd-message-content">
-                  <div className="dd-message-title">Carrier Message</div>
-                  <div className="dd-message-text">Great job on the Chicago delivery!</div>
-                </div>
-              </div>
+              ) : (
+                (msgTrayThreads || [])
+                  .slice()
+                  .sort((a, b) => (Number(b?.last_message_at || 0) - Number(a?.last_message_at || 0)))
+                  .slice(0, 3)
+                  .map((t) => {
+                    const threadId = String(t?.id || '').trim();
+                    const unread = Boolean(msgTrayUnreadSummary?.threads?.[threadId]?.has_unread);
+                    const title = String(t?.display_title || t?.other_display_name || t?.title || 'Message');
+                    const text = String(t?.last_message?.text || '').trim() || 'Open to view messages.';
+                    return (
+                      <button
+                        key={threadId || title}
+                        type="button"
+                        className={`card dd-message-card ${unread ? 'dd-notif-item--unread' : ''}`}
+                        onClick={() => {
+                          if (!threadId) return;
+                          setInitialThreadId(threadId);
+                          setActiveNav('messaging');
+                        }}
+                        style={{ textAlign: 'left', width: '100%', cursor: threadId ? 'pointer' : 'default' }}
+                      >
+                        <div className="dd-message-icon">
+                          <i className="fa-solid fa-comment" />
+                        </div>
+                        <div className="dd-message-content">
+                          <div className="dd-message-title">{title}{unread ? ' (New)' : ''}</div>
+                          <div className="dd-message-text">{text}</div>
+                        </div>
+                      </button>
+                    );
+                  })
+              )}
             </div>
 
             {/* AI Suggestions Card */}
+            {Boolean(userSettings?.notification_preferences?.ai_tips) && (
               <div className="card dd-ai-suggestions-separate-card">
                 <div className="dd-section-title">
                   <span>AI Suggestions</span>
@@ -1662,6 +1867,7 @@ export default function DriverDashboard() {
                   <button className="dd-suggestion-link">Find Rest Areas</button>
                 </div>
               </div>
+            )}
           </div>
         </div>
       </>
@@ -1968,7 +2174,7 @@ export default function DriverDashboard() {
           />
         );
       case 'settings':
-        return <AccountSettings onProfileUpdate={() => {
+        return <AccountSettings onNavigate={handleNavClick} onProfileUpdate={() => {
           // Refresh profile data when settings are updated
           const fetchProfile = async () => {
             if (!currentUser) return;
@@ -2105,7 +2311,7 @@ export default function DriverDashboard() {
                 </span>
                 <span className="dd-posthire-status">
                   <i className="fa-regular fa-clock dd-timer-icon" />
-                  <span className="dd-status-text">8h 45m left</span>
+                  <span className="dd-status-text">{timeLeftLabel}</span>
                 </span>
                 <div className="dd-notif-bell" style={{ position: 'relative' }}>
                   <div id="fp-notif-dropdown-root" style={{ position: 'relative' }}>
@@ -2131,7 +2337,7 @@ export default function DriverDashboard() {
                           </div>
                         </div>
 
-                        <div className="dd-notif-dropdown-body">
+                        <div className="dd-notif-dropdown-body" style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
                           <div className="dd-notif-section">
                             <div className="dd-notif-section-title">
                               Unopened ({(notifItems || []).filter((n) => !n?.is_read).length})
@@ -2241,7 +2447,7 @@ export default function DriverDashboard() {
                           </div>
                         </div>
 
-                        <div className="dd-notif-dropdown-body">
+                        <div className="dd-notif-dropdown-body" style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
                           <div className="dd-notif-section">
                             <div className="dd-notif-section-title">
                               Unopened ({(notifItems || []).filter((n) => !n?.is_read).length})
@@ -2340,7 +2546,7 @@ export default function DriverDashboard() {
                   <span className={`chip ${isAvailable ? 'blue' : 'gray'}`}>
                     {isAvailable ? 'Available' : 'Unavailable'}
                   </span>
-                  <span className="chip orange">8h 45m left</span>
+                  <span className="chip orange">{timeLeftLabel}</span>
                 </>
               ) : (
                 missingRequiredDocsCount > 0 ? <span className="chip yellow">Missing Docs</span> : null

@@ -1,10 +1,13 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '../../styles/driver/MyCarrier.css';
 import { useAuth } from '../../contexts/AuthContext';
+import { useUserSettings } from '../../contexts/UserSettingsContext';
 import { API_URL } from '../../config';
 
 export default function MyCarrier() {
   const { currentUser } = useAuth();
+  const { settings: userSettings } = useUserSettings();
+  const calendarProvider = String(userSettings?.calendar_sync || 'Google Calendar');
   const [activeTab, setActiveTab] = useState('Active');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [carrier, setCarrier] = useState(null);
@@ -482,6 +485,68 @@ export default function MyCarrier() {
     events.sort((a, b) => a.date.getTime() - b.date.getTime());
     return events;
   }, [loads, driverDocs]);
+
+  const exportScheduleIcs = useCallback(() => {
+    try {
+      const monthStart = scheduleMonth;
+      const year = monthStart.getFullYear();
+      const month = monthStart.getMonth();
+      const events = (Array.isArray(scheduleEvents) ? scheduleEvents : []).filter(
+        (e) => e?.date && e.date.getFullYear() === year && e.date.getMonth() === month
+      );
+
+      const pad2 = (n) => String(n).padStart(2, '0');
+      const fmtDate = (d) => `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}`;
+      const fmtStamp = (d) => `${d.getUTCFullYear()}${pad2(d.getUTCMonth() + 1)}${pad2(d.getUTCDate())}T${pad2(d.getUTCHours())}${pad2(d.getUTCMinutes())}${pad2(d.getUTCSeconds())}Z`;
+      const esc = (s) => String(s || '')
+        .replace(/\\/g, '\\\\')
+        .replace(/\n/g, '\\n')
+        .replace(/;/g, '\\;')
+        .replace(/,/g, '\\,');
+
+      const now = new Date();
+      const dtstamp = fmtStamp(now);
+      const calLines = [];
+      calLines.push('BEGIN:VCALENDAR');
+      calLines.push('VERSION:2.0');
+      calLines.push('PRODID:-//FreightPower//Driver Schedule//EN');
+      calLines.push('CALSCALE:GREGORIAN');
+      calLines.push('METHOD:PUBLISH');
+
+      for (const e of events) {
+        const start = new Date(e.date.getFullYear(), e.date.getMonth(), e.date.getDate());
+        const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1);
+        const uidBase = `${String(e?.kind || 'event')}:${String(e?.meta?.load_id || e?.meta?.doc_id || '')}:${fmtDate(start)}`;
+        const uid = `${uidBase || Math.random().toString(16).slice(2)}@freightpower`;
+        const desc = e?.meta?.load_id
+          ? `Load: ${String(e.meta.load_id)}\nStatus: ${String(e?.meta?.status || '')}`
+          : (e?.meta?.doc_id ? `Document: ${String(e.meta.doc_id)}` : '');
+
+        calLines.push('BEGIN:VEVENT');
+        calLines.push(`UID:${esc(uid)}`);
+        calLines.push(`DTSTAMP:${dtstamp}`);
+        calLines.push(`DTSTART;VALUE=DATE:${fmtDate(start)}`);
+        calLines.push(`DTEND;VALUE=DATE:${fmtDate(end)}`);
+        calLines.push(`SUMMARY:${esc(e?.title || 'FreightPower Event')}`);
+        if (desc) calLines.push(`DESCRIPTION:${esc(desc)}`);
+        calLines.push('END:VEVENT');
+      }
+
+      calLines.push('END:VCALENDAR');
+
+      const blob = new Blob([calLines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `freightpower-schedule-${year}-${pad2(month + 1)}.ics`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Failed to export calendar file.');
+    }
+  }, [scheduleMonth, scheduleEvents]);
 
   const openSchedule = async () => {
     setShowScheduleModal(true);
@@ -1372,12 +1437,23 @@ export default function MyCarrier() {
                     <h3 style={{ margin: 0, color: theme.text }}>Schedule</h3>
                     <div style={{ fontSize: 12, color: theme.muted }}>Pickups, deliveries, and document expirations</div>
                   </div>
-                  <button
-                    onClick={() => setShowScheduleModal(false)}
-                    style={{ border: `1px solid ${theme.border}`, background: theme.surfaceAlt, color: theme.text, borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}
-                  >
-                    Close
-                  </button>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn small ghost-cd"
+                      onClick={exportScheduleIcs}
+                      disabled={Boolean(scheduleLoading)}
+                      title={`Export for ${calendarProvider}`}
+                    >
+                      Export Calendar (.ics)
+                    </button>
+                    <button
+                      onClick={() => setShowScheduleModal(false)}
+                      style={{ border: `1px solid ${theme.border}`, background: theme.surfaceAlt, color: theme.text, borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}
+                    >
+                      Close
+                    </button>
+                  </div>
                 </div>
 
                 {scheduleError && <div style={{ color: theme.danger, marginBottom: 12 }}>{scheduleError}</div>}

@@ -31,6 +31,19 @@ from .banlist import assert_not_banned
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
+@router.get("/google/callback")
+async def google_oauth_callback(code: str, state: str):
+    """Google OAuth callback endpoint (calendar integration).
+
+    This endpoint exists to match common redirect URIs suggested by OAuth setup guides.
+    Internally it delegates to the calendar integration callback handler.
+    """
+    # Import lazily to avoid circular imports (calendar_integrations imports get_current_user from this module).
+    from .calendar_integrations import oauth_callback as _calendar_oauth_callback
+
+    return await _calendar_oauth_callback(provider="google", code=code, state=state)
+
+
 async def _to_thread(fn, timeout_s: float = 25.0):
     """Run blocking SDK calls off the event loop with a soft timeout."""
     return await asyncio.wait_for(asyncio.to_thread(fn), timeout=timeout_s)
@@ -1803,6 +1816,7 @@ async def get_user_settings(user: Dict[str, Any] = Depends(get_current_user)):
         # Driver/Carrier preferences
         "notification_preferences": notif,
         "calendar_sync": user.get("calendar_sync"),
+        "calendar_reminders_enabled": bool(user.get("calendar_reminders_enabled", True) is not False),
 
         # Accessibility
         "font_size": user.get("font_size") or "Medium",
@@ -1849,6 +1863,9 @@ async def update_user_settings(
             # Normalize values to bool
             update_data["notification_preferences"] = {str(k): bool(v) for k, v in prefs.items()}
 
+    if "calendar_reminders_enabled" in update_data:
+        update_data["calendar_reminders_enabled"] = bool(update_data.get("calendar_reminders_enabled") is True)
+
     if update_data:
         update_data["updated_at"] = time.time()
         db.collection("users").document(uid).set(update_data, merge=True)
@@ -1878,6 +1895,7 @@ async def update_user_settings(
 
         "notification_preferences": notif,
         "calendar_sync": merged.get("calendar_sync"),
+        "calendar_reminders_enabled": bool(merged.get("calendar_reminders_enabled", True) is not False),
 
         "font_size": merged.get("font_size") or "Medium",
         "high_contrast_mode": bool(merged.get("high_contrast_mode") is True),

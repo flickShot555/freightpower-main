@@ -28,6 +28,7 @@ import SystemSettings from '../super_admin/SystemSettings';
 import AdminApprovals from '../super_admin/AdminApprovals';
 import RemovalApprovals from '../super_admin/RemovalApprovals';
 import logo from '/src/assets/logo.png';
+import { AUTO_REFRESH_MS } from '../../constants/refresh';
 import resp_logo from '/src/assets/logo_1.png';
 
 import { downloadJson } from '../../utils/fileDownload';
@@ -255,7 +256,7 @@ export default function SuperAdminDashboard(){
       }
     };
     tick();
-    const id = setInterval(tick, 30000);
+    const id = setInterval(tick, AUTO_REFRESH_MS);
     return () => {
       alive = false;
       clearInterval(id);

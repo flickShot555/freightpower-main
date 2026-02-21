@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_URL } from '../../config';
+import { AUTO_REFRESH_MS } from '../../constants/refresh';
 import '../../styles/shipper/DocumentVault.css';
 
 // Document type mapping
@@ -25,6 +26,7 @@ export default function DocumentVault() {
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedDocType, setSelectedDocType] = useState('other');
   const [selectedFile, setSelectedFile] = useState(null);
@@ -92,6 +94,27 @@ export default function DocumentVault() {
   }, [currentUser]);
 
   useEffect(() => { fetchDocuments(); }, [fetchDocuments]);
+
+  const refreshAll = useCallback(async ({ showSpinner = false } = {}) => {
+    if (!currentUser) return;
+    if (showSpinner) setRefreshing(true);
+    try {
+      await Promise.allSettled([
+        fetchDocuments(),
+        fetchComplianceScore(),
+      ]);
+    } finally {
+      if (showSpinner) setRefreshing(false);
+    }
+  }, [currentUser, fetchDocuments, fetchComplianceScore]);
+
+  // Time-based auto-refresh (5 minutes) for Document Vault data.
+  useEffect(() => {
+    const id = setInterval(() => {
+      refreshAll({ showSpinner: false }).catch(() => {});
+    }, AUTO_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [refreshAll]);
 
   // Handle file upload
   const handleFileUpload = async (file) => {
@@ -184,6 +207,15 @@ export default function DocumentVault() {
             <input placeholder="Search documents (OCR-enabled)" />
           </div>
           <button className="btn small filter">Filters</button>
+          <button
+            className="btn small filter"
+            onClick={() => refreshAll({ showSpinner: true })}
+            disabled={refreshing}
+            title="Refresh"
+          >
+            <i className={`fa-solid ${refreshing ? 'fa-spinner fa-spin' : 'fa-rotate-right'}`} style={{ marginRight: '6px' }}></i>
+            Refresh
+          </button>
           <button className="btn small-cd" onClick={() => setShowUploadModal(true)}>
             <i className="fa-solid fa-upload" style={{ marginRight: '6px' }}></i>
             Upload
