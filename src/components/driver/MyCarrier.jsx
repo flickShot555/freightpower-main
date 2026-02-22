@@ -3,10 +3,18 @@ import '../../styles/driver/MyCarrier.css';
 import { useAuth } from '../../contexts/AuthContext';
 import { useUserSettings } from '../../contexts/UserSettingsContext';
 import { API_URL } from '../../config';
+import { t } from '../../i18n/translate';
 
 export default function MyCarrier() {
   const { currentUser } = useAuth();
   const { settings: userSettings } = useUserSettings();
+  const language = userSettings?.language || 'English';
+  const locale = useMemo(() => {
+    if (language === 'Spanish') return 'es';
+    if (language === 'Arabic') return 'ar';
+    return 'en';
+  }, [language]);
+  const tr = useCallback((key, fallback) => t(language, key, fallback), [language]);
   const calendarProvider = String(userSettings?.calendar_sync || 'Google Calendar');
   const [activeTab, setActiveTab] = useState('Active');
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -111,7 +119,7 @@ export default function MyCarrier() {
   }, [isDarkMode]);
 
   const getAuthToken = async () => {
-    if (!currentUser) throw new Error('Not authenticated');
+    if (!currentUser) throw new Error(tr('myCarrier.error.notAuthenticated', 'Not authenticated'));
     return await currentUser.getIdToken();
   };
 
@@ -167,12 +175,12 @@ export default function MyCarrier() {
     if (Number.isNaN(d.getTime())) return '';
     const diffMs = Date.now() - d.getTime();
     const diffMin = Math.round(diffMs / 60000);
-    if (diffMin < 1) return 'just now';
-    if (diffMin < 60) return `${diffMin} min ago`;
+    if (diffMin < 1) return tr('myCarrier.time.justNow', 'just now');
+    if (diffMin < 60) return `${diffMin} ${tr('myCarrier.time.minAgo', 'min ago')}`;
     const diffHr = Math.round(diffMin / 60);
-    if (diffHr < 24) return `${diffHr} hr ago`;
+    if (diffHr < 24) return `${diffHr} ${tr('myCarrier.time.hrAgo', 'hr ago')}`;
     const diffDay = Math.round(diffHr / 24);
-    return `${diffDay} day${diffDay === 1 ? '' : 's'} ago`;
+    return `${diffDay} ${diffDay === 1 ? tr('myCarrier.time.dayAgo', 'day ago') : tr('myCarrier.time.daysAgo', 'days ago')}`;
   };
 
   const fetchCompliance = async () => {
@@ -185,11 +193,11 @@ export default function MyCarrier() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.detail || 'Failed to load compliance');
+      if (!res.ok) throw new Error(data?.detail || tr('myCarrier.error.loadCompliance', 'Failed to load compliance'));
       setCompliance(data);
     } catch (e) {
       console.error('Compliance error:', e);
-      setComplianceError(e?.message || 'Failed to load compliance');
+      setComplianceError(e?.message || tr('myCarrier.error.loadCompliance', 'Failed to load compliance'));
       setCompliance(null);
     } finally {
       setComplianceLoading(false);
@@ -206,7 +214,7 @@ export default function MyCarrier() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.detail || 'Failed to load required documents');
+      if (!res.ok) throw new Error(data?.detail || tr('myCarrier.error.loadRequiredDocs', 'Failed to load required documents'));
       setRequiredDocs(data);
 
       // Keep consent status consistent with the required-docs gate (data_sharing_consent).
@@ -216,7 +224,7 @@ export default function MyCarrier() {
       });
     } catch (e) {
       console.error('Required docs error:', e);
-      setRequiredDocsError(e?.message || 'Failed to load required documents');
+      setRequiredDocsError(e?.message || tr('myCarrier.error.loadRequiredDocs', 'Failed to load required documents'));
       setRequiredDocs(null);
     } finally {
       setRequiredDocsLoading(false);
@@ -233,7 +241,7 @@ export default function MyCarrier() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.detail || 'Failed to load threads');
+      if (!res.ok) throw new Error(data?.detail || tr('myCarrier.error.loadThreads', 'Failed to load threads'));
       const list = Array.isArray(data?.threads) ? data.threads : [];
       setMessagingThreads(list);
       const preferred = carrierId
@@ -242,7 +250,7 @@ export default function MyCarrier() {
       setCommThread(preferred || list.find(t => String(t?.kind || '') === 'carrier_driver_direct') || list[0] || null);
     } catch (e) {
       console.error('Messaging threads error:', e);
-      setMessagingError(e?.message || 'Failed to load messages');
+      setMessagingError(e?.message || tr('myCarrier.error.loadMessages', 'Failed to load messages'));
       setMessagingThreads([]);
       setCommThread(null);
     } finally {
@@ -268,7 +276,7 @@ export default function MyCarrier() {
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.detail || 'Failed to load documents');
+      if (!res.ok) throw new Error(data?.detail || tr('myCarrier.error.loadDocuments', 'Failed to load documents'));
       const list = Array.isArray(data?.documents) ? data.documents : (Array.isArray(data) ? data : []);
       setDriverDocs(list);
       return list;
@@ -279,16 +287,16 @@ export default function MyCarrier() {
 
   const submitQuickUpload = async () => {
     if (!uploadFile) {
-      setUploadError('Please select a file');
+      setUploadError(tr('myCarrier.upload.error.selectFile', 'Please select a file'));
       return;
     }
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
     if (!allowedTypes.includes(uploadFile.type)) {
-      setUploadError('Only PDF, JPG, and PNG files are allowed');
+      setUploadError(tr('myCarrier.upload.error.invalidType', 'Only PDF, JPG, and PNG files are allowed'));
       return;
     }
     if (uploadFile.size > 25 * 1024 * 1024) {
-      setUploadError('File size must be less than 25MB');
+      setUploadError(tr('myCarrier.upload.error.fileTooLarge', 'File size must be less than 25MB'));
       return;
     }
 
@@ -305,7 +313,7 @@ export default function MyCarrier() {
         body: formData
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.detail || 'Upload failed');
+      if (!res.ok) throw new Error(data?.detail || tr('myCarrier.upload.error.uploadFailed', 'Upload failed'));
 
       setShowUploadDocsModal(false);
       setUploadFile(null);
@@ -313,9 +321,9 @@ export default function MyCarrier() {
       // Refresh compliance + schedule docs best-effort.
       fetchCompliance().catch(() => {});
       fetchDriverDocuments().catch(() => {});
-      alert('Document uploaded successfully.');
+      alert(tr('myCarrier.upload.success', 'Document uploaded successfully.'));
     } catch (e) {
-      setUploadError(e?.message || 'Upload failed');
+      setUploadError(e?.message || tr('myCarrier.upload.error.uploadFailed', 'Upload failed'));
     } finally {
       setUploadSubmitting(false);
     }
@@ -365,13 +373,13 @@ export default function MyCarrier() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data?.detail || 'Failed to load assignments');
+        throw new Error(data?.detail || tr('myCarrier.error.loadAssignments', 'Failed to load assignments'));
       }
       const list = Array.isArray(data?.loads) ? data.loads : [];
       setLoads(list);
     } catch (e) {
       console.error('Error fetching loads:', e);
-      setLoadsError(e?.message || 'Failed to load assignments');
+      setLoadsError(e?.message || tr('myCarrier.error.loadAssignments', 'Failed to load assignments'));
       setLoads([]);
     } finally {
       setLoadsLoading(false);
@@ -455,7 +463,7 @@ export default function MyCarrier() {
         events.push({
           kind: 'pickup',
           date: pickup,
-          title: `Pickup: Load ${loadNumber}`,
+          title: `${tr('myCarrier.schedule.pickupTitlePrefix', 'Pickup: Load')} ${loadNumber}`,
           meta: { load_id: loadId, status: normalizeStatus(l?.status) }
         });
       }
@@ -463,7 +471,7 @@ export default function MyCarrier() {
         events.push({
           kind: 'delivery',
           date: delivery,
-          title: `Delivery: Load ${loadNumber}`,
+          title: `${tr('myCarrier.schedule.deliveryTitlePrefix', 'Delivery: Load')} ${loadNumber}`,
           meta: { load_id: loadId, status: normalizeStatus(l?.status) }
         });
       }
@@ -473,11 +481,13 @@ export default function MyCarrier() {
     for (const d of (Array.isArray(driverDocs) ? driverDocs : [])) {
       const exp = parseDateOnly(d?.expiry_date || d?.extracted_fields?.expiry_date);
       if (!exp) continue;
-      const t = String(d?.type || d?.document_type || 'Document').replace(/_/g, ' ').toUpperCase();
+      const tDoc = String(d?.type || d?.document_type || tr('documentVault.documentFallback', 'Document'))
+        .replace(/_/g, ' ')
+        .toUpperCase();
       events.push({
         kind: 'expiry',
         date: exp,
-        title: `${t} expires`,
+        title: `${tDoc} ${tr('myCarrier.schedule.expires', 'expires')}`,
         meta: { doc_id: String(d?.id || d?.doc_id || '') }
       });
     }
@@ -519,15 +529,15 @@ export default function MyCarrier() {
         const uidBase = `${String(e?.kind || 'event')}:${String(e?.meta?.load_id || e?.meta?.doc_id || '')}:${fmtDate(start)}`;
         const uid = `${uidBase || Math.random().toString(16).slice(2)}@freightpower`;
         const desc = e?.meta?.load_id
-          ? `Load: ${String(e.meta.load_id)}\nStatus: ${String(e?.meta?.status || '')}`
-          : (e?.meta?.doc_id ? `Document: ${String(e.meta.doc_id)}` : '');
+          ? `${tr('myCarrier.schedule.ics.loadLabel', 'Load')}: ${String(e.meta.load_id)}\n${tr('myCarrier.schedule.ics.statusLabel', 'Status')}: ${String(e?.meta?.status || '')}`
+          : (e?.meta?.doc_id ? `${tr('myCarrier.schedule.ics.documentLabel', 'Document')}: ${String(e.meta.doc_id)}` : '');
 
         calLines.push('BEGIN:VEVENT');
         calLines.push(`UID:${esc(uid)}`);
         calLines.push(`DTSTAMP:${dtstamp}`);
         calLines.push(`DTSTART;VALUE=DATE:${fmtDate(start)}`);
         calLines.push(`DTEND;VALUE=DATE:${fmtDate(end)}`);
-        calLines.push(`SUMMARY:${esc(e?.title || 'FreightPower Event')}`);
+        calLines.push(`SUMMARY:${esc(e?.title || tr('myCarrier.schedule.ics.defaultEventSummary', 'FreightPower Event'))}`);
         if (desc) calLines.push(`DESCRIPTION:${esc(desc)}`);
         calLines.push('END:VEVENT');
       }
@@ -544,7 +554,7 @@ export default function MyCarrier() {
       a.remove();
       URL.revokeObjectURL(url);
     } catch {
-      alert('Failed to export calendar file.');
+      alert(tr('myCarrier.schedule.error.exportFailed', 'Failed to export calendar file.'));
     }
   }, [scheduleMonth, scheduleEvents]);
 
@@ -559,7 +569,7 @@ export default function MyCarrier() {
       setScheduleMonth(new Date(now.getFullYear(), now.getMonth(), 1));
       setSelectedScheduleDay(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
     } catch (e) {
-      setScheduleError('Failed to load schedule data');
+      setScheduleError(tr('myCarrier.schedule.error.loadDataFailed', 'Failed to load schedule data'));
     } finally {
       setScheduleLoading(false);
     }
@@ -574,7 +584,7 @@ export default function MyCarrier() {
   const openDocsForLoad = async (load) => {
     const loadId = getLoadId(load);
     if (!loadId) {
-      alert('Load ID not found');
+      alert(tr('myCarrier.error.loadIdNotFound', 'Load ID not found'));
       return;
     }
     setDocsLoad(load);
@@ -588,12 +598,12 @@ export default function MyCarrier() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.detail || 'Failed to load documents');
+      if (!response.ok) throw new Error(data?.detail || tr('myCarrier.error.loadDocuments', 'Failed to load documents'));
       const list = Array.isArray(data?.documents) ? data.documents : [];
       setDocs(list);
     } catch (e) {
       console.error('Docs fetch error:', e);
-      setDocsError(e?.message || 'Failed to load documents');
+      setDocsError(e?.message || tr('myCarrier.error.loadDocuments', 'Failed to load documents'));
       setDocs([]);
     } finally {
       setDocsLoading(false);
@@ -603,7 +613,7 @@ export default function MyCarrier() {
   const startTrip = async (load) => {
     const loadId = getLoadId(load);
     if (!loadId) {
-      alert('Load ID not found');
+      alert(tr('myCarrier.error.loadIdNotFound', 'Load ID not found'));
       return;
     }
     try {
@@ -617,11 +627,11 @@ export default function MyCarrier() {
         body: JSON.stringify({ new_status: 'in_transit' })
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.detail || 'Failed to start trip');
+      if (!response.ok) throw new Error(data?.detail || tr('myCarrier.error.startTripFailed', 'Failed to start trip'));
       await fetchLoads();
     } catch (e) {
       console.error('Start trip error:', e);
-      alert(e?.message || 'Failed to start trip');
+      alert(e?.message || tr('myCarrier.error.startTripFailed', 'Failed to start trip'));
     }
   };
 
@@ -681,7 +691,7 @@ export default function MyCarrier() {
   const refreshPodGps = async () => {
     setPodError('');
     if (!navigator?.geolocation) {
-      setPodError('Geolocation is not supported in this browser.');
+      setPodError(tr('myCarrier.pod.error.geoNotSupported', 'Geolocation is not supported in this browser.'));
       return;
     }
     await new Promise((resolve) => {
@@ -695,7 +705,7 @@ export default function MyCarrier() {
           resolve(true);
         },
         (err) => {
-          setPodError(err?.message || 'Could not get current location.');
+          setPodError(err?.message || tr('myCarrier.pod.error.getLocationFailed', 'Could not get current location.'));
           resolve(false);
         },
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
@@ -738,14 +748,14 @@ export default function MyCarrier() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data?.detail || 'Signature image not found. Upload one in Consent & E‑Signature.');
+        throw new Error(data?.detail || tr('myCarrier.pod.error.signatureNotFound', 'Signature image not found. Upload one in Consent & E‑Signature.'));
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       setPodSignatureImageUrl(url);
     } catch (e) {
       console.error('Load signature image error:', e);
-      setPodError(e?.message || 'Could not load signature image.');
+      setPodError(e?.message || tr('myCarrier.pod.error.signatureLoadFailed', 'Could not load signature image.'));
     }
   };
 
@@ -761,25 +771,48 @@ export default function MyCarrier() {
     const weight = load?.weight != null ? String(load.weight) : '—';
     const receiverName = String(podReceiverName || '').trim() || '—';
     const signedName = String(podSignerName || '').trim() || '—';
-    const signedAt = new Date().toLocaleString();
+    const signedAt = new Date().toLocaleString(locale);
     const gpsText = (podGps?.lat != null && podGps?.lng != null)
       ? `${Number(podGps.lat).toFixed(6)}, ${Number(podGps.lng).toFixed(6)} (±${podGps?.accuracy ? Math.round(podGps.accuracy) : '—'}m)`
       : '—';
     const distanceText = (podDistanceMeters != null)
-      ? `${podDistanceMeters.toFixed(1)} meters from delivery` : '—';
+      ? `${podDistanceMeters.toFixed(1)} ${tr('myCarrier.pod.metersFromDelivery', 'meters from delivery')}` : '—';
+
+    const podTitle = tr('myCarrier.pod.title', 'PROOF OF DELIVERY (POD)');
+    const podSubtitlePrefix = tr('myCarrier.pod.subtitlePrefix', 'FreightPower — Delivery confirmation for Load');
+    const podLabelLoad = tr('myCarrier.pod.label.load', 'Load');
+    const podLabelLoadId = tr('myCarrier.pod.label.loadId', 'Load ID:');
+    const podLabelReceiver = tr('myCarrier.pod.label.receiver', 'Receiver');
+    const podLabelSignedAt = tr('myCarrier.pod.label.signedAt', 'Signed at:');
+    const podLabelOrigin = tr('myCarrier.pod.label.origin', 'Origin');
+    const podLabelPickupDate = tr('myCarrier.pod.label.pickupDate', 'Pickup Date:');
+    const podLabelDestination = tr('myCarrier.pod.label.destination', 'Destination');
+    const podLabelDeliveryDate = tr('myCarrier.pod.label.deliveryDate', 'Delivery Date:');
+    const podLabelEquipmentWeight = tr('myCarrier.pod.label.equipmentWeight', 'Equipment / Weight');
+    const podLabelWeight = tr('myCarrier.pod.label.weight', 'Weight:');
+    const podLabelGpsProof = tr('myCarrier.pod.label.gpsProof', 'GPS Proof');
+    const podLabelSignerName = tr('myCarrier.pod.label.signerName', 'Signer Name');
+    const podLabelSignatureImage = tr('myCarrier.pod.label.signatureImage', 'Signature (image)');
+    const podLabelSignatureTyped = tr('myCarrier.pod.label.signatureTyped', 'Signature (typed)');
+    const podSignatureAlt = tr('myCarrier.pod.label.signatureAlt', 'Signature');
+    const podSignatureImageMissing = tr('myCarrier.pod.signatureImageMissing', 'Signature image not available');
+    const podFootnote = tr(
+      'myCarrier.pod.footnote',
+      'This is a digitally signed commercial document. False statements or misrepresentation may be subject to penalties under applicable law and contract terms.'
+    );
 
     const signatureBlock = podSignMethod === 'image'
       ? (podSignatureImageUrl
-          ? `<div class="sig-row"><div class="sig-label">Signature (image)</div><div class="sig-box"><img class="sig-img" src="${podSignatureImageUrl}" alt="Signature" /></div></div>`
-          : `<div class="sig-row"><div class="sig-label">Signature (image)</div><div class="sig-box sig-missing">Signature image not available</div></div>`)
-      : `<div class="sig-row"><div class="sig-label">Signature (typed)</div><div class="sig-box"><div class="sig-typed">${signedName}</div></div></div>`;
+          ? `<div class="sig-row"><div class="sig-label">${podLabelSignatureImage}</div><div class="sig-box"><img class="sig-img" src="${podSignatureImageUrl}" alt="${podSignatureAlt}" /></div></div>`
+          : `<div class="sig-row"><div class="sig-label">${podLabelSignatureImage}</div><div class="sig-box sig-missing">${podSignatureImageMissing}</div></div>`)
+      : `<div class="sig-row"><div class="sig-label">${podLabelSignatureTyped}</div><div class="sig-box"><div class="sig-typed">${signedName}</div></div></div>`;
 
     return `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>POD</title>
+    <title>${podTitle}</title>
     <style>
       body { font-family: Arial, sans-serif; color: #111827; margin: 0; padding: 0; }
       .page { padding: 18px 22px; }
@@ -803,38 +836,38 @@ export default function MyCarrier() {
   </head>
   <body>
     <div class="page">
-      <div class="title">PROOF OF DELIVERY (POD)</div>
-      <div class="sub">FreightPower — Delivery confirmation for Load ${loadNumber}</div>
+      <div class="title">${podTitle}</div>
+      <div class="sub">${podSubtitlePrefix} ${loadNumber}</div>
       <div class="hr"></div>
 
       <div class="grid">
         <div class="box">
-          <div class="label">Load</div>
+          <div class="label">${podLabelLoad}</div>
           <div class="value">#${loadNumber}</div>
-          <div class="sub">Load ID: <span class="value mono">${loadId || '—'}</span></div>
+          <div class="sub">${podLabelLoadId} <span class="value mono">${loadId || '—'}</span></div>
         </div>
         <div class="box">
-          <div class="label">Receiver</div>
+          <div class="label">${podLabelReceiver}</div>
           <div class="value">${receiverName}</div>
-          <div class="sub">Signed at: ${signedAt}</div>
+          <div class="sub">${podLabelSignedAt} ${signedAt}</div>
         </div>
         <div class="box">
-          <div class="label">Origin</div>
+          <div class="label">${podLabelOrigin}</div>
           <div class="value">${origin}</div>
-          <div class="sub">Pickup Date: ${pickupDate}</div>
+          <div class="sub">${podLabelPickupDate} ${pickupDate}</div>
         </div>
         <div class="box">
-          <div class="label">Destination</div>
+          <div class="label">${podLabelDestination}</div>
           <div class="value">${destination}</div>
-          <div class="sub">Delivery Date: ${deliveryDate}</div>
+          <div class="sub">${podLabelDeliveryDate} ${deliveryDate}</div>
         </div>
         <div class="box">
-          <div class="label">Equipment / Weight</div>
+          <div class="label">${podLabelEquipmentWeight}</div>
           <div class="value">${equipment}</div>
-          <div class="sub">Weight: ${weight}</div>
+          <div class="sub">${podLabelWeight} ${weight}</div>
         </div>
         <div class="box">
-          <div class="label">GPS Proof</div>
+          <div class="label">${podLabelGpsProof}</div>
           <div class="value mono">${gpsText}</div>
           <div class="sub">${distanceText}</div>
         </div>
@@ -844,12 +877,12 @@ export default function MyCarrier() {
         <div class="hr"></div>
         ${signatureBlock}
         <div class="sig-row">
-          <div class="sig-label">Signer Name</div>
+          <div class="sig-label">${podLabelSignerName}</div>
           <div class="sig-box"><div class="value">${signedName}</div></div>
         </div>
       </div>
 
-      <div class="footnote">This is a digitally signed commercial document. False statements or misrepresentation may be subject to penalties under applicable law and contract terms.</div>
+      <div class="footnote">${podFootnote}</div>
     </div>
   </body>
 </html>`;
@@ -857,7 +890,7 @@ export default function MyCarrier() {
 
   const buildPodPdfFromIframe = async () => {
     const body = podIframeRef.current?.contentDocument?.body;
-    if (!body) throw new Error('POD preview is not ready yet.');
+    if (!body) throw new Error(tr('myCarrier.pod.error.previewNotReady', 'POD preview is not ready yet.'));
     const { jsPDF } = await import('jspdf');
     const doc = new jsPDF({ unit: 'pt', format: 'letter' });
     await doc.html(body, { x: 24, y: 24, width: 560, windowWidth: 900 });
@@ -868,43 +901,43 @@ export default function MyCarrier() {
     if (!podLoad) return;
     const status = normalizeStatus(podLoad.status);
     if (status !== 'in_transit') {
-      setPodError('POD upload is only allowed for an In Transit load. Start the trip first.');
+      setPodError(tr('myCarrier.pod.error.onlyInTransit', 'POD upload is only allowed for an In Transit load. Start the trip first.'));
       return;
     }
 
     const loadId = getLoadId(podLoad);
     if (!loadId) {
-      setPodError('Load ID not found.');
+      setPodError(tr('myCarrier.error.loadIdNotFoundDot', 'Load ID not found.'));
       return;
     }
 
     const receiver = String(podReceiverName || '').trim();
     if (!receiver) {
-      setPodError('Receiver name is required.');
+      setPodError(tr('myCarrier.pod.error.receiverRequired', 'Receiver name is required.'));
       return;
     }
 
     const signer = String(podSignerName || '').trim();
     if (!signer) {
-      setPodError('Signer name is required.');
+      setPodError(tr('myCarrier.pod.error.signerRequired', 'Signer name is required.'));
       return;
     }
 
     if (podSignMethod === 'image' && !podSignatureImageUrl) {
-      setPodError('Signature image not loaded. Click “Load Signature Image”, or switch to Typed.');
+      setPodError(tr('myCarrier.pod.error.signatureNotLoaded', 'Signature image not loaded. Click “Load Signature Image”, or switch to Typed.'));
       return;
     }
 
     if (!podChecks.gpsOk) {
-      setPodError('GPS check failed. You must be within 10 meters of the delivery location.');
+      setPodError(tr('myCarrier.pod.error.gpsCheckFailed', 'GPS check failed. You must be within 10 meters of the delivery location.'));
       return;
     }
     if (!podChecks.timeOk) {
-      setPodError('48-hour check failed. POD must be uploaded within 48 hours of scheduled delivery.');
+      setPodError(tr('myCarrier.pod.error.timeCheckFailed', '48-hour check failed. POD must be uploaded within 48 hours of scheduled delivery.'));
       return;
     }
     if (!podChecks.confirmDelivered || !podChecks.confirmAccurate) {
-      setPodError('Please confirm the POD statements before submitting.');
+      setPodError(tr('myCarrier.pod.error.confirmStatements', 'Please confirm the POD statements before submitting.'));
       return;
     }
 
@@ -927,7 +960,7 @@ export default function MyCarrier() {
         body: form
       });
       const uploadData = await uploadRes.json().catch(() => ({}));
-      if (!uploadRes.ok) throw new Error(uploadData?.detail || 'Failed to upload POD');
+      if (!uploadRes.ok) throw new Error(uploadData?.detail || tr('myCarrier.pod.error.uploadFailed', 'Failed to upload POD'));
 
       const statusRes = await fetch(`${API_URL}/loads/${loadId}/driver-update-status`, {
         method: 'POST',
@@ -943,14 +976,14 @@ export default function MyCarrier() {
         })
       });
       const statusData = await statusRes.json().catch(() => ({}));
-      if (!statusRes.ok) throw new Error(statusData?.detail || 'Failed to mark load as delivered');
+      if (!statusRes.ok) throw new Error(statusData?.detail || tr('myCarrier.pod.error.markDeliveredFailed', 'Failed to mark load as delivered'));
 
       setShowPodModal(false);
       await fetchLoads();
-      alert('POD uploaded and load marked as delivered.');
+      alert(tr('myCarrier.pod.success.uploadedAndDelivered', 'POD uploaded and load marked as delivered.'));
     } catch (e) {
       console.error('Submit POD error:', e);
-      setPodError(e?.message || 'Failed to submit POD');
+      setPodError(e?.message || tr('myCarrier.pod.error.submitFailed', 'Failed to submit POD'));
     } finally {
       setPodSubmitting(false);
     }
@@ -964,15 +997,15 @@ export default function MyCarrier() {
             <div className="card mc-carrier-card">
               <div style={{ padding: '40px', textAlign: 'center' }}>
                 <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: '24px', marginRight: '10px' }}></i>
-                Loading carrier information...
+                {tr('myCarrier.carrier.loading', 'Loading carrier information...')}
               </div>
             </div>
           ) : !carrier ? (
             <div className="card mc-carrier-card">
               <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
                 <i className="fa-solid fa-building" style={{ fontSize: '48px', marginBottom: '20px', opacity: 0.5 }}></i>
-                <h3 style={{ marginBottom: '12px' }}>No Carrier Assigned</h3>
-                <p>You are not currently hired by any carrier. Once a carrier hires you from the marketplace, their information will appear here.</p>
+                <h3 style={{ marginBottom: '12px' }}>{tr('myCarrier.carrier.noneTitle', 'No Carrier Assigned')}</h3>
+                <p>{tr('myCarrier.carrier.noneBody', 'You are not currently hired by any carrier. Once a carrier hires you from the marketplace, their information will appear here.')}</p>
               </div>
             </div>
           ) : (
@@ -981,26 +1014,29 @@ export default function MyCarrier() {
               <div className="mc-carrier-logo">
                 {(() => {
                   const name = carrier.name || carrier.company_name || '';
+                  const logoFallback = tr('myCarrier.carrier.logoFallback', 'CA');
                   if (name) {
                     const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-                    return initials || 'CA';
+                    return initials || logoFallback;
                   }
-                  return 'CA';
+                  return logoFallback;
                 })()}
               </div>
               <div className="mc-carrier-info">
                 <div className="mc-carrier-name">
-                  <h3>{carrier.name || carrier.company_name || 'Unknown Carrier'}</h3>
+                  <h3>{carrier.name || carrier.company_name || tr('myCarrier.carrier.unknown', 'Unknown Carrier')}</h3>
                   <span className="int-status-badge active">
-                    {carrier.status === 'active' ? 'Active Carrier' : 'Verified Carrier'}
+                    {carrier.status === 'active'
+                      ? tr('myCarrier.carrier.activeCarrier', 'Active Carrier')
+                      : tr('myCarrier.carrier.verifiedCarrier', 'Verified Carrier')}
                   </span>
                 </div>
                 <div className="mc-carrier-details">
                   {carrier.dot_number && (
-                    <span className="mc-detail">DOT: {carrier.dot_number}</span>
+                    <span className="mc-detail">{tr('myCarrier.carrier.dotLabel', 'DOT')}: {carrier.dot_number}</span>
                   )}
                   {carrier.mc_number && (
-                    <span className="mc-detail">MC: {carrier.mc_number}</span>
+                    <span className="mc-detail">{tr('myCarrier.carrier.mcLabel', 'MC')}: {carrier.mc_number}</span>
                   )}
                   {carrier.service_areas && carrier.service_areas.length > 0 && (
                     <span className="mc-detail">{carrier.service_areas[0]}</span>
@@ -1011,16 +1047,16 @@ export default function MyCarrier() {
                 </div>
               </div>
               <div className="mc-carrier-status">
-                <span className="int-status-badge active">{carrier.status === 'active' ? 'Active' : 'Active'}</span>
+                <span className="int-status-badge active">{tr('common.active', 'Active')}</span>
                 {Number(carrier.rating) > 0 && (
                   <div className="mc-rating">
                     <i className="fa-solid fa-star"></i>
-                    <span>{carrier.rating} Rating</span>
+                    <span>{carrier.rating} {tr('myCarrier.carrier.ratingLabel', 'Rating')}</span>
                   </div>
                 )}
                 {Number(carrier.total_loads) > 0 && (
                   <div className="mc-rating" style={{ marginTop: '8px' }}>
-                    <span>{carrier.total_loads} Loads</span>
+                    <span>{carrier.total_loads} {tr('myCarrier.carrier.loadsLabel', 'Loads')}</span>
                   </div>
                 )}
               </div>
@@ -1032,10 +1068,10 @@ export default function MyCarrier() {
           <div className="mc-ai-alert-card" style={{marginTop: '10px', marginBottom: '10px'}}>
             <div className="mc-ai-alert">
               <div className="mc-ai-content" >
-                <h4 style={{fontWeight: '700', color: 'white'}}>AI Assistant</h4>
-                <p style={{color: "white"}}>Your CDL expires in 45 days. Upload renewal to maintain compliance.</p>
+                <h4 style={{fontWeight: '700', color: 'white'}}>{tr('myCarrier.ai.title', 'AI Assistant')}</h4>
+                <p style={{color: "white"}}>{tr('myCarrier.ai.cdlExpiryHint', 'Your CDL expires in 45 days. Upload renewal to maintain compliance.')}</p>
               </div>
-              <button className="btn small ghost-cd dd-btn">Upload Now</button>
+              <button className="btn small ghost-cd dd-btn">{tr('myCarrier.ai.uploadNow', 'Upload Now')}</button>
             </div>
           </div>
 
@@ -1049,15 +1085,15 @@ export default function MyCarrier() {
               <div className="card mc-active-load-card">
                 <div className="mc-load-header">
                   <div className="mc-load-title">
-                    <span className="mc-load-badge">Active Load #{activeLoad ? (activeLoad.load_number || getLoadId(activeLoad) || '—') : '—'}</span>
-                    <span className="int-status-badge active">{activeLoad ? (normalizeStatus(activeLoad.status) === 'in_transit' ? 'In Transit' : 'Active') : 'No Active Load'}</span>
+                    <span className="mc-load-badge">{tr('myCarrier.activeLoad.badgePrefix', 'Active Load #')}{activeLoad ? (activeLoad.load_number || getLoadId(activeLoad) || '—') : '—'}</span>
+                    <span className="int-status-badge active">{activeLoad ? (normalizeStatus(activeLoad.status) === 'in_transit' ? tr('myCarrier.status.inTransit', 'In Transit') : tr('common.active', 'Active')) : tr('myCarrier.activeLoad.none', 'No Active Load')}</span>
                   </div>
                   <div className="mc-load-actions">
                     <button className="btn small mc-view-route-btn" disabled={!activeLoad}>
-                      View Route
+                      {tr('myCarrier.activeLoad.viewRoute', 'View Route')}
                     </button>
                     <button className="btn small mc-message-dispatch-btn" disabled={!activeLoad} onClick={() => openMessaging(commThread?.id || null)}>
-                      Message Dispatch
+                      {tr('myCarrier.activeLoad.messageDispatch', 'Message Dispatch')}
                     </button>
                   </div>
                 </div>
@@ -1065,33 +1101,33 @@ export default function MyCarrier() {
                 <div className="mc-load-details">
                   <div className="mc-load-locations">
                     <div className="mc-location pickup">
-                      <h5>Pickup</h5>
+                      <h5>{tr('myCarrier.labels.pickup', 'Pickup')}</h5>
                       <p>{activeLoad ? (formatLoc(activeLoad.origin) || '—') : '—'}</p>
-                      <p>{activeLoad?.pickup_date ? `Pickup Date: ${activeLoad.pickup_date}` : 'Pickup Date: —'}</p>
+                      <p>{activeLoad?.pickup_date ? `${tr('myCarrier.labels.pickupDate', 'Pickup Date:')} ${activeLoad.pickup_date}` : `${tr('myCarrier.labels.pickupDate', 'Pickup Date:')} —`}</p>
                       {activeLoad?.pickup_confirmed_at ? (
                         <p className="mc-status-text">
                           <i className="fa-solid fa-check"></i>
-                          Pickup Confirmed
+                          {tr('myCarrier.pickup.confirmed', 'Pickup Confirmed')}
                         </p>
                       ) : (
                         <p className="mc-status-text" style={{ opacity: 0.85 }}>
                           <i className="fa-solid fa-circle-info"></i>
-                          Pickup not confirmed
+                          {tr('myCarrier.pickup.notConfirmed', 'Pickup not confirmed')}
                         </p>
                       )}
                     </div>
                     <div className="mc-location delivery">
-                      <h5>Delivery</h5>
+                      <h5>{tr('myCarrier.labels.delivery', 'Delivery')}</h5>
                       <p>{activeLoad ? (formatLoc(activeLoad.destination) || '—') : '—'}</p>
-                      <p>{activeLoad?.delivery_date ? `Delivery Date: ${activeLoad.delivery_date}` : 'Delivery Date: —'}</p>
-                      <p>{activeLoad ? `Status: ${String(activeLoad.status || '—')}` : 'Status: —'}</p>
+                      <p>{activeLoad?.delivery_date ? `${tr('myCarrier.labels.deliveryDate', 'Delivery Date:')} ${activeLoad.delivery_date}` : `${tr('myCarrier.labels.deliveryDate', 'Delivery Date:')} —`}</p>
+                      <p>{activeLoad ? `${tr('common.status', 'Status')}: ${String(activeLoad.status || '—')}` : `${tr('common.status', 'Status')}: —`}</p>
                     </div>
                   </div>
 
                   <div className="mc-progress-section">
                     <div className="mc-progress-header">
-                      <span style={{fontWeight: '650'}}>Trip Progress</span>
-                      <span style={{fontWeight: '650'}}>{activeLoad ? (activeLoad.status === 'in_transit' ? 'In Progress' : '—') : '—'}</span>
+                      <span style={{fontWeight: '650'}}>{tr('myCarrier.tripProgress.title', 'Trip Progress')}</span>
+                      <span style={{fontWeight: '650'}}>{activeLoad ? (activeLoad.status === 'in_transit' ? tr('common.inProgress', 'In Progress') : '—') : '—'}</span>
                     </div>
                     <div className="mc-progress-bar">
                       <div className="mc-progress-fill" style={{width: activeLoad ? (activeLoad.status === 'in_transit' ? '50%' : '0%') : '0%'}}></div>
@@ -1101,17 +1137,17 @@ export default function MyCarrier() {
                   <div className="mc-load-buttons">
                     <button className="btn small ghost-cd" disabled={!activeLoad} onClick={() => activeLoad && openDocsForLoad(activeLoad)}>
                       <i className="fa-solid fa-file-text"></i>
-                      View Docs
+                      {tr('myCarrier.docs.viewDocs', 'View Docs')}
                     </button>
                     <button className="btn small ghost-cd" disabled={!activeLoad} onClick={() => activeLoad && openPodForLoad(activeLoad)}>
                       <i className="fa-solid fa-upload"></i>
-                      Upload POD
+                      {tr('myCarrier.pod.upload', 'Upload POD')}
                     </button>
                   </div>
 
                   {!activeLoad && (
                     <div style={{ marginTop: 10, color: theme.muted, fontSize: 13 }}>
-                      No active load found. Start a trip from Assignments.
+                      {tr('myCarrier.activeLoad.noneHint', 'No active load found. Start a trip from Assignments.')}
                     </div>
                   )}
                 </div>
@@ -1120,25 +1156,25 @@ export default function MyCarrier() {
               {/* Assignments Section */}
               <div className="card mc-assignments-card">
                 <div className="mc-assignments-header">
-                  <h3>Assignments</h3>
+                  <h3>{tr('myCarrier.assignments.title', 'Assignments')}</h3>
                   <div className="mc-assignment-tabs">
                     <button 
                       className={`mc-tab ${activeTab === 'Active' ? 'active' : ''}`}
                       onClick={() => setActiveTab('Active')}
                     >
-                      Active
+                      {tr('common.active', 'Active')}
                     </button>
                     <button 
                       className={`mc-tab ${activeTab === 'Completed' ? 'active' : ''}`}
                       onClick={() => setActiveTab('Completed')}
                     >
-                      Completed
+                      {tr('myCarrier.assignments.tab.completed', 'Completed')}
                     </button>
                     <button 
                       className={`mc-tab ${activeTab === 'Archived' ? 'active' : ''}`}
                       onClick={() => setActiveTab('Archived')}
                     >
-                      Archived
+                      {tr('myCarrier.assignments.tab.archived', 'Archived')}
                     </button>
                   </div>
                 </div>
@@ -1150,11 +1186,11 @@ export default function MyCarrier() {
                   {loadsLoading ? (
                     <div style={{ padding: 20, color: theme.muted }}>
                       <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 10 }}></i>
-                      Loading assignments…
+                      {tr('myCarrier.assignments.loading', 'Loading assignments…')}
                     </div>
                   ) : (visibleAssignments.length === 0 ? (
                     <div style={{ padding: 20, color: theme.muted }}>
-                      No loads in this tab.
+                      {tr('myCarrier.assignments.empty', 'No loads in this tab.')}
                     </div>
                   ) : (
                     visibleAssignments.map((l) => {
@@ -1181,40 +1217,40 @@ export default function MyCarrier() {
 
                       const primaryAction = () => {
                         if (primaryKind === 'start_trip') return (
-                          <button className="btn small-cd" onClick={() => startTrip(l)}>Start Trip</button>
+                          <button className="btn small-cd" onClick={() => startTrip(l)}>{tr('myCarrier.actions.startTrip', 'Start Trip')}</button>
                         );
                         if (primaryKind === 'upload_pod') return (
-                          <button className="btn small-cd" onClick={() => openPodForLoad(l)}>Upload POD</button>
+                          <button className="btn small-cd" onClick={() => openPodForLoad(l)}>{tr('myCarrier.pod.upload', 'Upload POD')}</button>
                         );
                         return (
-                          <button className="btn small-cd" onClick={() => openDocsForLoad(l)}>View Docs</button>
+                          <button className="btn small-cd" onClick={() => openDocsForLoad(l)}>{tr('myCarrier.docs.viewDocs', 'View Docs')}</button>
                         );
                       };
 
                       return (
                         <div key={loadId || loadNumber} className="mc-assignment-item">
                           <div className="mc-assignment-info">
-                            <h4>Load #{loadNumber}</h4>
+                            <h4>{tr('myCarrier.assignments.loadPrefix', 'Load #')}{loadNumber}</h4>
                             <span className={`int-status-badge ${statusClass}`}>{statusLabel}</span>
                             <div className="mc-assignment-route">
-                              <p>From: {origin}</p>
+                              <p>{tr('myCarrier.labels.from', 'From:')} {origin}</p>
                             </div>
                             <div className="mc-assignment-route">
-                              <p>To: {destination}</p>
+                              <p>{tr('myCarrier.labels.to', 'To:')} {destination}</p>
                             </div>
                             <div className="mc-assignment-details">
                               <span>
-                                {miles != null ? `${miles} miles` : '—'}
+                                {miles != null ? `${miles} ${tr('myCarrier.units.miles', 'miles')}` : '—'}
                                 {rate != null ? ` • $${rate}` : ''}
                               </span>
                             </div>
                           </div>
                           <div className="mc-assignment-schedule">
-                            <p>Pickup: {l.pickup_date || '—'}</p>
+                            <p>{tr('myCarrier.labels.pickup', 'Pickup')}: {l.pickup_date || '—'}</p>
                             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                               {primaryKind !== 'view_docs' && (
                                 <button className="btn small ghost-cd" onClick={() => openDocsForLoad(l)}>
-                                  View Docs
+                                  {tr('myCarrier.docs.viewDocs', 'View Docs')}
                                 </button>
                               )}
                               {primaryAction()}
@@ -1233,14 +1269,14 @@ export default function MyCarrier() {
               {/* Compliance Sync */}
               <div className="card mc-compliance-card">
                 <div className="card-header">
-                  <h3>Compliance Sync</h3>
+                  <h3>{tr('myCarrier.compliance.title', 'Compliance Sync')}</h3>
                 </div>
                 <div className="mc-compliance-list">
                   {(requiredDocsLoading ? Array.from({ length: Math.max(3, complianceSyncDocs.length || 0) }) : complianceSyncDocs).map(
                     (doc, idx) => {
                       const title = requiredDocsLoading
-                        ? 'Loading…'
-                        : String(doc?.title || doc?.label || doc?.key || 'Document');
+                        ? tr('myCarrier.common.loading', 'Loading…')
+                        : String(doc?.title || doc?.label || doc?.key || tr('documentVault.documentFallback', 'Document'));
                       const status = requiredDocsLoading ? '' : String(doc?.status || '');
                       const ok = status && status !== 'Missing' && status !== 'Expired';
                       return (
@@ -1267,37 +1303,40 @@ export default function MyCarrier() {
                 )}
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
                   <span className={`int-status-badge ${complianceSyncProgress.missingCount === 0 && complianceSyncProgress.total > 0 ? 'active' : 'warning'}`}>
-                    Required Docs: {complianceSyncProgress.completed}/{complianceSyncProgress.total} ({complianceSyncProgress.percent}%)
+                    {tr('myCarrier.compliance.requiredDocsProgressLabel', 'Required Docs')}:{' '}
+                    {complianceSyncProgress.completed}/{complianceSyncProgress.total} ({complianceSyncProgress.percent}%)
                   </span>
                   <span className={`int-status-badge ${Number(compliance?.compliance_score || 0) >= 80 ? 'active' : 'warning'}`}>
-                    Compliance Score: {Number(compliance?.compliance_score || 0)}%
+                    {tr('myCarrier.compliance.complianceScore', 'Compliance Score')}: {Number(compliance?.compliance_score || 0)}%
                   </span>
                   <span className={`int-status-badge ${consentEligibility?.eligible ? 'active' : 'warning'}`}>
-                    {consentEligibility?.eligible ? 'Consents up to date' : 'Consent action required'}
+                    {consentEligibility?.eligible
+                      ? tr('myCarrier.compliance.consentsUpToDate', 'Consents up to date')
+                      : tr('myCarrier.compliance.consentActionRequired', 'Consent action required')}
                   </span>
                 </div>
                 <p className={`int-status-badge ${consentEligibility?.eligible ? 'active' : 'warning'}`} style={{ marginTop: 10 }}>
                   {consentEligibility?.eligible
-                    ? 'Driver has consented to share information with this carrier.'
-                    : 'Driver has not completed required consents for sharing/marketplace access.'}
+                    ? tr('myCarrier.compliance.consentShareOk', 'Driver has consented to share information with this carrier.')
+                    : tr('myCarrier.compliance.consentShareMissing', 'Driver has not completed required consents for sharing/marketplace access.')}
                 </p>
               </div>
 
               {/* Communication Hub */}
               <div className="card mc-communication-card">
                 <div className="card-header">
-                  <h3>Communication Hub</h3>
+                  <h3>{tr('myCarrier.communication.title', 'Communication Hub')}</h3>
                 </div>
                 <div className="mc-contact-info">
                   <div className="mc-dispatcher">
                     <img
                       src={commThread?.other_photo_url || 'https://randomuser.me/api/portraits/women/32.jpg'}
-                      alt={commThread?.display_title || commThread?.other_display_name || 'Dispatch'}
+                      alt={commThread?.display_title || commThread?.other_display_name || tr('myCarrier.communication.dispatchFallback', 'Dispatch')}
                       className="mc-dispatcher-avatar"
                     />
                     <div className="mc-dispatcher-info">
-                      <h4>{commThread?.display_title || commThread?.other_display_name || 'Dispatch'}</h4>
-                      <span>{commThread ? 'Messaging' : 'Dispatcher'}</span>
+                      <h4>{commThread?.display_title || commThread?.other_display_name || tr('myCarrier.communication.dispatchFallback', 'Dispatch')}</h4>
+                      <span>{commThread ? tr('myCarrier.communication.messaging', 'Messaging') : tr('myCarrier.communication.dispatcher', 'Dispatcher')}</span>
                     </div>
                   </div>
 
@@ -1307,7 +1346,7 @@ export default function MyCarrier() {
 
                   {commThread?.last_message?.text ? (
                     <div className="mc-recent-activity">
-                      <h4>Recent Activity</h4>
+                      <h4>{tr('myCarrier.communication.recentActivity', 'Recent Activity')}</h4>
                       <span className="mc-activity-time">{fmtWhen(commThread?.last_message_at || commThread?.updated_at)}</span>
                       <p>"{String(commThread.last_message.text)}"</p>
                     </div>
@@ -1316,7 +1355,7 @@ export default function MyCarrier() {
                   <div className="mc-communication-actions">
                     <button className="btn small-cd" onClick={() => openMessaging(commThread?.id || null)} disabled={messagingLoading}>
                       <i className="fa-solid fa-message"></i>
-                      Message
+                      {tr('common.message', 'Message')}
                     </button>
                   </div>
                 </div>
@@ -1325,20 +1364,20 @@ export default function MyCarrier() {
               {/* Quick Actions */}
               <div className="card mc-quick-actions-card">
                 <div className="card-header">
-                  <h3>Quick Actions</h3>
+                  <h3>{tr('myCarrier.quickActions.title', 'Quick Actions')}</h3>
                 </div>
                 <div className="mc-quick-actions">
                   <button className="btn small-cd" onClick={() => { setUploadError(''); setUploadFile(null); setUploadDocType('other'); setShowUploadDocsModal(true); }}>
                     <i className="fa-solid fa-upload"></i>
-                    <span>Upload Documents</span>
+                    <span>{tr('myCarrier.quickActions.uploadDocuments', 'Upload Documents')}</span>
                   </button>
                   <button className="btn small-cd" onClick={openSchedule}>
                     <i className="fa-solid fa-calendar"></i>
-                    <span>View Schedule</span>
+                    <span>{tr('myCarrier.quickActions.viewSchedule', 'View Schedule')}</span>
                   </button>
                   <button className="btn small-cd" onClick={() => setShowPerformanceModal(true)}>
                     <i className="fa-solid fa-chart-line"></i>
-                    <span>Performance Report</span>
+                    <span>{tr('myCarrier.quickActions.performanceReport', 'Performance Report')}</span>
                   </button>
                 </div>
               </div>
@@ -1356,35 +1395,35 @@ export default function MyCarrier() {
                 onClick={(e) => e.stopPropagation()}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                  <h3 style={{ margin: 0, color: theme.text }}>Upload Document</h3>
+                  <h3 style={{ margin: 0, color: theme.text }}>{tr('myCarrier.upload.modal.title', 'Upload Document')}</h3>
                   <button
                     onClick={() => setShowUploadDocsModal(false)}
                     style={{ border: `1px solid ${theme.border}`, background: theme.surfaceAlt, color: theme.text, borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}
                   >
-                    Close
+                    {tr('common.close', 'Close')}
                   </button>
                 </div>
 
                 <div style={{ marginBottom: 14 }}>
-                  <label style={{ display: 'block', marginBottom: 6, fontWeight: 650, color: theme.text }}>Document Type *</label>
+                  <label style={{ display: 'block', marginBottom: 6, fontWeight: 650, color: theme.text }}>{tr('myCarrier.upload.modal.documentType', 'Document Type')} *</label>
                   <select
                     value={uploadDocType}
                     onChange={(e) => setUploadDocType(e.target.value)}
                     style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${theme.border}`, background: theme.surfaceAlt, color: theme.text }}
                   >
-                    <option value="cdl">CDL License</option>
-                    <option value="medical_card">DOT Medical Card</option>
-                    <option value="mvr">Motor Vehicle Record (MVR)</option>
-                    <option value="w9">W-9 Tax Form</option>
-                    <option value="drug_test">Drug Test Results</option>
-                    <option value="background_check">Background Check</option>
-                    <option value="consent">Consent Form</option>
-                    <option value="other">Other</option>
+                    <option value="cdl">{tr('myCarrier.upload.docType.cdl', 'CDL License')}</option>
+                    <option value="medical_card">{tr('myCarrier.upload.docType.medicalCard', 'DOT Medical Card')}</option>
+                    <option value="mvr">{tr('myCarrier.upload.docType.mvr', 'Motor Vehicle Record (MVR)')}</option>
+                    <option value="w9">{tr('myCarrier.upload.docType.w9', 'W-9 Tax Form')}</option>
+                    <option value="drug_test">{tr('myCarrier.upload.docType.drugTest', 'Drug Test Results')}</option>
+                    <option value="background_check">{tr('myCarrier.upload.docType.backgroundCheck', 'Background Check')}</option>
+                    <option value="consent">{tr('myCarrier.upload.docType.consent', 'Consent Form')}</option>
+                    <option value="other">{tr('myCarrier.upload.docType.other', 'Other')}</option>
                   </select>
                 </div>
 
                 <div style={{ marginBottom: 14 }}>
-                  <label style={{ display: 'block', marginBottom: 6, fontWeight: 650, color: theme.text }}>Select File *</label>
+                  <label style={{ display: 'block', marginBottom: 6, fontWeight: 650, color: theme.text }}>{tr('myCarrier.upload.modal.selectFile', 'Select File')} *</label>
                   <input
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png"
@@ -1393,7 +1432,7 @@ export default function MyCarrier() {
                   />
                   {uploadFile && (
                     <div style={{ marginTop: 8, fontSize: 12, color: theme.muted }}>
-                      Selected: {uploadFile.name}
+                      {tr('myCarrier.upload.modal.selectedPrefix', 'Selected')}: {uploadFile.name}
                     </div>
                   )}
                 </div>
@@ -1408,14 +1447,14 @@ export default function MyCarrier() {
                     style={{ padding: '10px 14px', borderRadius: 10, border: `1px solid ${theme.border}`, background: theme.surface, color: theme.text, cursor: 'pointer' }}
                     disabled={uploadSubmitting}
                   >
-                    Cancel
+                    {tr('common.cancel', 'Cancel')}
                   </button>
                   <button
                     className="btn small-cd"
                     onClick={submitQuickUpload}
                     disabled={uploadSubmitting || !uploadFile}
                   >
-                    {uploadSubmitting ? 'Uploading…' : 'Upload'}
+                    {uploadSubmitting ? tr('common.uploading', 'Uploading…') : tr('common.upload', 'Upload')}
                   </button>
                 </div>
               </div>
@@ -1434,8 +1473,8 @@ export default function MyCarrier() {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14 }}>
                   <div>
-                    <h3 style={{ margin: 0, color: theme.text }}>Schedule</h3>
-                    <div style={{ fontSize: 12, color: theme.muted }}>Pickups, deliveries, and document expirations</div>
+                    <h3 style={{ margin: 0, color: theme.text }}>{tr('myCarrier.schedule.title', 'Schedule')}</h3>
+                    <div style={{ fontSize: 12, color: theme.muted }}>{tr('myCarrier.schedule.subtitle', 'Pickups, deliveries, and document expirations')}</div>
                   </div>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                     <button
@@ -1443,15 +1482,15 @@ export default function MyCarrier() {
                       className="btn small ghost-cd"
                       onClick={exportScheduleIcs}
                       disabled={Boolean(scheduleLoading)}
-                      title={`Export for ${calendarProvider}`}
+                      title={`${tr('myCarrier.schedule.ics.exportForPrefix', 'Export for')} ${calendarProvider}`}
                     >
-                      Export Calendar (.ics)
+                      {tr('myCarrier.schedule.ics.exportButton', 'Export Calendar (.ics)')}
                     </button>
                     <button
                       onClick={() => setShowScheduleModal(false)}
                       style={{ border: `1px solid ${theme.border}`, background: theme.surfaceAlt, color: theme.text, borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}
                     >
-                      Close
+                      {tr('common.close', 'Close')}
                     </button>
                   </div>
                 </div>
@@ -1460,7 +1499,7 @@ export default function MyCarrier() {
                 {scheduleLoading ? (
                   <div style={{ padding: 16, color: theme.muted }}>
                     <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 10 }}></i>
-                    Loading schedule…
+                    {tr('myCarrier.schedule.loading', 'Loading schedule…')}
                   </div>
                 ) : (
                   (() => {
@@ -1490,12 +1529,12 @@ export default function MyCarrier() {
                                   setSelectedScheduleDay(new Date(prev.getFullYear(), prev.getMonth(), 1));
                                 }}
                                 style={{ border: `1px solid ${theme.border}`, background: theme.surface, color: theme.text, borderRadius: 10, padding: '8px 10px', cursor: 'pointer' }}
-                                aria-label="Previous month"
+                                aria-label={tr('myCarrier.schedule.aria.previousMonth', 'Previous month')}
                               >
                                 <i className="fa-solid fa-chevron-left"></i>
                               </button>
                               <div style={{ fontWeight: 800, color: theme.text, minWidth: 180, textAlign: 'center' }}>
-                                {monthStart.toLocaleString('en-US', { month: 'long', year: 'numeric' })}
+                                {monthStart.toLocaleString(locale, { month: 'long', year: 'numeric' })}
                               </div>
                               <button
                                 onClick={() => {
@@ -1504,16 +1543,24 @@ export default function MyCarrier() {
                                   setSelectedScheduleDay(new Date(next.getFullYear(), next.getMonth(), 1));
                                 }}
                                 style={{ border: `1px solid ${theme.border}`, background: theme.surface, color: theme.text, borderRadius: 10, padding: '8px 10px', cursor: 'pointer' }}
-                                aria-label="Next month"
+                                aria-label={tr('myCarrier.schedule.aria.nextMonth', 'Next month')}
                               >
                                 <i className="fa-solid fa-chevron-right"></i>
                               </button>
                             </div>
-                            <span className="int-status-badge active">{eventsInMonth.length} events</span>
+                            <span className="int-status-badge active">{eventsInMonth.length} {tr('myCarrier.schedule.events', 'events')}</span>
                           </div>
                           <div style={{ padding: 12 }}>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, marginBottom: 6, fontSize: 12, color: theme.muted }}>
-                              {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(x => (<div key={x} style={{ textAlign: 'center' }}>{x}</div>))}
+                              {[
+                                tr('myCarrier.schedule.dow.sun', 'Sun'),
+                                tr('myCarrier.schedule.dow.mon', 'Mon'),
+                                tr('myCarrier.schedule.dow.tue', 'Tue'),
+                                tr('myCarrier.schedule.dow.wed', 'Wed'),
+                                tr('myCarrier.schedule.dow.thu', 'Thu'),
+                                tr('myCarrier.schedule.dow.fri', 'Fri'),
+                                tr('myCarrier.schedule.dow.sat', 'Sat')
+                              ].map(x => (<div key={x} style={{ textAlign: 'center' }}>{x}</div>))}
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
                               {cells.map((day, idx) => {
@@ -1549,13 +1596,13 @@ export default function MyCarrier() {
                         <div style={{ border: `1px solid ${theme.border}`, borderRadius: 12, overflow: 'hidden' }}>
                           <div style={{ padding: 12, background: theme.surfaceAlt, borderBottom: `1px solid ${theme.border}` }}>
                             <div style={{ fontWeight: 800, color: theme.text }}>
-                              {selectedScheduleDay.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
+                              {selectedScheduleDay.toLocaleDateString(locale, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
                             </div>
-                            <div style={{ fontSize: 12, color: theme.muted }}>Events for selected day</div>
+                            <div style={{ fontSize: 12, color: theme.muted }}>{tr('myCarrier.schedule.eventsForSelectedDay', 'Events for selected day')}</div>
                           </div>
                           <div style={{ padding: 12 }}>
                             {eventsForDay.length === 0 ? (
-                              <div style={{ color: theme.muted, padding: 10 }}>No events for this day.</div>
+                              <div style={{ color: theme.muted, padding: 10 }}>{tr('myCarrier.schedule.noEventsForDay', 'No events for this day.')}</div>
                             ) : (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                                 {eventsForDay.map((e, i) => (
@@ -1567,7 +1614,7 @@ export default function MyCarrier() {
                                     {e.meta?.load_id && (
                                       <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
                                         <button className="btn small ghost-cd" onClick={() => openDocsForLoad(loads.find(x => getLoadId(x) === e.meta.load_id) || { load_id: e.meta.load_id })}>
-                                          View Load Docs
+                                          {tr('myCarrier.schedule.viewLoadDocs', 'View Load Docs')}
                                         </button>
                                       </div>
                                     )}
@@ -1577,7 +1624,7 @@ export default function MyCarrier() {
                             )}
 
                             <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${theme.border}` }}>
-                              <div style={{ fontWeight: 800, color: theme.text, marginBottom: 8 }}>Upcoming (next 45 days)</div>
+                              <div style={{ fontWeight: 800, color: theme.text, marginBottom: 8 }}>{tr('myCarrier.schedule.upcomingTitle', 'Upcoming (next 45 days)')}</div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                 {scheduleEvents
                                   .filter(e => (e.date.getTime() - Date.now()) / (1000 * 60 * 60 * 24) <= 45)
@@ -1585,7 +1632,7 @@ export default function MyCarrier() {
                                   .map((e, i) => (
                                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '10px 12px', borderRadius: 10, background: theme.surfaceAlt, border: `1px solid ${theme.border}` }}>
                                       <div style={{ color: theme.text, fontWeight: 700 }}>{e.title}</div>
-                                      <div style={{ color: theme.muted, fontSize: 12 }}>{e.date.toLocaleDateString('en-US')}</div>
+                                      <div style={{ color: theme.muted, fontSize: 12 }}>{e.date.toLocaleDateString(locale)}</div>
                                     </div>
                                   ))}
                               </div>
@@ -1612,14 +1659,14 @@ export default function MyCarrier() {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14 }}>
                   <div>
-                    <h3 style={{ margin: 0, color: theme.text }}>Performance Report</h3>
-                    <div style={{ fontSize: 12, color: theme.muted }}>Operational insights based on your assignments</div>
+                    <h3 style={{ margin: 0, color: theme.text }}>{tr('myCarrier.performance.title', 'Performance Report')}</h3>
+                    <div style={{ fontSize: 12, color: theme.muted }}>{tr('myCarrier.performance.subtitle', 'Operational insights based on your assignments')}</div>
                   </div>
                   <button
                     onClick={() => setShowPerformanceModal(false)}
                     style={{ border: `1px solid ${theme.border}`, background: theme.surfaceAlt, color: theme.text, borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}
                   >
-                    Close
+                    {tr('common.close', 'Close')}
                   </button>
                 </div>
 
@@ -1645,40 +1692,58 @@ export default function MyCarrier() {
                   return (
                     <>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-                        {metricCard('Total Assignments', total, 'All-time loads currently visible to you')}
-                        {metricCard('Active Loads', active, 'Covered/Assigned/In Transit')}
-                        {metricCard('Completed Loads', completed, 'Delivered/Completed')}
-                        {metricCard('Completion Rate', `${successRate}%`, total ? `${delivered} completed` : 'No assignments yet')}
+                        {metricCard(
+                          tr('myCarrier.performance.metrics.totalAssignments', 'Total Assignments'),
+                          total,
+                          tr('myCarrier.performance.metrics.totalAssignmentsSub', 'All-time loads currently visible to you')
+                        )}
+                        {metricCard(
+                          tr('myCarrier.performance.metrics.activeLoads', 'Active Loads'),
+                          active,
+                          tr('myCarrier.performance.metrics.activeLoadsSub', 'Covered/Assigned/In Transit')
+                        )}
+                        {metricCard(
+                          tr('myCarrier.performance.metrics.completedLoads', 'Completed Loads'),
+                          completed,
+                          tr('myCarrier.performance.metrics.completedLoadsSub', 'Delivered/Completed')
+                        )}
+                        {metricCard(
+                          tr('myCarrier.performance.metrics.completionRate', 'Completion Rate'),
+                          `${successRate}%`,
+                          total
+                            ? `${delivered} ${tr('myCarrier.performance.metrics.completedSuffix', 'completed')}`
+                            : tr('myCarrier.performance.metrics.noAssignmentsYet', 'No assignments yet')
+                        )}
                       </div>
 
                       <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 12 }}>
                         <div style={{ padding: 16, borderRadius: 12, border: `1px solid ${theme.border}`, background: theme.surface }}>
-                          <div style={{ fontWeight: 900, color: theme.text, marginBottom: 10 }}>Quality & Compliance</div>
+                          <div style={{ fontWeight: 900, color: theme.text, marginBottom: 10 }}>{tr('myCarrier.performance.qualityTitle', 'Quality & Compliance')}</div>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                            <span className={`int-status-badge ${complianceScore >= 80 ? 'active' : 'warning'}`}>Compliance Score: {complianceScore}%</span>
-                            <span className={`int-status-badge ${hasConsent ? 'active' : 'warning'}`}>{hasConsent ? 'Consents: OK' : 'Consents: Action needed'}</span>
-                            <span className={`int-status-badge ${archived === 0 ? 'active' : 'warning'}`}>Archived: {archived}</span>
+                            <span className={`int-status-badge ${complianceScore >= 80 ? 'active' : 'warning'}`}>{tr('myCarrier.compliance.complianceScore', 'Compliance Score')}: {complianceScore}%</span>
+                            <span className={`int-status-badge ${hasConsent ? 'active' : 'warning'}`}>{hasConsent ? tr('myCarrier.performance.consentsOk', 'Consents: OK') : tr('myCarrier.performance.consentsActionNeeded', 'Consents: Action needed')}</span>
+                            <span className={`int-status-badge ${archived === 0 ? 'active' : 'warning'}`}>{tr('myCarrier.performance.archivedLabel', 'Archived')}: {archived}</span>
                           </div>
                           <div style={{ marginTop: 12, color: theme.muted, fontSize: 13 }}>
-                            Ratings and reviews will appear here once shippers/carriers submit feedback for completed loads.
+                            {tr('myCarrier.performance.ratingsHint', 'Ratings and reviews will appear here once shippers/carriers submit feedback for completed loads.')}
                           </div>
                         </div>
 
                         <div style={{ padding: 16, borderRadius: 12, border: `1px solid ${theme.border}`, background: theme.surface }}>
-                          <div style={{ fontWeight: 900, color: theme.text, marginBottom: 10 }}>Recent Messaging</div>
+                          <div style={{ fontWeight: 900, color: theme.text, marginBottom: 10 }}>{tr('myCarrier.performance.recentMessagingTitle', 'Recent Messaging')}</div>
                           {latestMsg ? (
                             <div style={{ color: theme.text, fontSize: 14, lineHeight: 1.4 }}>
                               “{latestMsg}”
                               <div style={{ marginTop: 8, color: theme.muted, fontSize: 12 }}>{fmtWhen(commThread?.last_message_at || commThread?.updated_at)}</div>
                               <div style={{ marginTop: 10 }}>
-                                <button className="btn small-cd" onClick={() => openMessaging(commThread?.id || null)}>Open Messaging</button>
+                                <button className="btn small-cd" onClick={() => openMessaging(commThread?.id || null)}>{tr('myCarrier.communication.openMessaging', 'Open Messaging')}</button>
                               </div>
                             </div>
                           ) : (
                             <div style={{ color: theme.muted, fontSize: 13 }}>
-                              No recent messages to display.
+                              {tr('myCarrier.performance.noRecentMessages', 'No recent messages to display.')}
                               <div style={{ marginTop: 10 }}>
-                                <button className="btn small-cd" onClick={() => openMessaging(null)}>Open Messaging</button>
+                                <button className="btn small-cd" onClick={() => openMessaging(null)}>{tr('myCarrier.communication.openMessaging', 'Open Messaging')}</button>
                               </div>
                             </div>
                           )}
@@ -1703,16 +1768,16 @@ export default function MyCarrier() {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 14 }}>
                   <div>
-                    <h3 style={{ margin: 0, color: theme.text }}>Load Documents</h3>
+                    <h3 style={{ margin: 0, color: theme.text }}>{tr('myCarrier.docs.loadDocumentsTitle', 'Load Documents')}</h3>
                     <div style={{ color: theme.muted, fontSize: 13 }}>
-                      Load #{docsLoad ? (docsLoad.load_number || getLoadId(docsLoad) || '—') : '—'}
+                      {tr('myCarrier.labels.loadNumber', 'Load #')} {docsLoad ? (docsLoad.load_number || getLoadId(docsLoad) || '—') : '—'}
                     </div>
                   </div>
                   <button
                     onClick={() => setShowDocsModal(false)}
                     style={{ border: `1px solid ${theme.border}`, background: theme.surfaceAlt, color: theme.text, borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}
                   >
-                    Close
+                    {tr('common.close', 'Close')}
                   </button>
                 </div>
 
@@ -1723,12 +1788,12 @@ export default function MyCarrier() {
                 {docsLoading ? (
                   <div style={{ color: theme.muted, padding: 16 }}>
                     <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 10 }}></i>
-                    Loading documents…
+                    {tr('myCarrier.docs.loading', 'Loading documents…')}
                   </div>
                 ) : (
                   <>
                     {docs.length === 0 ? (
-                      <div style={{ color: theme.muted, padding: 16 }}>No documents uploaded for this load yet.</div>
+                      <div style={{ color: theme.muted, padding: 16 }}>{tr('myCarrier.docs.empty', 'No documents uploaded for this load yet.')}</div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {docs
@@ -1746,16 +1811,16 @@ export default function MyCarrier() {
                                   className="btn small-cd"
                                   onClick={() => {
                                     if (url) window.open(url, '_blank');
-                                    else alert('Document URL not available');
+                                    else alert(tr('myCarrier.docs.error.urlNotAvailable', 'Document URL not available'));
                                   }}
                                 >
-                                  View
+                                  {tr('common.view', 'View')}
                                 </button>
                                 <div style={{ flex: 1 }}>
                                   <div style={{ fontWeight: 700, color: theme.text }}>{kind.replace(/_/g, ' ')}</div>
                                   <div style={{ fontSize: 13, color: theme.muted }}>
-                                    {d?.filename || d?.file_name || d?.original_filename || 'Document'}
-                                    {isShipperProvided ? ' • Shipper uploaded' : ''}
+                                    {d?.filename || d?.file_name || d?.original_filename || tr('documentVault.documentFallback', 'Document')}
+                                    {isShipperProvided ? ` • ${tr('myCarrier.docs.shipperUploaded', 'Shipper uploaded')}` : ''}
                                   </div>
                                 </div>
                                 <span className={`int-status-badge ${kind === 'POD' ? 'active' : 'pending'}`}>{kind}</span>
@@ -1782,16 +1847,16 @@ export default function MyCarrier() {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 12 }}>
                   <div>
-                    <h3 style={{ margin: 0, color: theme.text }}>Upload Proof of Delivery (POD)</h3>
+                    <h3 style={{ margin: 0, color: theme.text }}>{tr('myCarrier.pod.modal.title', 'Upload Proof of Delivery (POD)')}</h3>
                     <div style={{ color: theme.muted, fontSize: 13 }}>
-                      Load #{podLoad ? (podLoad.load_number || getLoadId(podLoad) || '—') : '—'}
+                      {tr('myCarrier.labels.loadNumber', 'Load #')} {podLoad ? (podLoad.load_number || getLoadId(podLoad) || '—') : '—'}
                     </div>
                   </div>
                   <button
                     onClick={() => setShowPodModal(false)}
                     style={{ border: `1px solid ${theme.border}`, background: theme.surfaceAlt, color: theme.text, borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}
                   >
-                    Close
+                    {tr('common.close', 'Close')}
                   </button>
                 </div>
 
@@ -1801,56 +1866,66 @@ export default function MyCarrier() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 16 }}>
                   <div style={{ border: `1px solid ${theme.border}`, background: theme.surfaceAlt, borderRadius: 12, padding: 14 }}>
-                    <h4 style={{ margin: '0 0 10px', color: theme.text }}>Delivery Checks</h4>
+                    <h4 style={{ margin: '0 0 10px', color: theme.text }}>{tr('myCarrier.pod.deliveryChecksTitle', 'Delivery Checks')}</h4>
 
                     <div style={{ marginBottom: 10 }}>
-                      <label style={{ display: 'block', fontWeight: 650, color: theme.text, marginBottom: 6 }}>Receiver Name *</label>
+                      <label style={{ display: 'block', fontWeight: 650, color: theme.text, marginBottom: 6 }}>{tr('myCarrier.pod.receiverName', 'Receiver Name')} *</label>
                       <input
                         value={podReceiverName}
                         onChange={(e) => setPodReceiverName(e.target.value)}
-                        placeholder="Receiver / warehouse contact"
+                        placeholder={tr('myCarrier.pod.receiverPlaceholder', 'Receiver / warehouse contact')}
                         style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${theme.border}`, background: theme.surface, color: theme.text }}
                       />
                     </div>
 
                     <div style={{ marginBottom: 10 }}>
-                      <label style={{ display: 'block', fontWeight: 650, color: theme.text, marginBottom: 6 }}>GPS (must be within 10m)</label>
+                      <label style={{ display: 'block', fontWeight: 650, color: theme.text, marginBottom: 6 }}>{tr('myCarrier.pod.gps.label', 'GPS (must be within 10m)')}</label>
                       <button className="btn small-cd" onClick={refreshPodGps} disabled={podSubmitting}>
-                        Get Current Location
+                        {tr('myCarrier.pod.gps.getCurrentLocation', 'Get Current Location')}
                       </button>
                       <div style={{ marginTop: 8, fontSize: 12, color: theme.muted }}>
-                        {podGps?.lat != null ? `Lat/Lng: ${Number(podGps.lat).toFixed(6)}, ${Number(podGps.lng).toFixed(6)} (±${podGps?.accuracy ? Math.round(podGps.accuracy) : '—'}m)` : 'Location not captured'}
+                        {podGps?.lat != null
+                          ? `${tr('myCarrier.pod.gps.latLng', 'Lat/Lng')}: ${Number(podGps.lat).toFixed(6)}, ${Number(podGps.lng).toFixed(6)} (±${podGps?.accuracy ? Math.round(podGps.accuracy) : '—'}m)`
+                          : tr('myCarrier.pod.gps.locationNotCaptured', 'Location not captured')}
                       </div>
                       <div style={{ marginTop: 4, fontSize: 12, color: theme.muted }}>
-                        {podDestinationCoords?.lat != null ? `Delivery coords: ${Number(podDestinationCoords.lat).toFixed(6)}, ${Number(podDestinationCoords.lng).toFixed(6)}` : 'Delivery coords not available (geocode failed)'}
+                        {podDestinationCoords?.lat != null
+                          ? `${tr('myCarrier.pod.gps.deliveryCoords', 'Delivery coords')}: ${Number(podDestinationCoords.lat).toFixed(6)}, ${Number(podDestinationCoords.lng).toFixed(6)}`
+                          : tr('myCarrier.pod.gps.deliveryCoordsUnavailable', 'Delivery coords not available (geocode failed)')}
                       </div>
                       <div style={{ marginTop: 4, fontSize: 12, color: podChecks.gpsOk ? '#059669' : '#b45309' }}>
-                        {podDistanceMeters == null ? 'Distance: —' : `Distance: ${podDistanceMeters.toFixed(1)}m`}
-                        {podChecks.gpsOk ? ' (OK)' : ' (needs ≤ 10m)'}
+                        {podDistanceMeters == null
+                          ? `${tr('myCarrier.pod.gps.distance', 'Distance')}: —`
+                          : `${tr('myCarrier.pod.gps.distance', 'Distance')}: ${podDistanceMeters.toFixed(1)}m`}
+                        {podChecks.gpsOk ? ` (${tr('myCarrier.pod.gps.ok', 'OK')})` : ` (${tr('myCarrier.pod.gps.needsWithin', 'needs ≤ 10m')})`}
                       </div>
                     </div>
 
                     <div style={{ marginBottom: 10 }}>
-                      <label style={{ display: 'block', fontWeight: 650, color: theme.text, marginBottom: 6 }}>48-hour rule</label>
+                      <label style={{ display: 'block', fontWeight: 650, color: theme.text, marginBottom: 6 }}>{tr('myCarrier.pod.timeRule.label', '48-hour rule')}</label>
                       <div style={{ fontSize: 12, color: podChecks.timeOk ? '#059669' : '#b45309' }}>
-                        {podLoad?.delivery_date ? `Delivery date: ${podLoad.delivery_date}` : 'Delivery date missing'}
-                        {podChecks.timeOk ? ' (OK)' : ' (must be within 48 hours)'}
+                        {podLoad?.delivery_date
+                          ? `${tr('myCarrier.pod.timeRule.deliveryDate', 'Delivery date')}: ${podLoad.delivery_date}`
+                          : tr('myCarrier.pod.timeRule.deliveryDateMissing', 'Delivery date missing')}
+                        {podChecks.timeOk
+                          ? ` (${tr('myCarrier.pod.timeRule.ok', 'OK')})`
+                          : ` (${tr('myCarrier.pod.timeRule.mustBeWithin', 'must be within 48 hours')})`}
                       </div>
                     </div>
 
                     <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <label style={{ display: 'flex', gap: 10, alignItems: 'center', color: theme.text }}>
                         <input type="checkbox" checked={podChecks.confirmDelivered} onChange={(e) => setPodChecks(prev => ({ ...prev, confirmDelivered: e.target.checked }))} />
-                        I confirm the shipment was delivered in full.
+                        {tr('myCarrier.pod.confirm.deliveredFull', 'I confirm the shipment was delivered in full.')}
                       </label>
                       <label style={{ display: 'flex', gap: 10, alignItems: 'center', color: theme.text }}>
                         <input type="checkbox" checked={podChecks.confirmAccurate} onChange={(e) => setPodChecks(prev => ({ ...prev, confirmAccurate: e.target.checked }))} />
-                        I confirm the POD information is accurate.
+                        {tr('myCarrier.pod.confirm.accurate', 'I confirm the POD information is accurate.')}
                       </label>
                     </div>
 
                     <div style={{ marginTop: 14, borderTop: `1px solid ${theme.border}`, paddingTop: 12 }}>
-                      <h4 style={{ margin: '0 0 10px', color: theme.text }}>Signing</h4>
+                      <h4 style={{ margin: '0 0 10px', color: theme.text }}>{tr('myCarrier.pod.signing.title', 'Signing')}</h4>
 
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
                         <button
@@ -1858,32 +1933,34 @@ export default function MyCarrier() {
                           onClick={() => setPodSignMethod('typed')}
                           type="button"
                         >
-                          Typed
+                          {tr('myCarrier.pod.signing.typed', 'Typed')}
                         </button>
                         <button
                           className={`btn small ${podSignMethod === 'image' ? 'small-cd' : 'ghost-cd'}`}
                           onClick={() => setPodSignMethod('image')}
                           type="button"
                         >
-                          Signature Image
+                          {tr('myCarrier.pod.signing.signatureImage', 'Signature Image')}
                         </button>
                         {podSignMethod === 'image' && (
                           <button className="btn small ghost-cd" onClick={loadSignatureImage} type="button">
-                            Load Signature Image
+                            {tr('myCarrier.pod.signing.loadSignatureImage', 'Load Signature Image')}
                           </button>
                         )}
                       </div>
 
-                      <label style={{ display: 'block', fontWeight: 650, color: theme.text, marginBottom: 6 }}>Signer Name *</label>
+                      <label style={{ display: 'block', fontWeight: 650, color: theme.text, marginBottom: 6 }}>{tr('myCarrier.pod.signing.signerName', 'Signer Name')} *</label>
                       <input
                         value={podSignerName}
                         onChange={(e) => setPodSignerName(e.target.value)}
-                        placeholder="Name on file"
+                        placeholder={tr('myCarrier.pod.signing.signerPlaceholder', 'Name on file')}
                         style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${theme.border}`, background: theme.surface, color: theme.text }}
                       />
                       {podSignMethod === 'image' && (
                         <div style={{ marginTop: 8, fontSize: 12, color: podSignatureImageUrl ? '#059669' : theme.muted }}>
-                          {podSignatureImageUrl ? 'Signature image loaded.' : 'Signature image not loaded.'}
+                          {podSignatureImageUrl
+                            ? tr('myCarrier.pod.signing.signatureLoaded', 'Signature image loaded.')
+                            : tr('myCarrier.pod.signing.signatureNotLoaded', 'Signature image not loaded.')}
                         </div>
                       )}
                     </div>
@@ -1894,26 +1971,26 @@ export default function MyCarrier() {
                         style={{ padding: '10px 14px', borderRadius: 10, border: `1px solid ${theme.border}`, background: theme.surface, color: theme.text, cursor: 'pointer' }}
                         disabled={podSubmitting}
                       >
-                        Cancel
+                        {tr('common.cancel', 'Cancel')}
                       </button>
                       <button
                         className="btn small-cd"
                         onClick={submitPod}
                         disabled={podSubmitting}
                       >
-                        {podSubmitting ? 'Submitting…' : 'Upload POD & Mark Delivered'}
+                        {podSubmitting ? tr('myCarrier.common.submitting', 'Submitting…') : tr('myCarrier.pod.actions.uploadAndMarkDelivered', 'Upload POD & Mark Delivered')}
                       </button>
                     </div>
                   </div>
 
                   <div style={{ border: `1px solid ${theme.border}`, borderRadius: 12, overflow: 'hidden', background: theme.surface }}>
                     <div style={{ padding: '10px 12px', borderBottom: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ fontWeight: 700, color: theme.text }}>POD Preview</div>
-                      <div style={{ color: theme.muted, fontSize: 12 }}>This PDF will be uploaded to the load document vault.</div>
+                      <div style={{ fontWeight: 700, color: theme.text }}>{tr('myCarrier.pod.preview.title', 'POD Preview')}</div>
+                      <div style={{ color: theme.muted, fontSize: 12 }}>{tr('myCarrier.pod.preview.hint', 'This PDF will be uploaded to the load document vault.')}</div>
                     </div>
                     <iframe
                       ref={podIframeRef}
-                      title="pod-preview"
+                      title={tr('myCarrier.pod.preview.iframeTitle', 'POD preview')}
                       style={{ width: '100%', height: '70vh', border: 'none', background: '#ffffff' }}
                       srcDoc={buildPodHtml()}
                     />

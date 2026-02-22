@@ -5,7 +5,7 @@ import { getStorage } from "firebase/storage";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-    apiKey: "",
+    apiKey: "AIzaSyClzYECMNer89EjBs_h12hb5tDIghUslMM",
     authDomain: "freightpowerai-e90fe.firebaseapp.com",
     projectId: "freightpowerai-e90fe",
     storageBucket: "freightpowerai-e90fe.firebasestorage.app",

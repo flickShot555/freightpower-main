@@ -386,6 +386,28 @@ def _notification_doc_id(message_id: str, recipient_uid: str) -> str:
     return f"{message_id}_{recipient_uid}"
 
 
+def _messages_notifications_enabled_for_uid(uid: str) -> bool:
+    """Return whether this user wants message notifications.
+
+    Defaults to True when unset to preserve legacy behavior.
+    """
+
+    try:
+        snap = db.collection("users").document(str(uid)).get()
+        if not getattr(snap, "exists", False):
+            return True
+        d = snap.to_dict() or {}
+        prefs = d.get("notification_preferences")
+        if not isinstance(prefs, dict):
+            return True
+        if "messages" not in prefs:
+            return True
+        return bool(prefs.get("messages"))
+    except Exception:
+        # Best-effort; never break messaging due to a settings read.
+        return True
+
+
 def queue_delayed_message_emails(
     *,
     thread_id: str,
@@ -409,6 +431,11 @@ def queue_delayed_message_emails(
     for to_uid in recipient_uids:
         if not to_uid or to_uid == sender_uid:
             continue
+
+        # Respect the driver's Messages toggle (or any role's preference).
+        if not _messages_notifications_enabled_for_uid(str(to_uid)):
+            continue
+
         doc_id = _notification_doc_id(message_id, to_uid)
         ref = db.collection("message_email_notifications").document(doc_id)
         payload = {
@@ -468,6 +495,23 @@ def process_pending_message_email_notifications_job(max_batch: int = 30):
         msg_created_at = float(d.get("message_created_at") or 0.0)
         if not thread_id or not recipient_uid or not msg_created_at:
             ref.update({"status": "invalid", "send_after": float(far_future), "updated_at": _now()})
+            continue
+
+        # Respect the user's Messages toggle at send-time as well.
+        try:
+            if not _messages_notifications_enabled_for_uid(str(recipient_uid)):
+                ref.update(
+                    {
+                        "status": "cancelled",
+                        "cancelled_at": _now(),
+                        "send_after": float(far_future),
+                        "updated_at": _now(),
+                    }
+                )
+                continue
+        except Exception:
+            # If we can't verify prefs, err on the side of not spamming.
+            ref.update({"status": "pending", "send_after": float(_now() + 120), "updated_at": _now()})
             continue
 
         # Check unread status using persistent read receipts.

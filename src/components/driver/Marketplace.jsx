@@ -1,14 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import '../../styles/driver/Marketplace.css';
 import { useAuth } from '../../contexts/AuthContext';
+import { useUserSettings } from '../../contexts/UserSettingsContext';
 import { API_URL } from '../../config';
 import { AUTO_REFRESH_MS } from '../../constants/refresh';
 import { useGeolocation, sortServicesByDistance, calculateDistance } from '../../hooks/useGeolocation';
+import { t } from '../../i18n/translate';
 import { db } from '../../firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, query, where, onSnapshot } from 'firebase/firestore';
 
 const MARKETPLACE_THRESHOLD = 60;
 const ACCESS_CACHE_PREFIX = 'fp_driver_marketplace_access_v1:';
+
+const SERVICE_TYPE_LABELS = {
+  fuel: { key: 'marketplace.serviceType.fuel', fallback: 'Fuel' },
+  parking: { key: 'marketplace.serviceType.parking', fallback: 'Parking' },
+  repair: { key: 'marketplace.serviceType.repair', fallback: 'Repair' },
+  legal: { key: 'marketplace.serviceType.legal', fallback: 'Legal' },
+  training: { key: 'marketplace.serviceType.training', fallback: 'Training' },
+  eld: { key: 'marketplace.serviceType.eld', fallback: 'ELD/Tech' },
+};
 
 function readAccessCache(uid) {
   if (!uid) return null;
@@ -36,6 +47,15 @@ function writeAccessCache(uid, data) {
 
 export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, onAvailabilityToggle, onNavigate }) {
   const { currentUser } = useAuth();
+  const { settings } = useUserSettings();
+  const language = settings?.language || 'English';
+  const locale = language === 'Spanish' ? 'es-ES' : language === 'Arabic' ? 'ar' : 'en-US';
+  const tr = (key, fallback) => t(language, key, fallback);
+  const trServiceType = (type) => {
+    const label = SERVICE_TYPE_LABELS[type];
+    if (!label) return String(type || '').replace(/_/g, ' ');
+    return tr(label.key, label.fallback);
+  };
   const cachedAccess = readAccessCache(currentUser?.uid);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isMarketplaceReady, setIsMarketplaceReady] = useState(() => cachedAccess?.isMarketplaceReady ?? true);
@@ -338,9 +358,9 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
         type: 'fuel',
         latitude: currentLocation.latitude + 0.01,
         longitude: currentLocation.longitude + 0.01,
-        description: 'Premium fuel station with truck parking and amenities',
-        openStatus: 'Open 24/7',
-        offers: '15¢ discount active',
+        description: tr('marketplace.mock.shell.description', 'Premium fuel station with truck parking and amenities'),
+        openStatus: tr('marketplace.mock.shell.openStatus', 'Open 24/7'),
+        offers: tr('marketplace.mock.shell.offers', '15¢ discount active'),
         verified: true,
         phone: '1-800-SHELL-GO',
         website: 'https://www.shell.us',
@@ -352,9 +372,9 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
         type: 'repair',
         latitude: currentLocation.latitude + 0.03,
         longitude: currentLocation.longitude - 0.02,
-        description: 'Full-service truck repair and maintenance facility',
-        openStatus: 'Open until 8 PM',
-        offers: 'Emergency service available',
+        description: tr('marketplace.mock.mikesRepair.description', 'Full-service truck repair and maintenance facility'),
+        openStatus: tr('marketplace.mock.mikesRepair.openStatus', 'Open until 8 PM'),
+        offers: tr('marketplace.mock.mikesRepair.offers', 'Emergency service available'),
         verified: true,
         phone: '1-555-REPAIR-1',
         email: 'service@mikestruckrepair.com',
@@ -366,9 +386,9 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
         type: 'parking',
         latitude: currentLocation.latitude - 0.05,
         longitude: currentLocation.longitude + 0.04,
-        description: 'Secure parking with showers, food court, and WiFi',
-        openStatus: 'Open 24/7',
-        offers: '42 spots available',
+        description: tr('marketplace.mock.truckStopPlaza.description', 'Secure parking with showers, food court, and WiFi'),
+        openStatus: tr('marketplace.mock.truckStopPlaza.openStatus', 'Open 24/7'),
+        offers: tr('marketplace.mock.truckStopPlaza.offers', '42 spots available'),
         verified: true,
         phone: '1-555-PARK-NOW',
         website: 'https://www.truckstopplaza.com',
@@ -380,9 +400,9 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
         type: 'fuel',
         latitude: currentLocation.latitude + 0.02,
         longitude: currentLocation.longitude - 0.03,
-        description: 'Full-service travel center with fuel, food, and parking',
-        openStatus: 'Open 24/7',
-        offers: '10¢ discount with rewards',
+        description: tr('marketplace.mock.pilot.description', 'Full-service travel center with fuel, food, and parking'),
+        openStatus: tr('marketplace.mock.pilot.openStatus', 'Open 24/7'),
+        offers: tr('marketplace.mock.pilot.offers', '10¢ discount with rewards'),
         verified: true,
         phone: '1-877-PILOT-77',
         website: 'https://www.pilotflyingj.com',
@@ -394,9 +414,9 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
         type: 'fuel',
         latitude: currentLocation.latitude - 0.02,
         longitude: currentLocation.longitude + 0.02,
-        description: 'Major truck stop chain with all amenities',
-        openStatus: 'Open 24/7',
-        offers: 'Free shower with fuel',
+        description: tr('marketplace.mock.loves.description', 'Major truck stop chain with all amenities'),
+        openStatus: tr('marketplace.mock.loves.openStatus', 'Open 24/7'),
+        offers: tr('marketplace.mock.loves.offers', 'Free shower with fuel'),
         verified: true,
         phone: '1-800-LOVES-01',
         website: 'https://www.loves.com',
@@ -408,9 +428,9 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
         type: 'legal',
         latitude: currentLocation.latitude + 0.08,
         longitude: currentLocation.longitude - 0.01,
-        description: 'Comprehensive CDL protection and legal services',
-        openStatus: 'Mon-Fri 9 AM - 6 PM',
-        offers: '20% off this week',
+        description: tr('marketplace.mock.tvc.description', 'Comprehensive CDL protection and legal services'),
+        openStatus: tr('marketplace.mock.tvc.openStatus', 'Mon-Fri 9 AM - 6 PM'),
+        offers: tr('marketplace.mock.tvc.offers', '20% off this week'),
         verified: true,
         phone: '1-888-TVC-LEGAL',
         website: 'https://www.tvcprotection.com',
@@ -423,9 +443,9 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
         type: 'training',
         latitude: currentLocation.latitude - 0.03,
         longitude: currentLocation.longitude - 0.04,
-        description: 'Professional CDL training and certification courses',
-        openStatus: 'Mon-Sat 8 AM - 5 PM',
-        offers: 'New class starting soon',
+        description: tr('marketplace.mock.trainingAcademy.description', 'Professional CDL training and certification courses'),
+        openStatus: tr('marketplace.mock.trainingAcademy.openStatus', 'Mon-Sat 8 AM - 5 PM'),
+        offers: tr('marketplace.mock.trainingAcademy.offers', 'New class starting soon'),
         verified: true,
         phone: '1-555-CDL-TRAIN',
         website: 'https://www.cdlacademy.com',
@@ -438,9 +458,9 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
         type: 'eld',
         latitude: currentLocation.latitude + 0.04,
         longitude: currentLocation.longitude + 0.03,
-        description: 'ELD devices, installation, and technical support',
-        openStatus: 'Mon-Fri 9 AM - 5 PM',
-        offers: 'Free installation',
+        description: tr('marketplace.mock.eldTech.description', 'ELD devices, installation, and technical support'),
+        openStatus: tr('marketplace.mock.eldTech.openStatus', 'Mon-Fri 9 AM - 5 PM'),
+        offers: tr('marketplace.mock.eldTech.offers', 'Free installation'),
         verified: true,
         phone: '1-877-ELD-TECH',
         website: 'https://www.eldtech.com',
@@ -467,7 +487,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
       const searchQuery = encodeURIComponent(`${service.name} ${service.address} phone number contact`);
       
       // Show alert to user
-      alert(`Phone number not available for ${service.name}. Opening search results to find contact information.`);
+      handlePhoneNotAvailable(service);
       window.open(`https://www.google.com/search?q=${searchQuery}`, '_blank');
       return;
     }
@@ -502,15 +522,23 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
           
           // Fallback: try alternative contact methods
           if (service.email) {
-            if (confirm(`Unable to open dialer. Would you like to send an email to ${service.name} instead?`)) {
+            const emailConfirm =
+              tr('marketplace.confirms.unableToOpenDialerEmailPrefix', 'Unable to open dialer. Would you like to send an email to ') +
+              String(service.name || '') +
+              tr('marketplace.confirms.unableToOpenDialerEmailSuffix', ' instead?');
+            if (confirm(emailConfirm)) {
               window.location.href = `mailto:${service.email}`;
             }
           } else if (service.website) {
-            if (confirm(`Unable to open dialer. Would you like to visit ${service.name}'s website instead?`)) {
+            const siteConfirm =
+              tr('marketplace.confirms.unableToOpenDialerWebsitePrefix', 'Unable to open dialer. Would you like to visit ') +
+              String(service.name || '') +
+              tr('marketplace.confirms.unableToOpenDialerWebsiteSuffix', "'s website instead?");
+            if (confirm(siteConfirm)) {
               window.open(service.website, '_blank');
             }
           } else {
-            alert(`Unable to open dialer. Phone number: ${service.phone}\n\nPlease dial manually or copy this number.`);
+            handleUnableToOpenDialer(service, { canCopy: true });
             
             // Try to copy to clipboard
             if (navigator.clipboard) {
@@ -528,13 +556,13 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
       console.error('❌ Error opening dialer:', error);
       
       // Show error and provide alternatives
-      alert(`Unable to open dialer. Phone number: ${service.phone}\n\nPlease dial manually.`);
+      handleUnableToOpenDialer(service, { canCopy: false });
       
       // Try to copy to clipboard as fallback
       if (navigator.clipboard) {
         try {
           await navigator.clipboard.writeText(service.phone);
-          alert('Phone number copied to clipboard!');
+          alert(tr('marketplace.alerts.phoneCopied', 'Phone number copied to clipboard!'));
         } catch (err) {
           console.error('Failed to copy to clipboard:', err);
         }
@@ -671,8 +699,32 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
       // State updates handled automatically by onSnapshot listener
     } catch (error) {
       console.error('❌ Error toggling favorite:', error);
-      alert('Failed to update favorites. Please try again.');
+      alert(tr('marketplace.alerts.favoritesUpdateFailed', 'Failed to update favorites. Please try again.'));
     }
+  };
+
+  const handlePhoneNotAvailable = (service) => {
+    const name = String(service?.name || '');
+    alert(
+      tr('marketplace.alerts.phoneNotAvailablePrefix', 'Phone number not available for ') +
+        name +
+        tr(
+          'marketplace.alerts.phoneNotAvailableSuffix',
+          '. Opening search results to find contact information.'
+        )
+    );
+  };
+
+  const handleUnableToOpenDialer = (service, { canCopy = false } = {}) => {
+    const phone = String(service?.phone || '');
+    const prefix = tr('marketplace.alerts.unableToOpenDialerPrefix', 'Unable to open dialer. Phone number: ');
+    const suffix = canCopy
+      ? tr(
+          'marketplace.alerts.unableToOpenDialerCopySuffix',
+          '\n\nPlease dial manually or copy this number.'
+        )
+      : tr('marketplace.alerts.unableToOpenDialerManualSuffix', '\n\nPlease dial manually.');
+    alert(prefix + phone + suffix);
   };
 
   // Handle favorites button click
@@ -691,13 +743,15 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
     return (
       <div className="dd-marketplace marketplace-loading" style={{ padding: '40px', textAlign: 'center' }}>
         <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: '2rem', color: '#3b82f6' }}></i>
-        <p style={{ marginTop: '10px', color: mpTheme.muted }}>Checking marketplace access...</p>
+        <p style={{ marginTop: '10px', color: mpTheme.muted }}>{tr('marketplace.checkingAccess', 'Checking marketplace access...')}</p>
       </div>
     );
   }
 
   // Show gating message if onboarding not complete or consents missing
   if (!isMarketplaceReady) {
+    const scoreNeeded = Math.max(0, Number(MARKETPLACE_THRESHOLD) - Number(onboardingScore || 0));
+
     return (
       <div className="dd-marketplace marketplace-gated" style={{
         padding: '60px 40px',
@@ -721,15 +775,17 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
         </div>
 
         <h2 style={{ fontSize: '1.75rem', color: mpTheme.text, marginBottom: '10px' }}>
-          Marketplace Access Locked
+          {tr('marketplace.gate.title', 'Marketplace Access Locked')}
         </h2>
 
         <p style={{ color: mpTheme.muted, marginBottom: '20px', maxWidth: '500px', margin: '0 auto 20px' }}>
           {gatingReason === 'consent'
-            ? 'You must sign all required consent forms to access the marketplace.'
+            ? tr('marketplace.gate.reasonConsent', 'You must sign all required consent forms to access the marketplace.')
             : gatingReason === 'both'
-            ? 'Complete your onboarding and sign required consent forms to unlock the marketplace.'
-            : `Complete your onboarding to unlock the marketplace. Score needed: ${MARKETPLACE_THRESHOLD}%`
+            ? tr('marketplace.gate.reasonBoth', 'Complete your onboarding and sign required consent forms to unlock the marketplace.')
+            : tr('marketplace.gate.reasonScorePrefix', 'Complete your onboarding to unlock the marketplace. Score needed: ') +
+              MARKETPLACE_THRESHOLD +
+              '%'
           }
         </p>
 
@@ -742,7 +798,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
               }}
               disabled={typeof onNavigate !== 'function'}
             >
-              Go to Consent & E-Signature
+              {tr('marketplace.gate.goToEsign', 'Go to Consent & E-Signature')}
             </button>
           </div>
         )}
@@ -759,7 +815,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
           }}>
             <div style={{ fontWeight: '600', color: mpTheme.dangerText, marginBottom: '10px' }}>
               <i className="fa-solid fa-file-signature" style={{ marginRight: '8px' }}></i>
-              Missing Required Consents
+              {tr('marketplace.gate.missingConsents', 'Missing Required Consents')}
             </div>
             <ul style={{ textAlign: 'left', margin: 0, paddingLeft: '20px', color: mpTheme.dangerText }}>
               {missingConsents.map((consent, idx) => (
@@ -800,9 +856,9 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
               {onboardingScore}%
             </div>
             <div style={{ textAlign: 'left' }}>
-              <div style={{ fontWeight: '600', color: mpTheme.text }}>Current Score</div>
+              <div style={{ fontWeight: '600', color: mpTheme.text }}>{tr('marketplace.gate.currentScore', 'Current Score')}</div>
               <div style={{ color: mpTheme.muted, fontSize: '0.875rem' }}>
-                Need {MARKETPLACE_THRESHOLD - onboardingScore}% more to unlock
+                {tr('marketplace.gate.needPrefix', 'Need ') + scoreNeeded + tr('marketplace.gate.needSuffix', '% more to unlock')}
               </div>
             </div>
           </div>
@@ -811,7 +867,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
 
         {nextActions.length > 0 && (gatingReason === 'score' || gatingReason === 'both') && (
           <div style={{ textAlign: 'left', maxWidth: '400px', margin: '0 auto' }}>
-            <h4 style={{ color: mpTheme.text, marginBottom: '10px' }}>Complete These Steps:</h4>
+            <h4 style={{ color: mpTheme.text, marginBottom: '10px' }}>{tr('marketplace.gate.completeSteps', 'Complete These Steps:')}</h4>
             <ul style={{ listStyle: 'none', padding: 0 }}>
               {nextActions.slice(0, 3).map((action, index) => (
                 <li key={index} style={{
@@ -836,9 +892,9 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
       <div className="dd-marketplace">
         <header className="fp-header">
           <div className="fp-header-titles">
-            <h2>Marketplace</h2>
-            <p className="fp-subtitle">Your smart CDL staffing hub - connect with carriers and service providers</p>
-            <button onClick={() => setIsPostHire(false)} className="btn small dd-back-btn">Pre-Hire</button>
+            <h2>{tr('marketplace.title', 'Marketplace')}</h2>
+            <p className="fp-subtitle">{tr('marketplace.subtitle', 'Your smart CDL staffing hub - connect with carriers and service providers')}</p>
+            <button onClick={() => setIsPostHire(false)} className="btn small dd-back-btn">{tr('marketplace.preHire', 'Pre-Hire')}</button>
           </div>
         </header>
         
@@ -846,9 +902,9 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
           {/* Driver Availability Section */}
           <div className="card mp-availability-card">
             <div className="card-header">
-              <h3>Driver Availability</h3>
+              <h3>{tr('marketplace.driverAvailability.title', 'Driver Availability')}</h3>
               <span className={`int-status-badge ${isAvailable ? 'active' : 'inactive'}`}>
-                {isAvailable ? 'Currently Available' : 'Currently Unavailable'}
+                {isAvailable ? tr('marketplace.driverAvailability.currentlyAvailable', 'Currently Available') : tr('marketplace.driverAvailability.currentlyUnavailable', 'Currently Unavailable')}
               </span>
             </div>
             <div className="mp-availability-content">
@@ -856,20 +912,20 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                 <div className={`mp-status-icon ${isAvailable ? 'active' : 'inactive'}`}></div>
                 <span>
                   {isAvailable 
-                    ? 'You are visible for your associated carrier' 
-                    : 'You are not visible for your associated carrier. Toggle availability to share your status.'}
+                    ? tr('marketplace.driverAvailability.visibleToCarrier', 'You are visible for your associated carrier')
+                    : tr('marketplace.driverAvailability.notVisibleToCarrier', 'You are not visible for your associated carrier. Toggle availability to share your status.')}
                 </span>
               </div>
               <div className="mp-consent-info">
                 <p className="mp-consent-text">
                   {isAvailable 
-                    ? "By being available, you've agreed to share your CDL & compliance information with your associated carrier through FreightPower." 
-                    : "Mark yourself as available to share your status with your associated carrier."}
+                    ? tr('marketplace.driverAvailability.autoConsentBody', "By being available, you've agreed to share your CDL & compliance information with your associated carrier through FreightPower.")
+                    : tr('marketplace.driverAvailability.becomeAvailableBody', 'Mark yourself as available to share your status with your associated carrier.')}
                 </p>
                 {isAvailable ? (
                   <button className='btn small-cd'>
                     <i className="fa-solid fa-info-circle"></i>
-                    Auto-Consent Active
+                    {tr('marketplace.driverAvailability.autoConsentActive', 'Auto-Consent Active')}
                   </button>
                 ) : (
                   <button 
@@ -878,7 +934,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                     style={{ background: '#3b82f6' }}
                   >
                     <i className="fa-solid fa-toggle-on"></i>
-                    Become Available
+                    {tr('marketplace.driverAvailability.becomeAvailable', 'Become Available')}
                   </button>
                 )}
               </div>
@@ -890,33 +946,33 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
             <div className="mp-promote-content">
               <div className="mp-promote-header">
                 <i className="fa-solid fa-star"></i>
-                <h4>Promote Myself</h4>
+                <h4>{tr('marketplace.promote.title', 'Promote Myself')}</h4>
               </div>
-              <p className="mp-promote-text">Boost your profile to appear higher in carrier searches</p>
-                <div className="mp-coming-soon-tag">Coming Soon</div>
-              <button className="btn small-cd" disabled style={{ cursor: 'not-allowed' }}>Promote Profile</button>
+              <p className="mp-promote-text">{tr('marketplace.promote.body', 'Boost your profile to appear higher in carrier searches')}</p>
+                <div className="mp-coming-soon-tag">{tr('marketplace.comingSoon', 'Coming Soon')}</div>
+              <button className="btn small-cd" disabled style={{ cursor: 'not-allowed' }}>{tr('marketplace.promote.cta', 'Promote Profile')}</button>
             </div>
           </div>
 
           {/* AI Staffing Insights */}
           <div className="card mp-ai-insights-card">
             <div className="mp-ai-header">
-              <h3>AI Staffing Insights</h3>
+              <h3>{tr('marketplace.aiStaffingInsights.title', 'AI Staffing Insights')}</h3>
             </div>
             <div className="mp-insights-grid">
               <div className="mp-insight-item high-demand">
                 <div className="mp-insight-header">
                   <i className="fa-solid fa-trending-up"></i>
-                  <span>High Demand Alert</span>
+                  <span>{tr('marketplace.aiStaffingInsights.highDemandTitle', 'High Demand Alert')}</span>
                 </div>
-                <p>There are 12 carriers in your region actively hiring — make sure your profile is up to date.</p>
+                <p>{tr('marketplace.aiStaffingInsights.highDemandBody', 'There are 12 carriers in your region actively hiring — make sure your profile is up to date.')}</p>
               </div>
               <div className="mp-insight-item special-offer">
                 <div className="mp-insight-header">
                   <i className="fa-solid fa-gift"></i>
-                  <span>Special Offer</span>
+                  <span>{tr('marketplace.aiStaffingInsights.specialOfferTitle', 'Special Offer')}</span>
                 </div>
-                <p>20% discount available with CDL protection service this week only.</p>
+                <p>{tr('marketplace.aiStaffingInsights.specialOfferBody', '20% discount available with CDL protection service this week only.')}</p>
               </div>
             </div>
           </div>
@@ -924,10 +980,10 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
           {/* Service Providers Hub */}
           <div className="card mp-services-card">
             <div className="card-header">
-              <h3>Service Providers Hub</h3>
+              <h3>{tr('marketplace.serviceProvidersHub.title', 'Service Providers Hub')}</h3>
               <div className="mp-search-bar">
                 <i className="fa-solid fa-search"></i>
-                <input type="text" placeholder="Search services..." />
+                <input type="text" placeholder={tr('marketplace.search.placeholderShort', 'Search services...')} />
               </div>
             </div>
             
@@ -937,11 +993,11 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   <div className="mp-service-icon cdl-protection">
                   <i className="fa-solid fa-shield"></i>
                 </div>
-                <h4>CDL Protection (TVC)</h4>
-                <p>Protect your CDL with expert legal representation and violation defense services.</p>
-                <span className="mp-coming-soon-tag">Coming Soon</span>
+                <h4>{tr('marketplace.categories.cdlProtection.title', 'CDL Protection (TVC)')}</h4>
+                <p>{tr('marketplace.categories.cdlProtection.body', 'Protect your CDL with expert legal representation and violation defense services.')}</p>
+                <span className="mp-coming-soon-tag">{tr('marketplace.comingSoon', 'Coming Soon')}</span>
                 </div>
-                <button className="btn small-cd" disabled style={{marginTop: '20px', width: '100%', cursor: 'not-allowed'}}>Explore</button>
+                <button className="btn small-cd" disabled style={{marginTop: '20px', width: '100%', cursor: 'not-allowed'}}>{tr('marketplace.explore', 'Explore')}</button>
               </div>
 
               <div className="mp-service-category" style={{ opacity: 0.55 }}>
@@ -949,11 +1005,11 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   <div className="mp-service-icon eld-solutions">
                   <i className="fa-solid fa-tablet-screen-button"></i>
                 </div>
-                <h4>ELD Solutions</h4>
-                <p>Advanced ELD integrations with real-time compliance monitoring and reporting.</p>
-                <span className="mp-coming-soon-tag">Coming Soon</span>
+                <h4>{tr('marketplace.categories.eldSolutions.title', 'ELD Solutions')}</h4>
+                <p>{tr('marketplace.categories.eldSolutions.body', 'Advanced ELD integrations with real-time compliance monitoring and reporting.')}</p>
+                <span className="mp-coming-soon-tag">{tr('marketplace.comingSoon', 'Coming Soon')}</span>
                 </div>
-                <button className="btn small-cd" disabled style={{marginTop: '20px', width: '100%', cursor: 'not-allowed'}}>Explore</button>
+                <button className="btn small-cd" disabled style={{marginTop: '20px', width: '100%', cursor: 'not-allowed'}}>{tr('marketplace.explore', 'Explore')}</button>
               </div>
 
               <div className="mp-service-category">
@@ -961,16 +1017,16 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   <div className="mp-service-icon fuel-programs">
                   <i className="fa-solid fa-gas-pump"></i>
                 </div>
-                <h4>Fuel Programs</h4>
-                <p>Access exclusive fuel discounts and rewards programs nationwide.</p>
-                <span className="int-status-badge active">Save up to 15¢/gal</span>
+                <h4>{tr('marketplace.categories.fuelPrograms.title', 'Fuel Programs')}</h4>
+                <p>{tr('marketplace.categories.fuelPrograms.body', 'Access exclusive fuel discounts and rewards programs nationwide.')}</p>
+                <span className="int-status-badge active">{tr('marketplace.categories.fuelPrograms.badge', 'Save up to 15¢/gal')}</span>
                 </div>
                 <button
                   className="btn small-cd"
                   style={{marginTop: '20px', width: '100%'}}
                   onClick={() => handleServiceTypeClick('fuel')}
                 >
-                  Explore
+                  {tr('marketplace.explore', 'Explore')}
                 </button>
               </div>
 
@@ -979,16 +1035,16 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   <div className="mp-service-icon roadside">
                   <i className="fa-solid fa-wrench"></i>
                 </div>
-                <h4>Roadside Repair</h4>
-                <p>24/7 roadside assistance and repair network for emergency breakdowns.</p>
-                <span className="int-status-badge warning">24/7 Available</span>
+                <h4>{tr('marketplace.categories.roadsideRepair.title', 'Roadside Repair')}</h4>
+                <p>{tr('marketplace.categories.roadsideRepair.body', '24/7 roadside assistance and repair network for emergency breakdowns.')}</p>
+                <span className="int-status-badge warning">{tr('marketplace.categories.roadsideRepair.badge', '24/7 Available')}</span>
                 </div>
                 <button
                   className="btn small-cd"
                   style={{marginTop: '20px', width: '100%'}}
                   onClick={() => handleServiceTypeClick('repair')}
                 >
-                  Explore
+                  {tr('marketplace.explore', 'Explore')}
                 </button>
               </div>
 
@@ -997,11 +1053,11 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   <div className="mp-service-icon training">
                   <i className="fa-solid fa-graduation-cap"></i>
                 </div>
-                <h4>Training & Compliance</h4>
-                <p>Continuing education and compliance training to advance your career.</p>
-                <span className="mp-coming-soon-tag">Coming Soon</span>
+                <h4>{tr('marketplace.categories.trainingCompliance.title', 'Training & Compliance')}</h4>
+                <p>{tr('marketplace.categories.trainingCompliance.body', 'Continuing education and compliance training to advance your career.')}</p>
+                <span className="mp-coming-soon-tag">{tr('marketplace.comingSoon', 'Coming Soon')}</span>
                 </div>
-                <button className="btn small-cd" disabled style={{marginTop: '20px', width: '100%', cursor: 'not-allowed'}}>Explore</button>
+                <button className="btn small-cd" disabled style={{marginTop: '20px', width: '100%', cursor: 'not-allowed'}}>{tr('marketplace.explore', 'Explore')}</button>
               </div>
 
               <div className="mp-service-category" style={{ opacity: 0.55 }}>
@@ -1009,11 +1065,11 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   <div className="mp-service-icon financial">
                   <i className="fa-solid fa-credit-card"></i>
                 </div>
-                <h4>Financial Services</h4>
-                <p>Banking, factoring, and financial planning services for drivers.</p>
-                <span className="mp-coming-soon-tag">Coming Soon</span>
+                <h4>{tr('marketplace.categories.financialServices.title', 'Financial Services')}</h4>
+                <p>{tr('marketplace.categories.financialServices.body', 'Banking, factoring, and financial planning services for drivers.')}</p>
+                <span className="mp-coming-soon-tag">{tr('marketplace.comingSoon', 'Coming Soon')}</span>
                 </div>
-                <button className="btn small-cd" disabled style={{marginTop: '20px', width: '100%', cursor: 'not-allowed'}}>Explore</button>
+                <button className="btn small-cd" disabled style={{marginTop: '20px', width: '100%', cursor: 'not-allowed'}}>{tr('marketplace.explore', 'Explore')}</button>
               </div>
             </div>
           </div>
@@ -1035,7 +1091,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
               {selectedServiceType === 'legal' && <i className="fa-solid fa-scale-balanced" style={{ marginRight: '10px', color: '#ef4444' }}></i>}
               {selectedServiceType === 'training' && <i className="fa-solid fa-graduation-cap" style={{ marginRight: '10px', color: '#10b981' }}></i>}
               {selectedServiceType === 'eld' && <i className="fa-solid fa-mobile-screen" style={{ marginRight: '10px', color: '#6366f1' }}></i>}
-              {selectedServiceType?.replace(/_/g, ' ')} Services
+              {trServiceType(selectedServiceType)} {tr('marketplace.servicesSuffix', 'Services')}
             </h2>
             <button className="modal-close" onClick={() => setShowServiceModal(false)}>
               <i className="fa-solid fa-times"></i>
@@ -1045,7 +1101,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
             {locationLoading && (
               <div style={{ padding: '40px', textAlign: 'center' }}>
                 <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: '2rem', color: '#3b82f6' }}></i>
-                <p style={{ marginTop: '10px', color: mpTheme.muted }}>Loading services...</p>
+                <p style={{ marginTop: '10px', color: mpTheme.muted }}>{tr('marketplace.loadingServices', 'Loading services...')}</p>
               </div>
             )}
 
@@ -1053,10 +1109,10 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
               <div style={{ padding: '40px', textAlign: 'center' }}>
                 <i className="fa-solid fa-circle-exclamation" style={{ fontSize: '2rem', color: '#f59e0b' }}></i>
                 <p style={{ marginTop: '15px', color: mpTheme.muted, fontWeight: '600' }}>
-                  No {selectedServiceType} services found nearby
+                  {tr('marketplace.noServicesOfTypePrefix', 'No ') + trServiceType(selectedServiceType) + tr('marketplace.noServicesOfTypeSuffix', ' services found nearby')}
                 </p>
                 <p style={{ color: '#94a3b8', fontSize: '0.875rem', marginTop: '8px' }}>
-                  Try expanding your search radius or check back later
+                  {tr('marketplace.tryExpandOrLater', 'Try expanding your search radius or check back later')}
                 </p>
               </div>
             )}
@@ -1076,7 +1132,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                       {service.verified && (
                         <span className="int-status-badge active" style={{ fontSize: '0.75rem' }}>
                           <i className="fa-solid fa-check-circle" style={{ marginRight: '4px' }}></i>
-                          Verified
+                          {tr('marketplace.verified', 'Verified')}
                         </span>
                       )}
                     </div>
@@ -1085,7 +1141,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                       {service.distance && (
                         <span style={{ color: '#3b82f6', fontWeight: '600', fontSize: '0.875rem' }}>
                           <i className="fa-solid fa-location-arrow" style={{ marginRight: '4px' }}></i>
-                          {service.distance.toFixed(1)} miles away
+                          {service.distance.toFixed(1)} {tr('marketplace.units.milesAway', 'miles away')}
                         </span>
                       )}
                       <span style={{ color: mpTheme.muted, fontSize: '0.875rem' }}>
@@ -1113,7 +1169,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                           style={{ textDecoration: 'none' }}
                         >
                           <i className="fa-solid fa-phone" style={{ marginRight: '6px' }}></i>
-                          Call
+                          {tr('marketplace.call', 'Call')}
                         </a>
                       )}
                       {service.website && (
@@ -1125,7 +1181,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                           style={{ textDecoration: 'none' }}
                         >
                           <i className="fa-solid fa-globe" style={{ marginRight: '6px' }}></i>
-                          Website
+                          {tr('marketplace.website', 'Website')}
                         </a>
                       )}
                       <button
@@ -1133,7 +1189,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                         onClick={() => handleToggleFavorite(service)}
                       >
                         <i className={`fa-${favoriteServices.includes(service.id) ? 'solid' : 'regular'} fa-heart`} style={{ marginRight: '6px' }}></i>
-                        {favoriteServices.includes(service.id) ? 'Saved' : 'Save'}
+                        {favoriteServices.includes(service.id) ? tr('marketplace.saved', 'Saved') : tr('marketplace.save', 'Save')}
                       </button>
                     </div>
                   </div>
@@ -1159,9 +1215,9 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
     <div className="dd-marketplace">
       <header className="fp-header">
         <div className="fp-header-titles">
-          <h2>Marketplace</h2>
-          <p className="fp-subtitle">Your smart CDL staffing hub - connect with carriers and service providers</p>
-          <button onClick={() => setIsPostHire(true)} className="btn small green-btn">Post Hire</button>
+          <h2>{tr('marketplace.title', 'Marketplace')}</h2>
+          <p className="fp-subtitle">{tr('marketplace.subtitle', 'Your smart CDL staffing hub - connect with carriers and service providers')}</p>
+          <button onClick={() => setIsPostHire(true)} className="btn small green-btn">{tr('marketplace.postHire', 'Post Hire')}</button>
         </div>
       </header>
       
@@ -1173,8 +1229,8 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
               <>
                 <i className="fa-solid fa-eye mp-alert-icon" style={{ color: '#10b981' }}></i>
                 <div className="mp-alert-text">
-                  <span className="mp-alert-title" style={{ color: '#10b981' }}>You are currently visible to carriers</span>
-                  <p className="mp-alert-subtitle">You're in the hiring pool and can receive job offers</p>
+                  <span className="mp-alert-title" style={{ color: '#10b981' }}>{tr('marketplace.visibility.visibleTitle', 'You are currently visible to carriers')}</span>
+                  <p className="mp-alert-subtitle">{tr('marketplace.visibility.visibleSubtitle', "You're in the hiring pool and can receive job offers")}</p>
                 </div>
                 <button 
                   className="btn small-cd"
@@ -1182,22 +1238,22 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   style={{ background: '#6c757d' }}
                 >
                   <i className="fa-solid fa-eye-slash" style={{ marginRight: '6px' }}></i>
-                  Hide from Carriers
+                  {tr('marketplace.visibility.hide', 'Hide from Carriers')}
                 </button>
               </>
             ) : (
               <>
                 <i className="fa-solid fa-eye-slash mp-alert-icon"></i>
                 <div className="mp-alert-text">
-                  <span className="mp-alert-title">You are currently hidden from carriers</span>
-                  <p className="mp-alert-subtitle">Toggle 'Available' to enter the hiring pool</p>
+                  <span className="mp-alert-title">{tr('marketplace.visibility.hiddenTitle', 'You are currently hidden from carriers')}</span>
+                  <p className="mp-alert-subtitle">{tr('marketplace.visibility.hiddenSubtitle', "Toggle 'Available' to enter the hiring pool")}</p>
                 </div>
                 <button 
                   className="btn small-cd"
                   onClick={onAvailabilityToggle}
                 >
                   <i className="fa-solid fa-eye" style={{ marginRight: '6px' }}></i>
-                  Become Available
+                  {tr('marketplace.driverAvailability.becomeAvailable', 'Become Available')}
                 </button>
               </>
             )}
@@ -1207,14 +1263,18 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
         {/* GPS-Based Services */}
         <div className="card mp-gps-services-card">
           <div className="card-header">
-            <h3>GPS-Based Services</h3>
+            <h3>{tr('marketplace.gpsServices.title', 'GPS-Based Services')}</h3>
             {location && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem' }}>
                 <i className={`fa-solid ${method === 'gps' ? 'fa-satellite-dish' : 'fa-wifi'}`} 
                    style={{ color: method === 'gps' ? '#10b981' : '#f59e0b' }}></i>
                 <span style={{ color: mpTheme.muted }}>
-                  {method === 'gps' ? 'GPS Location' : 'WiFi Location'} 
-                  {accuracy && accuracy < 100 ? ' (High Accuracy)' : accuracy && accuracy < 500 ? ` (±${Math.round(accuracy)}m)` : ' (Low Accuracy)'}
+                  {(method === 'gps' ? tr('marketplace.location.gps', 'GPS Location') : tr('marketplace.location.wifi', 'WiFi Location'))}
+                  {accuracy && accuracy < 100
+                    ? tr('marketplace.location.highAccuracy', ' (High Accuracy)')
+                    : accuracy && accuracy < 500
+                    ? ` (±${Math.round(accuracy)}m)`
+                    : tr('marketplace.location.lowAccuracy', ' (Low Accuracy)')}
                 </span>
                 <button 
                   onClick={refreshLocation}
@@ -1230,7 +1290,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
           {locationLoading && (
             <div style={{ padding: '20px', textAlign: 'center' }}>
               <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: '1.5rem', color: '#3b82f6' }}></i>
-              <p style={{ marginTop: '10px', color: mpTheme.muted }}>Getting your location...</p>
+              <p style={{ marginTop: '10px', color: mpTheme.muted }}>{tr('marketplace.gettingLocation', 'Getting your location...')}</p>
             </div>
           )}
           
@@ -1245,7 +1305,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
               <i className="fa-solid fa-exclamation-triangle" style={{ color: '#ef4444', fontSize: '1.5rem' }}></i>
               <p style={{ marginTop: '10px', color: isDarkMode ? '#ef4444' : '#dc2626' }}>{locationError}</p>
               <button onClick={refreshLocation} className="btn small-cd" style={{ marginTop: '10px' }}>
-                Try Again
+                {tr('marketplace.tryAgain', 'Try Again')}
               </button>
             </div>
           )}
@@ -1255,7 +1315,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
               <div className="mp-search-container">
                 <div className="mp-search-input">
                   <i className="fa-solid fa-search"></i>
-                  <input type="text" placeholder="Search services near you..." />
+                  <input type="text" placeholder={tr('marketplace.search.placeholderNearYou', 'Search services near you...')} />
                 </div>
               </div>
 
@@ -1264,37 +1324,37 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   <div className="mp-service-icon fuel">
                     <i className="fa-solid fa-gas-pump"></i>
                   </div>
-                  <span>Fuel Stations</span>
+                  <span>{tr('marketplace.icons.fuelStations', 'Fuel Stations')}</span>
                 </div>
                 <div className="mp-service-icon-item" onClick={() => handleServiceTypeClick('parking')} style={{ cursor: 'pointer' }}>
                   <div className="mp-service-icon parking">
                     <i className="fa-solid fa-parking"></i>
                   </div>
-                  <span>Parking</span>
+                  <span>{trServiceType('parking')}</span>
                 </div>
                 <div className="mp-service-icon-item" onClick={() => handleServiceTypeClick('repair')} style={{ cursor: 'pointer' }}>
                   <div className="mp-service-icon repair">
                     <i className="fa-solid fa-wrench"></i>
                   </div>
-                  <span>Repair Shops</span>
+                  <span>{tr('marketplace.icons.repairShops', 'Repair Shops')}</span>
                 </div>
                 <div className="mp-service-icon-item" onClick={() => handleServiceTypeClick('legal')} style={{ cursor: 'pointer' }}>
                   <div className="mp-service-icon cdl">
                     <i className="fa-solid fa-scale-balanced"></i>
                   </div>
-                  <span>CDL Protection</span>
+                  <span>{tr('marketplace.icons.cdlProtection', 'CDL Protection')}</span>
                 </div>
                 <div className="mp-service-icon-item" onClick={() => handleServiceTypeClick('training')} style={{ cursor: 'pointer' }}>
                   <div className="mp-service-icon training">
                     <i className="fa-solid fa-graduation-cap"></i>
                   </div>
-                  <span>Training</span>
+                  <span>{trServiceType('training')}</span>
                 </div>
                 <div className="mp-service-icon-item" onClick={() => handleServiceTypeClick('eld')} style={{ cursor: 'pointer' }}>
                   <div className="mp-service-icon eld">
                     <i className="fa-solid fa-mobile-screen"></i>
                   </div>
-                  <span>ELD/Tech</span>
+                  <span>{trServiceType('eld')}</span>
                 </div>
               </div>
             </>
@@ -1304,7 +1364,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
         {/* AI Highlights */}
         <div className="card mp-highlights-card">
           <div className="card-header">
-            <h3>AI Highlights</h3>
+            <h3>{tr('marketplace.aiHighlights.title', 'AI Highlights')}</h3>
           </div>
           
           {location && nearbyServices.length > 0 && (
@@ -1314,11 +1374,11 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   <i className="fa-solid fa-gas-pump"></i>
                 </div>
                 <div className="mp-highlight-content">
-                  <h4>Fuel Discount Alert</h4>
+                  <h4>{tr('marketplace.aiHighlights.fuelDiscountTitle', 'Fuel Discount Alert')}</h4>
                   <p>
-                    {nearbyServices.find(s => s.type === 'fuel')?.name || 'Nearby Fuel Station'} - 
-                    {nearbyServices.find(s => s.type === 'fuel')?.offers || '10¢ off per gallon'}, 
-                    {nearbyServices.find(s => s.type === 'fuel')?.distance?.toFixed(1) || '2.3'} miles ahead
+                    {(nearbyServices.find(s => s.type === 'fuel')?.name || tr('marketplace.aiHighlights.nearbyFuelStation', 'Nearby Fuel Station'))} - 
+                    {(nearbyServices.find(s => s.type === 'fuel')?.offers || tr('marketplace.aiHighlights.defaultFuelOffer', '10¢ off per gallon'))}, 
+                    {(nearbyServices.find(s => s.type === 'fuel')?.distance?.toFixed(1) || '2.3')} {tr('marketplace.units.milesAhead', 'miles ahead')}
                   </p>
                 </div>
               </div>
@@ -1329,11 +1389,11 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                     <i className="fa-solid fa-parking"></i>
                   </div>
                   <div className="mp-highlight-content">
-                    <h4>Parking Available</h4>
+                    <h4>{tr('marketplace.aiHighlights.parkingAvailableTitle', 'Parking Available')}</h4>
                     <p>
                       {nearbyServices.find(s => s.type === 'parking').name} - 
                       {nearbyServices.find(s => s.type === 'parking').offers}, 
-                      {nearbyServices.find(s => s.type === 'parking').distance?.toFixed(1)} miles away
+                      {nearbyServices.find(s => s.type === 'parking').distance?.toFixed(1)} {tr('marketplace.units.milesAway', 'miles away')}
                     </p>
                   </div>
                 </div>
@@ -1348,8 +1408,8 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   <i className="fa-solid fa-gas-pump"></i>
                 </div>
                 <div className="mp-highlight-content">
-                  <h4>Fuel Discount Alert</h4>
-                  <p>Enable location to see nearby fuel discounts</p>
+                  <h4>{tr('marketplace.aiHighlights.fuelDiscountTitle', 'Fuel Discount Alert')}</h4>
+                  <p>{tr('marketplace.aiHighlights.enableLocationForFuel', 'Enable location to see nearby fuel discounts')}</p>
                 </div>
               </div>
             </>
@@ -1360,8 +1420,8 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
               <i className="fa-solid fa-exclamation-triangle"></i>
             </div>
             <div className="mp-highlight-content">
-              <h4>CDL Renewal Reminder</h4>
-              <p>Your CDL expires in 45 days - renew to stay eligible</p>
+              <h4>{tr('marketplace.aiHighlights.cdlRenewalTitle', 'CDL Renewal Reminder')}</h4>
+              <p>{tr('marketplace.aiHighlights.cdlRenewalBody', 'Your CDL expires in 45 days - renew to stay eligible')}</p>
             </div>
           </div>
         </div>
@@ -1369,18 +1429,18 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
         {/* Nearby Service Providers */}
         <div className="card mp-nearby-providers-card">
           <div className="card-header">
-            <h3>Nearby Service Providers</h3>
+            <h3>{tr('marketplace.nearbyProviders.title', 'Nearby Service Providers')}</h3>
             <div className="mp-filter-controls">
               <button className="btn small mp-filter-btn" onClick={() => setShowFilterModal(true)}>
                 <i className="fa-solid fa-filter"></i>
-                Filters
+                {tr('marketplace.filters', 'Filters')}
               </button>
               <button 
                 className={`btn small mp-favorites-btn ${showFavoritesOnly ? 'active' : ''}`}
                 onClick={handleFavoritesClick}
               >
                 <i className={`fa-${showFavoritesOnly ? 'solid' : 'regular'} fa-heart`}></i>
-                Favorites {favoriteServices.length > 0 && `(${favoriteServices.length})`}
+                {tr('marketplace.favorites', 'Favorites')} {favoriteServices.length > 0 && `(${favoriteServices.length})`}
               </button>
             </div>
           </div>
@@ -1388,7 +1448,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
           {locationLoading && (
             <div style={{ padding: '40px', textAlign: 'center' }}>
               <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: '1.5rem', color: '#3b82f6' }}></i>
-              <p style={{ marginTop: '10px', color: mpTheme.muted }}>Loading nearby services...</p>
+              <p style={{ marginTop: '10px', color: mpTheme.muted }}>{tr('marketplace.loadingNearbyServices', 'Loading nearby services...')}</p>
             </div>
           )}
 
@@ -1402,13 +1462,13 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
             }}>
               <i className="fa-solid fa-location-crosshairs" style={{ color: '#ef4444', fontSize: '2rem' }}></i>
               <p style={{ marginTop: '15px', color: isDarkMode ? '#ef4444' : '#dc2626', fontWeight: '600' }}>
-                Location Required
+                {tr('marketplace.locationRequired.title', 'Location Required')}
               </p>
               <p style={{ color: mpTheme.muted, marginTop: '8px' }}>
-                Enable location services to see nearby providers
+                {tr('marketplace.locationRequired.body', 'Enable location services to see nearby providers')}
               </p>
               <button onClick={refreshLocation} className="btn small-cd" style={{ marginTop: '15px' }}>
-                Enable Location
+                {tr('marketplace.locationRequired.enable', 'Enable Location')}
               </button>
             </div>
           )}
@@ -1433,12 +1493,21 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                     {showFavoritesOnly ? (
                       <span style={{ color: isDarkMode ? '#ef4444' : '#991b1b', fontWeight: '600' }}>
                         <i className="fa-solid fa-heart" style={{ marginRight: '6px' }}></i>
-                        Showing {getFilteredByCategory().length} favorite service{getFilteredByCategory().length !== 1 ? 's' : ''}
+                        {tr('marketplace.banner.showingFavoritesPrefix', 'Showing ') +
+                          getFilteredByCategory().length +
+                          ' ' +
+                          (getFilteredByCategory().length === 1
+                            ? tr('marketplace.banner.favoriteServiceSingular', 'favorite service')
+                            : tr('marketplace.banner.favoriteServicePlural', 'favorite services'))}
                       </span>
                     ) : (
                       <span style={{ color: isDarkMode ? '#3b82f6' : '#1e40af', fontWeight: '600' }}>
                         <i className="fa-solid fa-filter" style={{ marginRight: '6px' }}></i>
-                        Filters applied: {Object.entries(selectedFilters).filter(([k, v]) => v).map(([k]) => k.charAt(0).toUpperCase() + k.slice(1)).join(', ')}
+                        {tr('marketplace.banner.filtersAppliedPrefix', 'Filters applied: ') +
+                          Object.entries(selectedFilters)
+                            .filter(([k, v]) => v)
+                            .map(([k]) => trServiceType(k))
+                            .join(', ')}
                       </span>
                     )}
                   </div>
@@ -1463,7 +1532,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                       fontSize: '0.75rem'
                     }}
                   >
-                    Clear
+                    {tr('marketplace.clear', 'Clear')}
                   </button>
                 </div>
               )}
@@ -1497,7 +1566,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                     <div className="mp-provider-info">
                       <h4>{service.name}</h4>
                       <p>
-                        {service.distance ? `${service.distance.toFixed(1)} miles` : 'Nearby'} • {service.openStatus}
+                        {(service.distance ? `${service.distance.toFixed(1)} ${tr('marketplace.units.miles', 'miles')}` : tr('marketplace.nearby', 'Nearby'))} • {service.openStatus}
                       </p>
                       <p className="mp-provider-description">{service.description}</p>
                       {service.offers && (
@@ -1513,7 +1582,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                     <div className="mp-provider-actions">
                       {service.verified && (
                         <span className="int-status-badge active">
-                          Verified
+                          {tr('marketplace.verified', 'Verified')}
                         </span>
                       )}
                       <button 
@@ -1528,7 +1597,9 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                           color: favoriteServices.includes(service.id) ? '#ef4444' : '#cbd5e1',
                           transition: 'all 0.2s'
                         }}
-                        title={favoriteServices.includes(service.id) ? 'Remove from favorites' : 'Add to favorites'}
+                        title={favoriteServices.includes(service.id)
+                          ? tr('marketplace.favorites.remove', 'Remove from favorites')
+                          : tr('marketplace.favorites.add', 'Add to favorites')}
                       >
                         <i className={`fa-${favoriteServices.includes(service.id) ? 'solid' : 'regular'} fa-heart`}></i>
                       </button>
@@ -1538,7 +1609,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                         style={{ marginTop: '8px', width: '100%' }}
                       >
                         <i className="fa-solid fa-phone" style={{ marginRight: '6px' }}></i>
-                        Contact
+                        {tr('marketplace.contact', 'Contact')}
                       </button>
                       {service.latitude && service.longitude && (
                         <button 
@@ -1548,10 +1619,10 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                             window.open(mapsUrl, '_blank');
                           }}
                           style={{ marginTop: '8px', width: '100%' }}
-                          title="Open in Google Maps"
+                            title={tr('marketplace.openInGoogleMaps', 'Open in Google Maps')}
                         >
                           <i className="fa-solid fa-map-location-dot" style={{ marginRight: '6px' }}></i>
-                          Locate
+                          {tr('marketplace.locate', 'Locate')}
                         </button>
                       )}
                     </div>
@@ -1566,10 +1637,10 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
             <div style={{ padding: '40px', textAlign: 'center' }}>
               <i className="fa-regular fa-heart" style={{ fontSize: '2rem', color: '#94a3b8' }}></i>
               <p style={{ marginTop: '15px', color: mpTheme.muted, fontWeight: '600' }}>
-                No favorites yet
+                {tr('marketplace.noFavoritesYet', 'No favorites yet')}
               </p>
               <p style={{ color: '#94a3b8', fontSize: '0.875rem', marginTop: '8px' }}>
-                Click the heart icon on any service to add it to your favorites
+                {tr('marketplace.noFavoritesBody', 'Click the heart icon on any service to add it to your favorites')}
               </p>
             </div>
           )}
@@ -1578,10 +1649,10 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
             <div style={{ padding: '40px', textAlign: 'center' }}>
               <i className="fa-solid fa-map-location-dot" style={{ fontSize: '2rem', color: '#94a3b8' }}></i>
               <p style={{ marginTop: '15px', color: mpTheme.muted }}>
-                No services found in your area
+                {tr('marketplace.noServicesInArea', 'No services found in your area')}
               </p>
               <p style={{ color: '#94a3b8', fontSize: '0.875rem', marginTop: '8px' }}>
-                Try expanding your search radius
+                {tr('marketplace.tryExpandRadius', 'Try expanding your search radius')}
               </p>
               
               {/* Debug Information */}
@@ -1594,14 +1665,14 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                 fontSize: '0.875rem',
                 fontFamily: 'monospace'
               }}>
-                <strong style={{ color: isDarkMode ? '#f59e0b' : '#92400e' }}>🐛 Debug Info:</strong>
+                <strong style={{ color: isDarkMode ? '#f59e0b' : '#92400e' }}>{tr('marketplace.debug.title', '🐛 Debug Info:')}</strong>
                 <div style={{ marginTop: '8px', color: isDarkMode ? mpTheme.text : '#78350f' }}>
-                  <div>Location Loading: {locationLoading ? 'Yes' : 'No'}</div>
-                  <div>Location Error: {locationError || 'None'}</div>
-                  <div>Location: {location ? `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}` : 'Not available'}</div>
-                  <div>Method: {method || 'Not detected'}</div>
-                  <div>Services Count: {nearbyServices.length}</div>
-                  <div>Current User: {currentUser ? 'Logged in' : 'Not logged in'}</div>
+                  <div>{tr('marketplace.debug.locationLoading', 'Location Loading: ')}{locationLoading ? tr('marketplace.debug.yes', 'Yes') : tr('marketplace.debug.no', 'No')}</div>
+                  <div>{tr('marketplace.debug.locationError', 'Location Error: ')}{locationError || tr('marketplace.debug.none', 'None')}</div>
+                  <div>{tr('marketplace.debug.location', 'Location: ')}{location ? `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}` : tr('marketplace.debug.notAvailable', 'Not available')}</div>
+                  <div>{tr('marketplace.debug.method', 'Method: ')}{method || tr('marketplace.debug.notDetected', 'Not detected')}</div>
+                  <div>{tr('marketplace.debug.servicesCount', 'Services Count: ')}{nearbyServices.length}</div>
+                  <div>{tr('marketplace.debug.currentUser', 'Current User: ')}{currentUser ? tr('marketplace.debug.loggedIn', 'Logged in') : tr('marketplace.debug.notLoggedIn', 'Not logged in')}</div>
                 </div>
                 <button 
                   onClick={() => {
@@ -1618,7 +1689,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   className="btn small-cd"
                   style={{ marginTop: '10px', fontSize: '0.75rem' }}
                 >
-                  Log Full State to Console
+                  {tr('marketplace.debug.logFullState', 'Log Full State to Console')}
                 </button>
               </div>
             </div>
@@ -1635,7 +1706,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
             <div className="modal-header">
               <h2>
                 <i className="fa-solid fa-filter" style={{ marginRight: '10px', color: '#3b82f6' }}></i>
-                Service Filters
+                {tr('marketplace.filterModal.title', 'Service Filters')}
               </h2>
               <button className="modal-close" onClick={() => setShowFilterModal(false)}>
                 <i className="fa-solid fa-times"></i>
@@ -1643,7 +1714,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
             </div>
             <div className="modal-body">
               <p style={{ color: mpTheme.muted, fontSize: '0.875rem', marginBottom: '16px' }}>
-                Select service categories to display
+                {tr('marketplace.filterModal.subtitle', 'Select service categories to display')}
               </p>
 
               <div className="filter-options-horizontal">
@@ -1654,7 +1725,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   <div className="filter-icon fuel">
                     <i className="fa-solid fa-gas-pump"></i>
                   </div>
-                  <span className="filter-label-compact">Fuel</span>
+                  <span className="filter-label-compact">{trServiceType('fuel')}</span>
                   <span className="filter-count-compact">
                     {nearbyServices.filter(s => s.type === 'fuel').length}
                   </span>
@@ -1667,7 +1738,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   <div className="filter-icon parking">
                     <i className="fa-solid fa-parking"></i>
                   </div>
-                  <span className="filter-label-compact">Parking</span>
+                  <span className="filter-label-compact">{trServiceType('parking')}</span>
                   <span className="filter-count-compact">
                     {nearbyServices.filter(s => s.type === 'parking').length}
                   </span>
@@ -1680,7 +1751,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   <div className="filter-icon repair">
                     <i className="fa-solid fa-wrench"></i>
                   </div>
-                  <span className="filter-label-compact">Repair</span>
+                  <span className="filter-label-compact">{trServiceType('repair')}</span>
                   <span className="filter-count-compact">
                     {nearbyServices.filter(s => s.type === 'repair').length}
                   </span>
@@ -1693,7 +1764,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   <div className="filter-icon cdl">
                     <i className="fa-solid fa-scale-balanced"></i>
                   </div>
-                  <span className="filter-label-compact">Legal</span>
+                  <span className="filter-label-compact">{trServiceType('legal')}</span>
                   <span className="filter-count-compact">
                     {nearbyServices.filter(s => s.type === 'legal').length}
                   </span>
@@ -1706,7 +1777,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   <div className="filter-icon training">
                     <i className="fa-solid fa-graduation-cap"></i>
                   </div>
-                  <span className="filter-label-compact">Training</span>
+                  <span className="filter-label-compact">{trServiceType('training')}</span>
                   <span className="filter-count-compact">
                     {nearbyServices.filter(s => s.type === 'training').length}
                   </span>
@@ -1719,7 +1790,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   <div className="filter-icon eld">
                     <i className="fa-solid fa-mobile-screen"></i>
                   </div>
-                  <span className="filter-label-compact">ELD/Tech</span>
+                  <span className="filter-label-compact">{trServiceType('eld')}</span>
                   <span className="filter-count-compact">
                     {nearbyServices.filter(s => s.type === 'eld').length}
                   </span>
@@ -1732,14 +1803,16 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   onClick={handleSelectAllFilters}
                   style={{ flex: 1 }}
                 >
-                  {Object.values(selectedFilters).every(v => v) ? 'Deselect All' : 'Select All'}
+                  {Object.values(selectedFilters).every(v => v)
+                    ? tr('marketplace.filterModal.deselectAll', 'Deselect All')
+                    : tr('marketplace.filterModal.selectAll', 'Select All')}
                 </button>
                 <button 
                   className="btn small-cd" 
                   onClick={() => setShowFilterModal(false)}
                   style={{ flex: 1 }}
                 >
-                  Apply Filters
+                  {tr('marketplace.filterModal.apply', 'Apply Filters')}
                 </button>
               </div>
             </div>

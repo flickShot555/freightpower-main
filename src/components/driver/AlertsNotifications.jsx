@@ -1,4 +1,6 @@
 import React from 'react';
+import { useUserSettings } from '../../contexts/UserSettingsContext';
+import { t } from '../../i18n/translate';
 
 export default function AlertsNotifications({
   items,
@@ -8,6 +10,10 @@ export default function AlertsNotifications({
   onAction,
   onMarkRead,
 }) {
+  const { settings } = useUserSettings();
+  const language = settings?.language || 'English';
+  const tr = (key, fallback) => t(language, key, fallback);
+
   const list = Array.isArray(items) ? items : [];
   const unopened = list.filter((n) => !n?.is_read);
   const opened = list.filter((n) => Boolean(n?.is_read));
@@ -16,8 +22,8 @@ export default function AlertsNotifications({
     <div className="dd-alerts-view">
       <header className="fp-header">
         <div className="fp-header-titles">
-          <h2>Alerts &amp; Notifications</h2>
-          <p className="fp-subtitle">Updates, reminders, and important alerts.</p>
+          <h2>{tr('alerts.title', 'Alerts & Notifications')}</h2>
+          <p className="fp-subtitle">{tr('alerts.subtitle', 'Updates, reminders, and important alerts.')}</p>
         </div>
         <div className="fp-header-controls">
           <button
@@ -26,7 +32,7 @@ export default function AlertsNotifications({
             onClick={onRefresh}
             disabled={Boolean(loading)}
           >
-            {loading ? 'Loading…' : 'Refresh'}
+            {loading ? tr('common.loading', 'Loading…') : tr('common.refresh', 'Refresh')}
           </button>
         </div>
       </header>
@@ -34,25 +40,25 @@ export default function AlertsNotifications({
       <section className="fp-grid dd-alerts-grid">
         <div className="card dd-notifications-card">
           <div className="card-header">
-            <h3>Notifications</h3>
+            <h3>{tr('alerts.notificationsHeading', 'Notifications')}</h3>
           </div>
 
           <div className="dd-notifications-body">
             {Boolean(loading) ? (
-              <div style={{ padding: 14, color: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 13 }}>Loading…</div>
+              <div style={{ padding: 14, color: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 13 }}>{tr('common.loading', 'Loading…')}</div>
             ) : list.length === 0 ? (
-              <div style={{ padding: 14, color: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 13 }}>No notifications yet.</div>
+              <div style={{ padding: 14, color: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 13 }}>{tr('alerts.noNotifications', 'No notifications yet.')}</div>
             ) : (
               <>
                 <div style={{ padding: '10px 12px', fontWeight: 900, fontSize: 12, color: isDarkMode ? '#cbd5e1' : '#334155' }}>
-                  Unopened ({unopened.length})
+                  {tr('alerts.unopened', 'Unopened')} ({unopened.length})
                 </div>
                 {unopened.length === 0 ? (
-                  <div style={{ padding: 14, color: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 13 }}>No unopened notifications.</div>
+                  <div style={{ padding: 14, color: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 13 }}>{tr('alerts.noUnopened', 'No unopened notifications.')}</div>
                 ) : (
                   unopened.map((n) => {
                     const id = String(n?.id || '').trim();
-                    const title = String(n?.title || 'Notification');
+                    const title = String(n?.title || tr('alerts.notification', 'Notification'));
                     const body = String(n?.message || n?.body || '');
                     const when = String(n?.relative_time || n?.formatted_time || n?.created_at_human || n?.created_at || '').trim();
 
@@ -95,7 +101,7 @@ export default function AlertsNotifications({
                               if (id) onMarkRead?.(id);
                             }}
                           >
-                            Mark read
+                            {tr('alerts.markRead', 'Mark read')}
                           </button>
                         </div>
                       </div>
@@ -104,14 +110,14 @@ export default function AlertsNotifications({
                 )}
 
                 <div style={{ padding: '12px 12px 10px', fontWeight: 900, fontSize: 12, color: isDarkMode ? '#cbd5e1' : '#334155' }}>
-                  Opened ({opened.length})
+                  {tr('alerts.opened', 'Opened')} ({opened.length})
                 </div>
                 {opened.length === 0 ? (
-                  <div style={{ padding: 14, color: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 13 }}>No opened notifications.</div>
+                  <div style={{ padding: 14, color: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 13 }}>{tr('alerts.noOpened', 'No opened notifications.')}</div>
                 ) : (
                   opened.map((n) => {
                     const id = String(n?.id || '').trim();
-                    const title = String(n?.title || 'Notification');
+                    const title = String(n?.title || tr('alerts.notification', 'Notification'));
                     const body = String(n?.message || n?.body || '');
                     const when = String(n?.relative_time || n?.formatted_time || n?.created_at_human || n?.created_at || '').trim();
 

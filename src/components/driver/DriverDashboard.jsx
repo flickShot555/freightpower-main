@@ -25,6 +25,8 @@ export default function DriverDashboard() {
   const { currentUser, logout } = useAuth();
   const { settings: userSettings } = useUserSettings();
   const language = userSettings?.language || 'English';
+  const locale = language === 'Spanish' ? 'es-ES' : language === 'Arabic' ? 'ar' : 'en-US';
+  const tr = (key, fallback) => t(language, key, fallback);
   const messagesPrefEnabled = Boolean(userSettings?.notification_preferences?.messages);
   const compliancePrefEnabled = Boolean(userSettings?.notification_preferences?.compliance_alerts);
   const navigate = useNavigate();
@@ -64,9 +66,25 @@ export default function DriverDashboard() {
   const shouldHideNotificationForPrefs = useCallback((n) => {
     const toText = (v) => String(v || '').toLowerCase();
     const type = toText(n?.notification_type || n?.type);
+    const category = toText(n?.category);
     const resource = toText(n?.resource_type);
     const title = toText(n?.title);
     const body = toText(n?.message || n?.body);
+
+    const isMessageTagged = (
+      category === 'messaging' ||
+      category === 'messages' ||
+      type === 'message'
+    );
+
+    const isComplianceTagged = (
+      category === 'compliance' ||
+      type === 'compliance_alert' ||
+      resource === 'compliance'
+    );
+
+    if (!messagesPrefEnabled && isMessageTagged) return true;
+    if (!compliancePrefEnabled && isComplianceTagged) return true;
 
     const isMessageLike = (
       type.includes('message') ||
@@ -123,6 +141,13 @@ export default function DriverDashboard() {
 
   const fetchMessageTray = useCallback(async () => {
     if (!currentUser) return;
+    if (!messagesPrefEnabled) {
+      setMsgTrayThreads([]);
+      setMsgTrayUnreadSummary({ total_unread: 0, threads: {}, channels: {} });
+      setMsgTrayLoading(false);
+      return;
+    }
+
     setMsgTrayLoading(true);
     try {
       const token = await currentUser.getIdToken();
@@ -155,7 +180,7 @@ export default function DriverDashboard() {
     } finally {
       setMsgTrayLoading(false);
     }
-  }, [currentUser]);
+  }, [currentUser, messagesPrefEnabled]);
 
   const persistNotificationRead = async (notificationId) => {
     if (!currentUser || !notificationId) return;
@@ -265,6 +290,8 @@ export default function DriverDashboard() {
       const id = String(notif?.id || '').trim();
       if (!id) return;
 
+      if (shouldHideNotificationForPrefs(notif)) return;
+
       setNotifItems((prev) => {
         const list = Array.isArray(prev) ? prev : [];
         if (list.some((x) => String(x?.id || '').trim() === id)) return list;
@@ -276,7 +303,21 @@ export default function DriverDashboard() {
     };
     window.addEventListener('fp-notification', onNotif);
     return () => window.removeEventListener('fp-notification', onNotif);
-  }, []);
+  }, [shouldHideNotificationForPrefs]);
+
+  // Re-filter notifications in real-time when preferences change.
+  useEffect(() => {
+    setNotifItems((prev) => {
+      const list = Array.isArray(prev) ? prev : [];
+      return list.filter((n) => !shouldHideNotificationForPrefs(n));
+    });
+  }, [shouldHideNotificationForPrefs]);
+
+  // Keep unread count consistent with the filtered list.
+  useEffect(() => {
+    const list = Array.isArray(notifItems) ? notifItems : [];
+    setNotifUnread(list.filter((n) => !n?.is_read).length);
+  }, [notifItems]);
 
   useEffect(() => {
     if (!toast) return;
@@ -440,6 +481,14 @@ export default function DriverDashboard() {
     };
   }, [fetchRequiredDocs]);
 
+  // Ensure compliance notifications are generated/cleaned up when enabling the toggle.
+  useEffect(() => {
+    if (!currentUser) return;
+    if (compliancePrefEnabled) {
+      fetchRequiredDocs();
+    }
+  }, [currentUser, compliancePrefEnabled, fetchRequiredDocs]);
+
   // Poll messaging unread summary (used for sidebar badge)
   useEffect(() => {
     let alive = true;
@@ -458,7 +507,8 @@ export default function DriverDashboard() {
         if (!res.ok) return;
         const data = await res.json();
         if (!alive) return;
-        setMessagingUnread(Number(data?.total_unread || 0));
+        const nextUnread = Number(data?.total_unread || 0);
+        setMessagingUnread((prev) => (prev === nextUnread ? prev : nextUnread));
 
         // Admin toasts are tied to the Preferences -> Notifications -> Messages toggle.
         // We treat "admin_channels" (broadcast by admins) as the source of admin messages.
@@ -503,6 +553,9 @@ export default function DriverDashboard() {
   useEffect(() => {
     if (!messagesPrefEnabled) {
       lastAdminMsgAtRef.current = 0;
+      setToast(null);
+      setMsgTrayThreads([]);
+      setMsgTrayUnreadSummary({ total_unread: 0, threads: {}, channels: {} });
     }
   }, [messagesPrefEnabled]);
 
@@ -513,26 +566,33 @@ export default function DriverDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
 
+  // When notification preferences change, refresh from backend immediately.
+  useEffect(() => {
+    if (!currentUser) return;
+    fetchNotifications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, messagesPrefEnabled, compliancePrefEnabled]);
+
   const timeLeftLabel = useMemo(() => {
     const load = activeLoad;
-    if (!load) return 'ETA TBD';
+    if (!load) return tr('driverDashboard.time.etaTbd', 'ETA TBD');
     const raw = load.delivery_date || load.delivery_datetime || load.delivery_time || load.pickup_date || load.pickup_datetime || null;
-    if (!raw) return 'ETA TBD';
+    if (!raw) return tr('driverDashboard.time.etaTbd', 'ETA TBD');
     const d = new Date(raw);
-    if (Number.isNaN(d.getTime())) return 'ETA TBD';
+    if (Number.isNaN(d.getTime())) return tr('driverDashboard.time.etaTbd', 'ETA TBD');
     const diffMs = d.getTime() - Date.now();
     const diffSec = Math.floor(diffMs / 1000);
-    if (diffSec <= 0) return 'Due';
+    if (diffSec <= 0) return tr('driverDashboard.time.due', 'Due');
     const mins = Math.floor(diffSec / 60);
     const hours = Math.floor(mins / 60);
     const remMins = mins % 60;
     if (hours >= 24) {
       const days = Math.floor(hours / 24);
       const remHours = hours % 24;
-      return `${days}d ${remHours}h left`;
+      return `${days}${tr('driverDashboard.time.dayAbbrev', 'd')} ${remHours}${tr('driverDashboard.time.hourAbbrev', 'h')} ${tr('driverDashboard.time.left', 'left')}`;
     }
-    if (hours <= 0) return `${Math.max(1, remMins)}m left`;
-    return `${hours}h ${remMins}m left`;
+    if (hours <= 0) return `${Math.max(1, remMins)}${tr('driverDashboard.time.minAbbrev', 'm')} ${tr('driverDashboard.time.left', 'left')}`;
+    return `${hours}${tr('driverDashboard.time.hourAbbrev', 'h')} ${remMins}${tr('driverDashboard.time.minAbbrev', 'm')} ${tr('driverDashboard.time.left', 'left')}`;
   }, [activeLoad]);
 
   const navGroups = [
@@ -584,6 +644,19 @@ export default function DriverDashboard() {
       setActiveNav(key);
       if (isSidebarOpen) setIsSidebarOpen(false);
     }
+  };
+
+  const openOnboardingCenter = () => {
+    try {
+      const qs = new URLSearchParams(location.search || '');
+      qs.set('nav', 'settings');
+      qs.set('tab', 'onboarding');
+      navigate({ pathname: location.pathname, search: `?${qs.toString()}` }, { replace: true });
+    } catch {
+      // ignore
+    }
+    setActiveNav('settings');
+    if (isSidebarOpen) setIsSidebarOpen(false);
   };
 
   const openAlerts = () => {
@@ -640,11 +713,11 @@ export default function DriverDashboard() {
         console.log(`✅ Availability updated to: ${newAvailability ? 'Available' : 'Unavailable'}`);
       } else {
         console.error('Failed to update availability');
-        alert('Failed to update availability. Please try again.');
+        alert(tr('driverDashboard.availability.updateFailed', 'Failed to update availability. Please try again.'));
       }
     } catch (error) {
       console.error('Error toggling availability:', error);
-      alert('Error updating availability. Please try again.');
+      alert(tr('driverDashboard.availability.updateError', 'Error updating availability. Please try again.'));
     } finally {
       setAvailabilityLoading(false);
     }
@@ -674,13 +747,13 @@ export default function DriverDashboard() {
       });
 
       if (response.ok) {
-        alert('Document uploaded successfully!');
+        alert(tr('driverDashboard.alert.documentUploadSuccess', 'Document uploaded successfully!'));
       } else {
-        alert('Failed to upload document. Please try again.');
+        alert(tr('driverDashboard.alert.documentUploadFailed', 'Failed to upload document. Please try again.'));
       }
     } catch (error) {
       console.error('Error uploading document:', error);
-      alert('Error uploading document. Please try again.');
+      alert(tr('driverDashboard.alert.documentUploadError', 'Error uploading document. Please try again.'));
     } finally {
       if (fileUploadRef.current) {
         fileUploadRef.current.value = '';
@@ -712,15 +785,15 @@ export default function DriverDashboard() {
 
       if (response.ok) {
         // Show success toast
-        alert('✅ Your support request has been sent to our admin staff at help@freightpower-ai.com');
+        alert(tr('driverDashboard.alert.supportRequestSent', 'Your support request has been sent to our admin staff at help@freightpower-ai.com'));
         setShowSupportModal(false);
         setSupportFormData({ name: '', email: '', subject: '', message: '' });
       } else {
-        alert('Failed to submit support request. Please try again.');
+        alert(tr('driverDashboard.alert.supportSubmitFailed', 'Failed to submit support request. Please try again.'));
       }
     } catch (error) {
       console.error('Error submitting support:', error);
-      alert('Error submitting support request. Please try again.');
+      alert(tr('driverDashboard.alert.supportSubmitError', 'Error submitting support request. Please try again.'));
     } finally {
       setSupportSubmitting(false);
     }
@@ -778,7 +851,7 @@ export default function DriverDashboard() {
     console.log('🔍 Available fields:', Object.keys(load));
     
     if (!loadId) {
-      alert('Load ID not found');
+      alert(tr('driverDashboard.alert.loadIdNotFound', 'Load ID not found'));
       console.error('Load object:', load);
       return;
     }
@@ -804,11 +877,11 @@ export default function DriverDashboard() {
       } else {
         const error = await response.json();
         console.error('❌ API Error:', error);
-        alert(error.detail || 'Failed to start trip');
+        alert(error.detail || tr('driverDashboard.alert.startTripFailed', 'Failed to start trip'));
       }
     } catch (error) {
       console.error('❌ Network Error:', error);
-      alert('Error starting trip. Please try again.');
+      alert(tr('driverDashboard.alert.startTripError', 'Error starting trip. Please try again.'));
     }
   };
 
@@ -818,7 +891,7 @@ export default function DriverDashboard() {
     
     const loadId = activeLoad.load_id || activeLoad.id || activeLoad._id;
     if (!loadId) {
-      alert('Load ID not found');
+      alert(tr('driverDashboard.alert.loadIdNotFound', 'Load ID not found'));
       return;
     }
     
@@ -862,7 +935,7 @@ export default function DriverDashboard() {
     
     const loadId = activeLoad.load_id || activeLoad.id || activeLoad._id;
     if (!loadId) {
-      alert('Load ID not found');
+      alert(tr('driverDashboard.alert.loadIdNotFound', 'Load ID not found'));
       return;
     }
     
@@ -880,14 +953,14 @@ export default function DriverDashboard() {
       if (response.ok) {
         setDeliveryCompleted(true);
         fetchLoads();
-        alert('Delivery marked as completed!');
+        alert(tr('driverDashboard.alert.deliveryMarkedCompleted', 'Delivery marked as completed!'));
       } else {
         const error = await response.json();
-        alert(error.detail || 'Failed to mark delivery');
+        alert(error.detail || tr('driverDashboard.alert.markDeliveryFailed', 'Failed to mark delivery'));
       }
     } catch (error) {
       console.error('Error marking delivery:', error);
-      alert('Error marking delivery. Please try again.');
+      alert(tr('driverDashboard.alert.markDeliveryError', 'Error marking delivery. Please try again.'));
     }
   };
 
@@ -991,11 +1064,11 @@ export default function DriverDashboard() {
         <header className="fp-header">
           <div className="fp-header-titles">
             <h2>
-              <span role="img" aria-label="wave">👋</span>
-              Welcome to FreightPower, {profileData.name || 'Driver'}!
+              <span role="img" aria-label={tr('driverDashboard.home.waveLabel', 'wave')}>👋</span>
+              {tr('driverDashboard.home.welcomePrefix', 'Welcome to FreightPower,')} {profileData.name || tr('driverDashboard.home.defaultName', 'Driver')}!
             </h2>
-            <p className="fp-subtitle">Complete your onboarding to start connecting with carriers and finding loads.</p>
-            <button onClick={() => setIsPostHire(true)} className="btn small green-btn">Post Hire</button>
+            <p className="fp-subtitle">{tr('driverDashboard.home.subtitle', 'Complete your onboarding to start connecting with carriers and finding loads.')}</p>
+            <button onClick={() => setIsPostHire(true)} className="btn small green-btn">{tr('driverDashboard.home.postHire', 'Post Hire')}</button>
           </div>
         </header>
 
@@ -1004,42 +1077,42 @@ export default function DriverDashboard() {
           <section style={{ marginBottom: '20px' }}>
             <div className="card" style={{ padding: '20px', background: '#f8fafc' }}>
               <div className="card-header">
-                <h3><i className="fa-solid fa-user" style={{ marginRight: '8px' }}></i>Driver Profile</h3>
+                <h3><i className="fa-solid fa-user" style={{ marginRight: '8px' }}></i>{tr('driverDashboard.home.driverProfile', 'Driver Profile')}</h3>
                 {onboardingScore !== null && (
                   <div className="pill" style={{ background:'#e0f2fe', color:'#075985', padding:'6px 10px', borderRadius:'999px', fontWeight:600 }}>
-                    Onboarding Score: {Math.round(onboardingScore)}%
+                    {tr('driverDashboard.home.onboardingScore', 'Onboarding Score:')} {Math.round(onboardingScore)}%
                   </div>
                 )}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginTop: '16px' }}>
                 {driverProfile.data.fullName && (
-                  <div><strong>Name:</strong> {driverProfile.data.fullName}</div>
+                  <div><strong>{tr('driverDashboard.labels.name', 'Name:')}</strong> {driverProfile.data.fullName}</div>
                 )}
                 {driverProfile.data.cdlNumber && (
-                  <div><strong>CDL Number:</strong> {driverProfile.data.cdlNumber}</div>
+                  <div><strong>{tr('driverDashboard.labels.cdlNumber', 'CDL Number:')}</strong> {driverProfile.data.cdlNumber}</div>
                 )}
                 {driverProfile.data.cdlClass && (
-                  <div><strong>CDL Class:</strong> {driverProfile.data.cdlClass}</div>
+                  <div><strong>{tr('driverDashboard.labels.cdlClass', 'CDL Class:')}</strong> {driverProfile.data.cdlClass}</div>
                 )}
                 {driverProfile.data.issuingState && (
-                  <div><strong>Issuing State:</strong> {driverProfile.data.issuingState}</div>
+                  <div><strong>{tr('driverDashboard.labels.issuingState', 'Issuing State:')}</strong> {driverProfile.data.issuingState}</div>
                 )}
                 {driverProfile.data.preferredRegions && (
-                  <div><strong>Preferred Regions:</strong> {driverProfile.data.preferredRegions}</div>
+                  <div><strong>{tr('driverDashboard.labels.preferredRegions', 'Preferred Regions:')}</strong> {driverProfile.data.preferredRegions}</div>
                 )}
                 {driverProfile.data.equipmentExperience && (
-                  <div><strong>Equipment Experience:</strong> {driverProfile.data.equipmentExperience}</div>
+                  <div><strong>{tr('driverDashboard.labels.equipmentExperience', 'Equipment Experience:')}</strong> {driverProfile.data.equipmentExperience}</div>
                 )}
               </div>
               {!driverProfile.onboarding_completed && (
                 <div style={{ marginTop: '16px', padding: '12px', background: '#fef3c7', borderRadius: '8px', color: '#92400e' }}>
                   <i className="fa-solid fa-exclamation-triangle" style={{ marginRight: '8px' }}></i>
-                  Onboarding not complete.{' '}
+                  {tr('driverDashboard.home.onboardingNotComplete', 'Onboarding not complete.')}{' '}
                   <span 
-                    onClick={() => handleNavClick('settings')}
+                    onClick={openOnboardingCenter}
                     style={{ color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer' }}
                   >
-                    Complete now
+                    {tr('driverDashboard.home.completeNow', 'Complete now')}
                   </span>
                 </div>
               )}
@@ -1053,7 +1126,7 @@ export default function DriverDashboard() {
           {/* Onboarding Progress Card */}
           <div className="card dd-onboarding-card span-3">
             <div className="dd-onboarding-progress">
-              <span className="dd-progress-title">Onboarding Progress</span>
+              <span className="dd-progress-title">{tr('driverDashboard.home.onboardingProgress', 'Onboarding Progress')}</span>
               <span className="dd-progress-percent">
                 {(() => {
                   const docsPct = Math.max(0, Math.min(100, Number(documentCompletion || 0)));
@@ -1062,7 +1135,7 @@ export default function DriverDashboard() {
                   const progress = Math.round((0.33 * docsPct) + (0.33 * consentPct) + (0.34 * availabilityPct));
                   return `${progress}%`;
                 })()}
-                {' '}Complete
+                {' '}{tr('common.complete', 'Complete')}
               </span>
             </div>
             <div className="dd-progress-bar">
@@ -1080,14 +1153,14 @@ export default function DriverDashboard() {
               {/* Document Upload Step */}
               <div className={`dd-step ${documentCompletion === 100 ? 'dd-step-complete' : documentCompletion > 0 ? 'dd-step-inprogress' : 'dd-step-pending'}`}>
                 <i className={`fa-solid ${documentCompletion === 100 ? 'fa-check-circle dd-step-complete-icon-fa' : documentCompletion > 0 ? 'fa-hourglass-half dd-step-inprogress-icon-fa' : 'fa-regular fa-circle dd-step-pending-icon-fa'}`}></i>
-                <div className="dd-step-title">Docs Uploaded</div>
+                <div className="dd-step-title">{tr('driverDashboard.home.docsUploaded', 'Docs Uploaded')}</div>
                 <div className="dd-step-status">
                   {documentCompletion === 100 ? (
-                    <span style={{ color: '#10b981' }}>Complete</span>
+                    <span style={{ color: '#10b981' }}>{tr('common.complete', 'Complete')}</span>
                   ) : documentCompletion > 0 ? (
-                    <span style={{ color: '#f59e0b' }}>In Progress</span>
+                    <span style={{ color: '#f59e0b' }}>{tr('common.inProgress', 'In Progress')}</span>
                   ) : (
-                    <span style={{ color: '#ef4444' }}>Incomplete</span>
+                    <span style={{ color: '#ef4444' }}>{tr('common.incomplete', 'Incomplete')}</span>
                   )}
                 </div>
               </div>
@@ -1095,12 +1168,12 @@ export default function DriverDashboard() {
               {/* Consent Step */}
               <div className={`dd-step ${hasConsent ? 'dd-step-complete' : 'dd-step-pending'}`}>
                 <i className={`fa-solid ${hasConsent ? 'fa-check-circle dd-step-complete-icon-fa' : 'fa-regular fa-circle dd-step-pending-icon-fa'}`}></i>
-                <div className="dd-step-title">Consent Given</div>
+                <div className="dd-step-title">{tr('driverDashboard.home.consentGiven', 'Consent Given')}</div>
                 <div className="dd-step-status">
                   {hasConsent ? (
-                    <span style={{ color: '#10b981' }}>Complete</span>
+                    <span style={{ color: '#10b981' }}>{tr('common.complete', 'Complete')}</span>
                   ) : (
-                    <span style={{ color: '#6c757d' }}>Pending</span>
+                    <span style={{ color: '#6c757d' }}>{tr('common.pending', 'Pending')}</span>
                   )}
                 </div>
               </div>
@@ -1108,12 +1181,12 @@ export default function DriverDashboard() {
               {/* Availability Step */}
               <div className={`dd-step ${isAvailable ? 'dd-step-complete' : 'dd-step-pending'}`}>
                 <i className={`fa-solid ${isAvailable ? 'fa-check-circle dd-step-complete-icon-fa' : 'fa-regular fa-circle dd-step-pending-icon-fa'}`}></i>
-                <div className="dd-step-title">Availability On</div>
+                <div className="dd-step-title">{tr('driverDashboard.home.availabilityOn', 'Availability On')}</div>
                 <div className="dd-step-status">
                   {isAvailable ? (
-                    <span style={{ color: '#10b981' }}>Active</span>
+                    <span style={{ color: '#10b981' }}>{tr('common.active', 'Active')}</span>
                   ) : (
-                    <span style={{ color: '#6c757d' }}>Pending</span>
+                    <span style={{ color: '#6c757d' }}>{tr('common.pending', 'Pending')}</span>
                   )}
                 </div>
               </div>
@@ -1122,33 +1195,33 @@ export default function DriverDashboard() {
               className="btn small-cd"
               onClick={() => handleNavClick('settings')}
             >
-              Go to Profile
+              {tr('driverDashboard.home.goToProfile', 'Go to Profile')}
             </button>
           </div>
 
           {/* Marketplace Activity */}
           <div className="card dd-marketplace-card">
             <div className="card-header">
-              <h3>Marketplace Activity</h3>
+              <h3>{tr('driverDashboard.home.marketplaceActivity', 'Marketplace Activity')}</h3>
               {marketplaceViewsCount > 0 && (
-                <span className="dd-marketplace-new dd-marketplace-green">{marketplaceViewsCount} New</span>
+                <span className="dd-marketplace-new dd-marketplace-green">{marketplaceViewsCount} {tr('driverDashboard.home.newLabel', 'New')}</span>
               )}
             </div>
             <div className="dd-marketplace-content dd-center dd-marketplace-padding">
               <div className="dd-marketplace-eye">
                 <i className="fa-solid fa-eye dd-marketplace-eye-icon"></i>
               </div>
-              <div className="dd-marketplace-viewed">{marketplaceViewsCount} Carriers Viewed You</div>
+              <div className="dd-marketplace-viewed">{marketplaceViewsCount} {tr('driverDashboard.home.carriersViewedYou', 'Carriers Viewed You')}</div>
               <div className="dd-marketplace-desc">
                 {marketplaceViewsCount > 0 
-                  ? `This week carriers have shown interest in your profile` 
-                  : `No views this week. Toggle availability to be discovered by carriers`}
+                  ? tr('driverDashboard.home.marketplaceDescHasViews', 'This week carriers have shown interest in your profile')
+                  : tr('driverDashboard.home.marketplaceDescNoViews', 'No views this week. Toggle availability to be discovered by carriers')}
               </div>
               <button 
                 className="btn small-cd"
                 onClick={() => handleNavClick('marketplace')}
               >
-                View Marketplace
+                {tr('driverDashboard.home.viewMarketplace', 'View Marketplace')}
               </button>
             </div>
           </div>
@@ -1157,19 +1230,19 @@ export default function DriverDashboard() {
           {Boolean(userSettings?.notification_preferences?.ai_tips) && (
             <div className="card dd-ai-suggestions-card">
               <div className="card-header">
-                <h3>AI Suggestions</h3>
+                <h3>{tr('driverDashboard.home.aiSuggestions', 'AI Suggestions')}</h3>
               </div>
               <div className="dd-ai-suggestion">
-                <div className="dd-suggestion-title">Medical Card Expiring</div>
-                <div className="dd-suggestion-text">Expires in 15 days</div>
+                <div className="dd-suggestion-title">{tr('driverDashboard.home.ai.medicalCardExpiring', 'Medical Card Expiring')}</div>
+                <div className="dd-suggestion-text">{tr('driverDashboard.home.ai.expiresInDays', 'Expires in 15 days')}</div>
               </div>
               <div className="dd-ai-suggestion">
-                <div className="dd-suggestion-title">Profile Tip</div>
-                <div className="dd-suggestion-text">Add experience details to attract carriers</div>
+                <div className="dd-suggestion-title">{tr('driverDashboard.home.ai.profileTipTitle', 'Profile Tip')}</div>
+                <div className="dd-suggestion-text">{tr('driverDashboard.home.ai.profileTipText', 'Add experience details to attract carriers')}</div>
               </div>
               <div className="dd-ai-suggestion">
-                <div className="dd-suggestion-title">Marketplace Ready</div>
-                <div className="dd-suggestion-text">Turn on availability to be discovered</div>
+                <div className="dd-suggestion-title">{tr('driverDashboard.home.ai.marketplaceReadyTitle', 'Marketplace Ready')}</div>
+                <div className="dd-suggestion-text">{tr('driverDashboard.home.ai.marketplaceReadyText', 'Turn on availability to be discovered')}</div>
               </div>
             </div>
           )}
@@ -1177,13 +1250,13 @@ export default function DriverDashboard() {
           {/* Service Providers */}
           <div className="card dd-service-providers-card">
             <div className="card-header">
-              <h3>Service Providers</h3>
+              <h3>{tr('driverDashboard.home.serviceProviders', 'Service Providers')}</h3>
               <span 
                 className="view-all" 
                 onClick={() => handleNavClick('marketplace')}
                 style={{ cursor: 'pointer' }}
               >
-                View All
+                {tr('common.viewAll', 'View All')}
               </span>
             </div>
             <div className="dd-service-grid">
@@ -1193,7 +1266,7 @@ export default function DriverDashboard() {
                 style={{ cursor: 'pointer' }}
               >
                 <i className="fa-solid fa-gavel" />
-                <div>Legal Help</div>
+                <div>{tr('driverDashboard.home.services.legalHelp', 'Legal Help')}</div>
               </div>
               <div 
                 className="dd-service-item dd-center"
@@ -1201,7 +1274,7 @@ export default function DriverDashboard() {
                 style={{ cursor: 'pointer' }}
               >
                 <i className="fa-solid fa-wrench" />
-                <div>Roadside</div>
+                <div>{tr('driverDashboard.home.services.roadside', 'Roadside')}</div>
               </div>
               <div 
                 className="dd-service-item dd-center"
@@ -1209,7 +1282,7 @@ export default function DriverDashboard() {
                 style={{ cursor: 'pointer' }}
               >
                 <i className="fa-solid fa-parking" />
-                <div>Parking</div>
+                <div>{tr('driverDashboard.home.services.parking', 'Parking')}</div>
               </div>
               <div 
                 className="dd-service-item dd-center"
@@ -1217,7 +1290,7 @@ export default function DriverDashboard() {
                 style={{ cursor: 'pointer' }}
               >
                 <i className="fa-solid fa-gas-pump" />
-                <div>Fuel</div>
+                <div>{tr('driverDashboard.home.services.fuel', 'Fuel')}</div>
               </div>
             </div>
           </div>
@@ -1225,7 +1298,7 @@ export default function DriverDashboard() {
           {/* Quick Actions */}
           <div className="card dd-quick-actions-card span-3">
             <div className="card-header">
-              <h3>Quick Actions</h3>
+              <h3>{t(language, 'dashboard.quickActions', 'Quick Actions')}</h3>
             </div>
             <div className="dd-quick-actions">
               <input 
@@ -1240,28 +1313,28 @@ export default function DriverDashboard() {
                 onClick={handleDocumentUpload}
               >
                 <i className="fa-solid fa-upload"></i>
-                Upload Document
+                {t(language, 'dashboard.uploadDocument', 'Upload Document')}
               </button>
               <button 
                 className="btn small-cd"
                 onClick={() => handleNavClick('marketplace')}
               >
                 <i className="fa-solid fa-store"></i>
-                Browse Marketplace
+                {t(language, 'dashboard.browseMarketplace', 'Browse Marketplace')}
               </button>
               <button 
                 className="btn small-cd"
                 onClick={() => handleNavClick('esign')}
               >
                 <i className="fa-solid fa-pen"></i>
-                Complete Consent
+                {t(language, 'dashboard.completeConsent', 'Complete Consent')}
               </button>
               <button 
                 className="btn small ghost-cd"
                 onClick={() => setShowSupportModal(true)}
               >
                 <i className="fa-solid fa-headset"></i>
-                Get Support
+                {t(language, 'dashboard.getSupport', 'Get Support')}
               </button>
             </div>
           </div>
@@ -1301,8 +1374,8 @@ export default function DriverDashboard() {
 
     useEffect(() => {
       // Keep message previews in sync for Home cards.
-      fetchMessageTray();
-    }, [fetchMessageTray]);
+      if (messagesPrefEnabled) fetchMessageTray();
+    }, [fetchMessageTray, messagesPrefEnabled]);
 
     const complianceCardItems = useMemo(() => {
       const role = homeCompliance?.role_data || {};
@@ -1337,10 +1410,10 @@ export default function DriverDashboard() {
       const bg = (mvr === 'ok' && clearinghouse === 'ok') ? 'ok' : ((mvr === 'bad' || clearinghouse === 'bad') ? 'bad' : 'pending');
 
       return [
-        { key: 'cdl', label: 'CDL License', icon: 'fa-solid fa-id-card', status: cdl },
-        { key: 'medical', label: 'Medical Card', icon: 'fa-solid fa-file-medical', status: medical },
-        { key: 'drug', label: 'Drug Test', icon: 'fa-solid fa-search', status: drug },
-        { key: 'background', label: 'Background Check', icon: 'fa-solid fa-clipboard-check', status: bg },
+        { key: 'cdl', label: tr('driverDashboard.compliance.cdlLicense', 'CDL License'), icon: 'fa-solid fa-id-card', status: cdl },
+        { key: 'medical', label: tr('driverDashboard.compliance.medicalCard', 'Medical Card'), icon: 'fa-solid fa-file-medical', status: medical },
+        { key: 'drug', label: tr('driverDashboard.compliance.drugTest', 'Drug Test'), icon: 'fa-solid fa-search', status: drug },
+        { key: 'background', label: tr('driverDashboard.compliance.backgroundCheck', 'Background Check'), icon: 'fa-solid fa-clipboard-check', status: bg },
       ];
     }, [homeCompliance]);
 
@@ -1383,7 +1456,7 @@ export default function DriverDashboard() {
           full: `${origin.city || ''}, ${origin.state || ''}`
         };
       }
-      return { city: 'Pickup', state: '', full: 'Pickup Location' };
+      return { city: tr('driverDashboard.postHire.pickup', 'Pickup'), state: '', full: tr('driverDashboard.postHire.pickupLocation', 'Pickup Location') };
     };
 
     const getDeliveryLocation = () => {
@@ -1405,7 +1478,7 @@ export default function DriverDashboard() {
           full: `${destination.city || ''}, ${destination.state || ''}`
         };
       }
-      return { city: 'Delivery', state: '', full: 'Delivery Location' };
+      return { city: tr('driverDashboard.postHire.delivery', 'Delivery'), state: '', full: tr('driverDashboard.postHire.deliveryLocation', 'Delivery Location') };
     };
 
     const getRate = () => {
@@ -1436,7 +1509,7 @@ export default function DriverDashboard() {
       <>
         <header className="fp-header">
           <div className="fp-header-titles">
-            <button onClick={() => setIsPostHire(false)} className="btn small">Back to Pre-Hire</button>
+            <button onClick={() => setIsPostHire(false)} className="btn small">{tr('driverDashboard.postHire.backToPreHire', 'Back to Pre-Hire')}</button>
           </div>
         </header>
 
@@ -1444,40 +1517,40 @@ export default function DriverDashboard() {
         {activeLoad ? (
           <div className="card dd-active-load-card">
             <div className="dd-active-load-header">
-              <h3>Active Load - Pickup to Delivery</h3>
-              <span className="dd-load-status">{tripStarted ? 'In Transit' : 'Ready to Start'}</span>
+              <h3>{tr('driverDashboard.postHire.activeLoadTitle', 'Active Load - Pickup to Delivery')}</h3>
+              <span className="dd-load-status">{tripStarted ? tr('driverDashboard.postHire.inTransit', 'In Transit') : tr('driverDashboard.postHire.readyToStart', 'Ready to Start')}</span>
             </div>
             
             {tripStarted ? (
               <div className="dd-active-load-content">
                 <div className="dd-load-info-grid">
                   <div className="dd-load-info-item">
-                    <span className="dd-info-label">Pickup</span>
+                    <span className="dd-info-label">{tr('driverDashboard.postHire.pickup', 'Pickup')}</span>
                     <span className="dd-info-value">
                       {pickupLoc.full}
                     </span>
                     <span className="dd-info-status" style={{fontSize: '0.875rem', color: ddTheme.muted}}>
-                      {activeLoad.pickup_date || 'Date TBD'}
+                      {activeLoad.pickup_date || tr('driverDashboard.postHire.dateTbd', 'Date TBD')}
                     </span>
                   </div>
                   <div className="dd-load-info-item">
-                    <span className="dd-info-label">Delivery</span>
+                    <span className="dd-info-label">{tr('driverDashboard.postHire.delivery', 'Delivery')}</span>
                     <span className="dd-info-value">
                       {deliveryLoc.full}
                     </span>
                     <span className="dd-info-status" style={{fontSize: '0.875rem', color: ddTheme.muted}}>
-                      {activeLoad.delivery_date || 'Date TBD'}
+                      {activeLoad.delivery_date || tr('driverDashboard.postHire.dateTbd', 'Date TBD')}
                     </span>
                   </div>
                   <div className="dd-load-info-item">
-                    <span className="dd-info-label">Distance</span>
-                    <span className="dd-info-value">{distanceLeft} miles left</span>
-                    <span className="dd-info-status">{totalDistance} total miles</span>
+                    <span className="dd-info-label">{tr('driverDashboard.postHire.distance', 'Distance')}</span>
+                    <span className="dd-info-value">{distanceLeft} {tr('driverDashboard.units.milesLeft', 'miles left')}</span>
+                    <span className="dd-info-status">{totalDistance} {tr('driverDashboard.units.totalMiles', 'total miles')}</span>
                   </div>
                   <div className="dd-load-info-item">
-                    <span className="dd-info-label">Rate</span>
+                    <span className="dd-info-label">{tr('driverDashboard.postHire.rate', 'Rate')}</span>
                     <span className="dd-info-value">${rate}</span>
-                    <span className="dd-info-status">${ratePerMile}/mile</span>
+                    <span className="dd-info-status">${ratePerMile}/{tr('driverDashboard.units.perMile', 'mile')}</span>
                   </div>
                 </div>
                 
@@ -1491,7 +1564,7 @@ export default function DriverDashboard() {
                       style={{cursor: 'pointer', width: '18px', height: '18px'}}
                     />
                     <span style={{fontSize: '0.9rem', color: pickupCompleted ? '#22c55e' : ddTheme.muted, fontWeight: '500'}}>
-                      {pickupCompleted ? '✓ Pickup Completed' : 'Mark Pickup'}
+                      {pickupCompleted ? tr('driverDashboard.postHire.pickupCompletedShort', '✓ Pickup Completed') : tr('driverDashboard.postHire.markPickup', 'Mark Pickup')}
                     </span>
                   </div>
                   <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
@@ -1503,7 +1576,7 @@ export default function DriverDashboard() {
                       style={{cursor: pickupCompleted ? 'pointer' : 'not-allowed', width: '18px', height: '18px', opacity: pickupCompleted ? 1 : 0.5}}
                     />
                     <span style={{fontSize: '0.9rem', color: deliveryCompleted ? '#22c55e' : ddTheme.muted, fontWeight: '500', opacity: pickupCompleted ? 1 : 0.5}}>
-                      {deliveryCompleted ? '✓ Delivered' : 'Mark Delivery'}
+                      {deliveryCompleted ? tr('driverDashboard.postHire.deliveredShort', '✓ Delivered') : tr('driverDashboard.postHire.markDelivery', 'Mark Delivery')}
                     </span>
                   </div>
                 </div>
@@ -1511,24 +1584,24 @@ export default function DriverDashboard() {
                 <div className="dd-load-actions">
                   <button className="btn small ghost-cd dd-btn">
                     <i className="fa-solid fa-location-arrow"></i>
-                    Navigate
+                    {tr('driverDashboard.postHire.navigate', 'Navigate')}
                   </button>
                   <button className="btn small ghost-cd dd-btn">
                     <i className="fa-solid fa-upload"></i>
-                    Upload POD
+                    {tr('driverDashboard.postHire.uploadPod', 'Upload POD')}
                   </button>
                   <button className="btn small ghost-cd dd-btn">
                     <i className="fa-solid fa-comment"></i>
-                    Message Dispatch
+                    {tr('driverDashboard.postHire.messageDispatch', 'Message Dispatch')}
                   </button>
                 </div>
               </div>
             ) : (
               <div style={{padding: '20px', textAlign: 'center'}}>
-                <p style={{marginBottom: '16px', color: ddTheme.muted}}>Click Start Trip to begin tracking</p>
+                <p style={{marginBottom: '16px', color: ddTheme.muted}}>{tr('driverDashboard.postHire.startTripHint', 'Click Start Trip to begin tracking')}</p>
                 <button className="btn small-cd" onClick={() => handleStartTrip(activeLoad)}>
                   <i className="fa-solid fa-play" style={{marginRight: '8px'}}></i>
-                  Start Trip
+                  {tr('driverDashboard.postHire.startTrip', 'Start Trip')}
                 </button>
               </div>
             )}
@@ -1536,9 +1609,9 @@ export default function DriverDashboard() {
         ) : (
           <div className="card dd-active-load-card" style={{textAlign: 'center', padding: '40px'}}>
             <i className="fa-solid fa-truck" style={{fontSize: '3rem', color: ddTheme.iconMuted, marginBottom: '16px'}}></i>
-            <h3 style={{margin: '0 0 8px', color: ddTheme.text}}>No Active Load</h3>
+            <h3 style={{margin: '0 0 8px', color: ddTheme.text}}>{tr('driverDashboard.postHire.noActiveLoad', 'No Active Load')}</h3>
             <p style={{margin: 0, color: ddTheme.muted}}>
-              You don't have any active loads at the moment. Check your assigned loads below to start a new trip.
+              {tr('driverDashboard.postHire.noActiveLoadDesc', "You don't have any active loads at the moment. Check your assigned loads below to start a new trip.")}
             </p>
           </div>
         )}
@@ -1549,17 +1622,17 @@ export default function DriverDashboard() {
             <div className="card-header">
               <h3 style={{margin: 0, fontSize: '1.25rem', fontWeight: '600', color: ddTheme.text}}>
                 <i className="fa-solid fa-route" style={{marginRight: '8px', color: '#3b82f6'}}></i>
-                Trip Details
+                {tr('driverDashboard.postHire.tripDetails', 'Trip Details')}
               </h3>
               {gpsPermissionGranted ? (
                 <span style={{fontSize: '0.875rem', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '4px'}}>
                   <i className="fa-solid fa-circle" style={{fontSize: '0.5rem'}}></i>
-                  GPS Active
+                  {tr('driverDashboard.postHire.gpsActive', 'GPS Active')}
                 </span>
               ) : (
                 <span style={{fontSize: '0.875rem', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '4px'}}>
                   <i className="fa-solid fa-circle" style={{fontSize: '0.5rem'}}></i>
-                  GPS Disabled
+                  {tr('driverDashboard.postHire.gpsDisabled', 'GPS Disabled')}
                 </span>
               )}
             </div>
@@ -1573,7 +1646,7 @@ export default function DriverDashboard() {
                       <i className="fa-solid fa-location-dot" style={{color: '#3b82f6', fontSize: '1.25rem'}}></i>
                     </div>
                     <div>
-                      <div style={{fontSize: '0.875rem', color: ddTheme.muted, marginBottom: '2px'}}>Pickup Location</div>
+                      <div style={{fontSize: '0.875rem', color: ddTheme.muted, marginBottom: '2px'}}>{tr('driverDashboard.postHire.pickupLocation', 'Pickup Location')}</div>
                       <div style={{fontSize: '1.125rem', fontWeight: '600', color: ddTheme.text}}>{pickupLoc.full}</div>
                     </div>
                   </div>
@@ -1581,12 +1654,12 @@ export default function DriverDashboard() {
                     {gpsPermissionGranted ? (
                       <div style={{fontSize: '0.875rem', color: ddTheme.muted}}>
                         <i className="fa-solid fa-location-crosshairs" style={{marginRight: '6px', color: '#3b82f6'}}></i>
-                        {distanceToPickup} miles away
+                        {distanceToPickup} {tr('driverDashboard.units.milesAway', 'miles away')}
                       </div>
                     ) : (
                       <div style={{fontSize: '0.875rem', color: '#f59e0b'}}>
                         <i className="fa-solid fa-triangle-exclamation" style={{marginRight: '6px'}}></i>
-                        Enable GPS for distance
+                        {tr('driverDashboard.postHire.enableGpsForDistance', 'Enable GPS for distance')}
                       </div>
                     )}
                   </div>
@@ -1600,7 +1673,7 @@ export default function DriverDashboard() {
                       style={{width: '20px', height: '20px', cursor: 'pointer', accentColor: '#22c55e'}}
                     />
                     <span style={{fontSize: '0.95rem', fontWeight: '600', color: pickupCompleted ? '#16a34a' : ddTheme.muted}}>
-                      {pickupCompleted ? 'Pickup Completed ✓' : 'Mark Pickup Complete'}
+                      {pickupCompleted ? tr('driverDashboard.postHire.pickupCompleted', 'Pickup Completed ✓') : tr('driverDashboard.postHire.markPickupComplete', 'Mark Pickup Complete')}
                     </span>
                   </label>
                 </div>
@@ -1611,35 +1684,35 @@ export default function DriverDashboard() {
             <div style={{padding: '20px', background: ddTheme.surfaceAlt, borderBottom: `1px solid ${ddTheme.border}`}}>
               <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px'}}>
                 <div>
-                  <div style={{fontSize: '0.75rem', color: ddTheme.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px'}}>Load ID</div>
+                  <div style={{fontSize: '0.75rem', color: ddTheme.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px'}}>{tr('driverDashboard.postHire.loadId', 'Load ID')}</div>
                   <div style={{fontSize: '0.95rem', fontWeight: '600', color: ddTheme.text}}>{activeLoad.load_id}</div>
                 </div>
                 <div>
-                  <div style={{fontSize: '0.75rem', color: ddTheme.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px'}}>Equipment</div>
-                  <div style={{fontSize: '0.95rem', fontWeight: '600', color: ddTheme.text}}>{activeLoad.equipment_type || 'Not Specified'}</div>
+                  <div style={{fontSize: '0.75rem', color: ddTheme.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px'}}>{tr('driverDashboard.postHire.equipment', 'Equipment')}</div>
+                  <div style={{fontSize: '0.95rem', fontWeight: '600', color: ddTheme.text}}>{activeLoad.equipment_type || tr('driverDashboard.postHire.notSpecified', 'Not Specified')}</div>
                 </div>
                 <div>
-                  <div style={{fontSize: '0.75rem', color: ddTheme.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px'}}>Weight</div>
-                  <div style={{fontSize: '0.95rem', fontWeight: '600', color: ddTheme.text}}>{activeLoad.weight ? `${activeLoad.weight} lbs` : 'Not Specified'}</div>
+                  <div style={{fontSize: '0.75rem', color: ddTheme.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px'}}>{tr('driverDashboard.postHire.weight', 'Weight')}</div>
+                  <div style={{fontSize: '0.95rem', fontWeight: '600', color: ddTheme.text}}>{activeLoad.weight ? `${activeLoad.weight} ${tr('driverDashboard.units.lbs', 'lbs')}` : tr('driverDashboard.postHire.notSpecified', 'Not Specified')}</div>
                 </div>
                 <div>
-                  <div style={{fontSize: '0.75rem', color: ddTheme.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px'}}>Commodity</div>
-                  <div style={{fontSize: '0.95rem', fontWeight: '600', color: ddTheme.text}}>{activeLoad.commodity || 'General Freight'}</div>
+                  <div style={{fontSize: '0.75rem', color: ddTheme.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px'}}>{tr('driverDashboard.postHire.commodity', 'Commodity')}</div>
+                  <div style={{fontSize: '0.95rem', fontWeight: '600', color: ddTheme.text}}>{activeLoad.commodity || tr('driverDashboard.postHire.generalFreight', 'General Freight')}</div>
                 </div>
                 <div>
-                  <div style={{fontSize: '0.75rem', color: ddTheme.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px'}}>Total Rate</div>
+                  <div style={{fontSize: '0.75rem', color: ddTheme.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px'}}>{tr('driverDashboard.postHire.totalRate', 'Total Rate')}</div>
                   <div style={{fontSize: '0.95rem', fontWeight: '600', color: '#16a34a'}}>${rate}</div>
                 </div>
                 <div>
-                  <div style={{fontSize: '0.75rem', color: ddTheme.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px'}}>Total Distance</div>
-                  <div style={{fontSize: '0.95rem', fontWeight: '600', color: ddTheme.text}}>{totalDistance} miles</div>
+                  <div style={{fontSize: '0.75rem', color: ddTheme.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px'}}>{tr('driverDashboard.postHire.totalDistance', 'Total Distance')}</div>
+                  <div style={{fontSize: '0.95rem', fontWeight: '600', color: ddTheme.text}}>{totalDistance} {tr('driverDashboard.units.miles', 'miles')}</div>
                 </div>
               </div>
               {activeLoad.special_requirements && (
                 <div style={{marginTop: '16px', padding: '12px', background: ddTheme.warningBg, borderRadius: '6px', borderLeft: '3px solid #f59e0b'}}>
                   <div style={{fontSize: '0.75rem', color: ddTheme.warningLabel, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px'}}>
                     <i className="fa-solid fa-triangle-exclamation" style={{marginRight: '6px'}}></i>
-                    Special Requirements
+                    {tr('driverDashboard.postHire.specialRequirements', 'Special Requirements')}
                   </div>
                   <div style={{fontSize: '0.875rem', color: ddTheme.warningText}}>{activeLoad.special_requirements}</div>
                 </div>
@@ -1655,7 +1728,7 @@ export default function DriverDashboard() {
                       <i className="fa-solid fa-flag-checkered" style={{color: '#16a34a', fontSize: '1.25rem'}}></i>
                     </div>
                     <div>
-                      <div style={{fontSize: '0.875rem', color: ddTheme.muted, marginBottom: '2px'}}>Delivery Location</div>
+                      <div style={{fontSize: '0.875rem', color: ddTheme.muted, marginBottom: '2px'}}>{tr('driverDashboard.postHire.deliveryLocation', 'Delivery Location')}</div>
                       <div style={{fontSize: '1.125rem', fontWeight: '600', color: ddTheme.text}}>{deliveryLoc.full}</div>
                     </div>
                   </div>
@@ -1663,12 +1736,12 @@ export default function DriverDashboard() {
                     {gpsPermissionGranted ? (
                       <div style={{fontSize: '0.875rem', color: ddTheme.muted}}>
                         <i className="fa-solid fa-location-crosshairs" style={{marginRight: '6px', color: '#16a34a'}}></i>
-                        {distanceToDelivery} miles away
+                        {distanceToDelivery} {tr('driverDashboard.units.milesAway', 'miles away')}
                       </div>
                     ) : (
                       <div style={{fontSize: '0.875rem', color: '#f59e0b'}}>
                         <i className="fa-solid fa-triangle-exclamation" style={{marginRight: '6px'}}></i>
-                        Enable GPS for distance
+                        {tr('driverDashboard.postHire.enableGpsForDistance', 'Enable GPS for distance')}
                       </div>
                     )}
                   </div>
@@ -1683,7 +1756,7 @@ export default function DriverDashboard() {
                       style={{width: '20px', height: '20px', cursor: pickupCompleted ? 'pointer' : 'not-allowed', accentColor: '#22c55e'}}
                     />
                     <span style={{fontSize: '0.95rem', fontWeight: '600', color: deliveryCompleted ? '#16a34a' : ddTheme.muted}}>
-                      {deliveryCompleted ? 'Delivered ✓' : 'Mark Delivery Complete'}
+                      {deliveryCompleted ? tr('driverDashboard.postHire.delivered', 'Delivered ✓') : tr('driverDashboard.postHire.markDeliveryComplete', 'Mark Delivery Complete')}
                     </span>
                   </label>
                 </div>
@@ -1698,20 +1771,20 @@ export default function DriverDashboard() {
           <div className="dd-left-column">
             {/* Load Summary */}
             <div className="dd-load-summary-section">
-              <h3 className="dd-section-title">Load Summary</h3>
+              <h3 className="dd-section-title">{tr('driverDashboard.postHire.loadSummary', 'Load Summary')}</h3>
               <div className="card dd-load-summary-card dd-no-header">
                 <div className="dd-summary-stats-horizontal">
                   <div className="dd-stat-item-horizontal">
                     <div className="dd-stat-number-large">{assignedLoads.length}</div>
-                    <div className="dd-stat-label-horizontal">Assigned</div>
+                    <div className="dd-stat-label-horizontal">{tr('driverDashboard.postHire.assigned', 'Assigned')}</div>
                   </div>
                   <div className="dd-stat-item-horizontal">
                     <div className="dd-stat-number-large">{activeLoad ? 1 : 0}</div>
-                    <div className="dd-stat-label-horizontal">In Transit</div>
+                    <div className="dd-stat-label-horizontal">{tr('driverDashboard.postHire.inTransit', 'In Transit')}</div>
                   </div>
                   <div className="dd-stat-item-horizontal">
                     <div className="dd-stat-number-large">{completedLoads.length}</div>
-                    <div className="dd-stat-label-horizontal">Completed</div>
+                    <div className="dd-stat-label-horizontal">{tr('driverDashboard.postHire.completed', 'Completed')}</div>
                   </div>
                 </div>
               </div>
@@ -1723,12 +1796,12 @@ export default function DriverDashboard() {
                 // Parse origin
                 const origin = typeof load.origin === 'string' 
                   ? load.origin.split(',').map(s => s.trim())[0] 
-                  : (load.origin?.city || 'Pickup');
+                  : (load.origin?.city || tr('driverDashboard.postHire.pickup', 'Pickup'));
                 
                 // Parse destination
                 const destination = typeof load.destination === 'string' 
                   ? load.destination.split(',').map(s => s.trim())[0] 
-                  : (load.destination?.city || 'Delivery');
+                  : (load.destination?.city || tr('driverDashboard.postHire.delivery', 'Delivery'));
                 
                 // Get rate
                 const loadRate = load.total_rate || load.linehaul_rate || load.rate || load.price || 0;
@@ -1736,20 +1809,20 @@ export default function DriverDashboard() {
                 return (
                   <div key={load.load_id} className="card dd-route-card">
                     <div className="dd-route-header">
-                      <h4>{origin} to {destination}</h4>
-                      <span className="int-status-badge active">Assigned</span>
+                      <h4>{origin} {tr('common.to', 'to')} {destination}</h4>
+                      <span className="int-status-badge active">{tr('driverDashboard.postHire.assigned', 'Assigned')}</span>
                     </div>
                     <div className="dd-route-info">
                       <div className="dd-route-details">
-                        <div>Pickup: {load.pickup_date || 'TBD'}</div>
-                        <div>Delivery: {load.delivery_date || 'TBD'}</div>
-                        <div>Rate: ${loadRate}</div>
+                        <div>{tr('driverDashboard.postHire.pickup', 'Pickup')}: {load.pickup_date || tr('common.tbd', 'TBD')}</div>
+                        <div>{tr('driverDashboard.postHire.delivery', 'Delivery')}: {load.delivery_date || tr('common.tbd', 'TBD')}</div>
+                        <div>{tr('driverDashboard.postHire.rate', 'Rate')}: ${loadRate}</div>
                       </div>
                       <div className="dd-route-actions">
                         <button className="btn small-cd" onClick={() => handleStartTrip(load)}>
-                          Start Trip
+                          {tr('driverDashboard.postHire.startTrip', 'Start Trip')}
                         </button>
-                        <button className="btn small ghost-cd">View Details</button>
+                        <button className="btn small ghost-cd">{tr('driverDashboard.postHire.viewDetails', 'View Details')}</button>
                       </div>
                     </div>
                   </div>
@@ -1758,14 +1831,14 @@ export default function DriverDashboard() {
             ) : (
               <div className="card dd-route-card" style={{textAlign: 'center', padding: '30px'}}>
                 <i className="fa-solid fa-clipboard-list" style={{fontSize: '2.5rem', color: ddTheme.iconMuted, marginBottom: '12px'}}></i>
-                <p style={{margin: 0, color: ddTheme.muted}}>No assigned loads at the moment</p>
+                <p style={{margin: 0, color: ddTheme.muted}}>{tr('driverDashboard.postHire.noAssignedLoads', 'No assigned loads at the moment')}</p>
               </div>
             )}
 
             {/* Live Route Tracking */}
             <div className="card dd-live-route-card">
               <div className="dd-section-title">
-                <h3>Live Route Tracking</h3>
+                <h3>{tr('driverDashboard.postHire.liveRouteTracking', 'Live Route Tracking')}</h3>
               </div>
               <div className="dd-live-route-content">
                 <HereMap
@@ -1773,7 +1846,7 @@ export default function DriverDashboard() {
                   center={{ lat: 39.8283, lng: -98.5795 }}
                   zoom={6}
                   markers={[
-                    { lat: 39.8283, lng: -98.5795, label: 'Current Location', icon: 'https://cdn-icons-png.flaticon.com/512/684/684908.png' }
+                    { lat: 39.8283, lng: -98.5795, label: tr('driverDashboard.postHire.currentLocation', 'Current Location'), icon: 'https://cdn-icons-png.flaticon.com/512/684/684908.png' }
                   ]}
                   height="300px"
                   width="100%"
@@ -1787,7 +1860,7 @@ export default function DriverDashboard() {
             {/* Compliance Status */}
             <div className="card dd-compliance-card">
               <div className="dd-section-title">
-                <h3>Compliance Status</h3>
+                <h3>{tr('driverDashboard.postHire.complianceStatus', 'Compliance Status')}</h3>
               </div>
               <div className="dd-compliance-items">
                 {complianceCardItems.map((item) => (
@@ -1799,21 +1872,21 @@ export default function DriverDashboard() {
                 ))}
               </div>
               <button className="btn small-cd" style={{width: '100%'}} onClick={() => handleNavClick('compliance')}>
-                {homeComplianceLoading ? 'Loading…' : 'View All Documents'}
+                {homeComplianceLoading ? tr('common.loading', 'Loading…') : tr('driverDashboard.postHire.viewAllDocuments', 'View All Documents')}
               </button>
             </div>
 
             {/* Messages & Alerts Section */}
             <div className="dd-messages-alerts-section">
-              <h3 className="dd-section-title">Messages & Alerts</h3>
+              <h3 className="dd-section-title">{tr('driverDashboard.postHire.messagesAndAlerts', 'Messages & Alerts')}</h3>
 
               {msgTrayLoading && (msgTrayThreads || []).length === 0 ? (
                 <div className="card dd-message-card" style={{ padding: 16, opacity: 0.9 }}>
-                  Loading messages…
+                  {tr('driverDashboard.postHire.loadingMessages', 'Loading messages…')}
                 </div>
               ) : (msgTrayThreads || []).length === 0 ? (
                 <div className="card dd-message-card" style={{ padding: 16, opacity: 0.9 }}>
-                  No messages yet.
+                  {tr('driverDashboard.postHire.noMessagesYet', 'No messages yet.')}
                 </div>
               ) : (
                 (msgTrayThreads || [])
@@ -1823,8 +1896,8 @@ export default function DriverDashboard() {
                   .map((t) => {
                     const threadId = String(t?.id || '').trim();
                     const unread = Boolean(msgTrayUnreadSummary?.threads?.[threadId]?.has_unread);
-                    const title = String(t?.display_title || t?.other_display_name || t?.title || 'Message');
-                    const text = String(t?.last_message?.text || '').trim() || 'Open to view messages.';
+                    const title = String(t?.display_title || t?.other_display_name || t?.title || tr('common.message', 'Message'));
+                    const text = String(t?.last_message?.text || '').trim() || tr('driverDashboard.postHire.openToViewMessages', 'Open to view messages.');
                     return (
                       <button
                         key={threadId || title}
@@ -1841,7 +1914,7 @@ export default function DriverDashboard() {
                           <i className="fa-solid fa-comment" />
                         </div>
                         <div className="dd-message-content">
-                          <div className="dd-message-title">{title}{unread ? ' (New)' : ''}</div>
+                          <div className="dd-message-title">{title}{unread ? ` (${tr('common.new', 'New')})` : ''}</div>
                           <div className="dd-message-text">{text}</div>
                         </div>
                       </button>
@@ -1854,17 +1927,17 @@ export default function DriverDashboard() {
             {Boolean(userSettings?.notification_preferences?.ai_tips) && (
               <div className="card dd-ai-suggestions-separate-card">
                 <div className="dd-section-title">
-                  <span>AI Suggestions</span>
+                  <span>{tr('driverDashboard.postHire.aiSuggestions', 'AI Suggestions')}</span>
                 </div>
                 <div className="dd-suggestion-item">
-                  <div className="dd-suggestion-title">Fuel Stop Recommended</div>
-                  <div className="dd-suggestion-text">Pilot at Exit 142 - Best price in 50 miles ahead</div>
-                  <button className="dd-suggestion-link">Navigate</button>
+                  <div className="dd-suggestion-title">{tr('driverDashboard.postHire.ai.fuelStopRecommended', 'Fuel Stop Recommended')}</div>
+                  <div className="dd-suggestion-text">{tr('driverDashboard.postHire.ai.fuelStopRecommendedDesc', 'Pilot at Exit 142 - Best price in 50 miles ahead')}</div>
+                  <button className="dd-suggestion-link">{tr('driverDashboard.postHire.navigate', 'Navigate')}</button>
                 </div>
                 <div className="dd-suggestion-item">
-                  <div className="dd-suggestion-title">Break Required Soon</div>
-                  <div className="dd-suggestion-text">30-min break needed in 45 minutes</div>
-                  <button className="dd-suggestion-link">Find Rest Areas</button>
+                  <div className="dd-suggestion-title">{tr('driverDashboard.postHire.ai.breakRequiredSoon', 'Break Required Soon')}</div>
+                  <div className="dd-suggestion-text">{tr('driverDashboard.postHire.ai.breakRequiredSoonDesc', '30-min break needed in 45 minutes')}</div>
+                  <button className="dd-suggestion-link">{tr('driverDashboard.postHire.ai.findRestAreas', 'Find Rest Areas')}</button>
                 </div>
               </div>
             )}
@@ -1974,29 +2047,29 @@ export default function DriverDashboard() {
     if (loading) return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' }}>
         <i className="fas fa-spinner fa-spin" style={{ fontSize: '2rem', color: '#3b82f6' }}></i>
-        <span style={{ marginLeft: '10px' }}>Loading compliance data...</span>
+        <span style={{ marginLeft: '10px' }}>{tr('driverDashboard.compliance.loadingData', 'Loading compliance data...')}</span>
       </div>
     );
 
     return (
       <div style={{ padding: '20px' }}>
         <header style={{ marginBottom: '20px' }}>
-          <h2 style={{ margin: 0 }}>Compliance & Safety</h2>
-          <p style={{ color: cvTheme.muted, margin: '8px 0' }}>Monitor your compliance status and required documents</p>
+          <h2 style={{ margin: 0 }}>{tr('driverDashboard.compliance.title', 'Compliance & Safety')}</h2>
+          <p style={{ color: cvTheme.muted, margin: '8px 0' }}>{tr('driverDashboard.compliance.subtitle', 'Monitor your compliance status and required documents')}</p>
         </header>
 
         {/* Score Card */}
         <div className="card" style={{ padding: '20px', marginBottom: '20px', background: 'linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%)', color: 'white' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <h3 style={{ margin: 0, color: 'white' }}>AI Compliance Score</h3>
-              <p style={{ margin: '8px 0 0', opacity: 0.8 }}>Based on documents, verification, and completeness</p>
+              <h3 style={{ margin: 0, color: 'white' }}>{tr('driverDashboard.compliance.aiScore', 'AI Compliance Score')}</h3>
+              <p style={{ margin: '8px 0 0', opacity: 0.8 }}>{tr('driverDashboard.compliance.aiScoreSubtitle', 'Based on documents, verification, and completeness')}</p>
             </div>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '48px', fontWeight: 'bold', color: getScoreColor(complianceStatus.score) }}>
                 {complianceStatus.score}%
               </div>
-              <div style={{ fontSize: '14px', opacity: 0.8 }}>{complianceStatus.status_color} Status</div>
+              <div style={{ fontSize: '14px', opacity: 0.8 }}>{complianceStatus.status_color} {tr('common.status', 'Status')}</div>
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginTop: '20px' }}>
@@ -2014,36 +2087,36 @@ export default function DriverDashboard() {
           <div>
             {/* CDL & Credentials */}
             <div className="card" style={{ padding: '20px', marginBottom: '20px' }}>
-              <h4 style={{ margin: '0 0 16px' }}><i className="fas fa-id-card" style={{ marginRight: '8px' }}></i>CDL & Credentials</h4>
+              <h4 style={{ margin: '0 0 16px' }}><i className="fas fa-id-card" style={{ marginRight: '8px' }}></i>{tr('driverDashboard.compliance.cdlCredentials', 'CDL & Credentials')}</h4>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                <div><strong>CDL Number:</strong> {complianceData.cdlNumber || 'Not provided'}</div>
-                <div><strong>CDL State:</strong> {complianceData.cdlState || 'Not provided'}</div>
-                <div><strong>CDL Class:</strong> {complianceData.cdlClass || 'Not provided'}</div>
-                <div><strong>CDL Expiry:</strong> {complianceData.cdlExpiry || 'Not provided'}</div>
-                <div><strong>Medical Card Expiry:</strong> {complianceData.medicalCardExpiry || 'Not provided'}</div>
+                <div><strong>{tr('driverDashboard.compliance.cdlNumber', 'CDL Number')}:</strong> {complianceData.cdlNumber || tr('common.notProvided', 'Not provided')}</div>
+                <div><strong>{tr('driverDashboard.compliance.cdlState', 'CDL State')}:</strong> {complianceData.cdlState || tr('common.notProvided', 'Not provided')}</div>
+                <div><strong>{tr('driverDashboard.compliance.cdlClass', 'CDL Class')}:</strong> {complianceData.cdlClass || tr('common.notProvided', 'Not provided')}</div>
+                <div><strong>{tr('driverDashboard.compliance.cdlExpiry', 'CDL Expiry')}:</strong> {complianceData.cdlExpiry || tr('common.notProvided', 'Not provided')}</div>
+                <div><strong>{tr('driverDashboard.compliance.medicalCardExpiry', 'Medical Card Expiry')}:</strong> {complianceData.medicalCardExpiry || tr('common.notProvided', 'Not provided')}</div>
               </div>
             </div>
 
             {/* Compliance Checks */}
             <div className="card" style={{ padding: '20px', marginBottom: '20px' }}>
-              <h4 style={{ margin: '0 0 16px' }}><i className="fas fa-clipboard-check" style={{ marginRight: '8px' }}></i>Compliance Checks</h4>
+              <h4 style={{ margin: '0 0 16px' }}><i className="fas fa-clipboard-check" style={{ marginRight: '8px' }}></i>{tr('driverDashboard.compliance.complianceChecks', 'Compliance Checks')}</h4>
               <div style={{ display: 'grid', gap: '12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', background: cvTheme.surfaceAlt, borderRadius: '8px' }}>
-                  <span>Drug Test</span>
+                  <span>{tr('driverDashboard.compliance.drugTest', 'Drug Test')}</span>
                   <span className={`int-status-badge ${complianceData.drugTestStatus === 'passed' ? 'active' : 'pending'}`}>
-                    {complianceData.drugTestStatus}
+                    {tr(`driverDashboard.compliance.status.${String(complianceData.drugTestStatus || 'pending').toLowerCase()}`, complianceData.drugTestStatus)}
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', background: cvTheme.surfaceAlt, borderRadius: '8px' }}>
-                  <span>MVR Check</span>
+                  <span>{tr('driverDashboard.compliance.mvrCheck', 'MVR Check')}</span>
                   <span className={`int-status-badge ${complianceData.mvrStatus === 'passed' ? 'active' : 'pending'}`}>
-                    {complianceData.mvrStatus}
+                    {tr(`driverDashboard.compliance.status.${String(complianceData.mvrStatus || 'pending').toLowerCase()}`, complianceData.mvrStatus)}
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', background: cvTheme.surfaceAlt, borderRadius: '8px' }}>
-                  <span>FMCSA Clearinghouse</span>
+                  <span>{tr('driverDashboard.compliance.clearinghouse', 'FMCSA Clearinghouse')}</span>
                   <span className={`int-status-badge ${complianceData.clearinghouseStatus === 'passed' ? 'active' : 'pending'}`}>
-                    {complianceData.clearinghouseStatus}
+                    {tr(`driverDashboard.compliance.status.${String(complianceData.clearinghouseStatus || 'pending').toLowerCase()}`, complianceData.clearinghouseStatus)}
                   </span>
                 </div>
               </div>
@@ -2051,57 +2124,57 @@ export default function DriverDashboard() {
 
             {/* Documents */}
             <div className="card" style={{ padding: '20px' }}>
-              <h4 style={{ margin: '0 0 16px' }}><i className="fas fa-file-alt" style={{ marginRight: '8px' }}></i>Uploaded Documents</h4>
+              <h4 style={{ margin: '0 0 16px' }}><i className="fas fa-file-alt" style={{ marginRight: '8px' }}></i>{tr('driverDashboard.compliance.uploadedDocuments', 'Uploaded Documents')}</h4>
               {complianceStatus.documents && complianceStatus.documents.length > 0 ? (
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead><tr style={{ borderBottom: `1px solid ${cvTheme.border}` }}>
-                    <th style={{ textAlign: 'left', padding: '8px' }}>Document</th>
-                    <th style={{ textAlign: 'left', padding: '8px' }}>Type</th>
-                    <th style={{ textAlign: 'left', padding: '8px' }}>Expiry</th>
-                    <th style={{ textAlign: 'left', padding: '8px' }}>Status</th>
-                    <th style={{ textAlign: 'left', padding: '8px' }}>Uploaded</th>
+                    <th style={{ textAlign: 'left', padding: '8px' }}>{tr('driverDashboard.compliance.table.document', 'Document')}</th>
+                    <th style={{ textAlign: 'left', padding: '8px' }}>{tr('driverDashboard.compliance.table.type', 'Type')}</th>
+                    <th style={{ textAlign: 'left', padding: '8px' }}>{tr('driverDashboard.compliance.table.expiry', 'Expiry')}</th>
+                    <th style={{ textAlign: 'left', padding: '8px' }}>{tr('driverDashboard.compliance.table.status', 'Status')}</th>
+                    <th style={{ textAlign: 'left', padding: '8px' }}>{tr('driverDashboard.compliance.table.uploaded', 'Uploaded')}</th>
                   </tr></thead>
                   <tbody>
                     {complianceStatus.documents.map((doc, idx) => (
                       <tr key={idx} style={{ borderBottom: `1px solid ${cvTheme.rowBorder}` }}>
-                        <td style={{ padding: '8px' }}>{doc.file_name || doc.filename || 'Document'}</td>
+                        <td style={{ padding: '8px' }}>{doc.file_name || doc.filename || tr('driverDashboard.compliance.table.document', 'Document')}</td>
                         <td style={{ padding: '8px', fontSize: '12px' }}>{(doc.document_type || doc.type || 'OTHER').replace(/_/g, ' ').toUpperCase()}</td>
                         <td style={{ padding: '8px', fontSize: '12px', color: cvTheme.muted }}>
-                          {doc.expiry_date ? new Date(doc.expiry_date).toLocaleDateString() : 'N/A'}
+                          {doc.expiry_date ? new Date(doc.expiry_date).toLocaleDateString(locale) : tr('common.na', 'N/A')}
                         </td>
                         <td style={{ padding: '8px' }}>
                           <span className={`int-status-badge ${doc.status === 'Valid' ? 'active' : doc.status === 'Expired' ? 'inactive' : 'pending'}`}>
-                            {doc.status || 'Unknown'}
+                            {doc.status || tr('common.unknown', 'Unknown')}
                           </span>
                         </td>
                         <td style={{ padding: '8px', color: cvTheme.muted, fontSize: '12px' }}>
-                          {doc.uploaded_at ? new Date(doc.uploaded_at * 1000).toLocaleDateString('en-US', { 
+                          {doc.uploaded_at ? new Date(doc.uploaded_at * 1000).toLocaleDateString(locale, { 
                             month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                          }) : 'N/A'}
+                          }) : tr('common.na', 'N/A')}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              ) : <p style={{ color: cvTheme.muted }}>No documents uploaded yet</p>}
+              ) : <p style={{ color: cvTheme.muted }}>{tr('driverDashboard.compliance.noDocumentsUploaded', 'No documents uploaded yet')}</p>}
             </div>
           </div>
 
           {/* Right Column - AI Assistant */}
           <div>
             <div className="card" style={{ padding: '20px' }}>
-              <h4 style={{ margin: '0 0 16px' }}><i className="fas fa-robot" style={{ marginRight: '8px' }}></i>AI Compliance Assistant</h4>
+              <h4 style={{ margin: '0 0 16px' }}><i className="fas fa-robot" style={{ marginRight: '8px' }}></i>{tr('driverDashboard.compliance.aiAssistant', 'AI Compliance Assistant')}</h4>
               <button onClick={runAIAnalysis} disabled={analyzingAI} className="btn small-cd" style={{ width: '100%', marginBottom: '16px' }}>
-                {analyzingAI ? 'Analyzing...' : 'Run AI Analysis'}
+                {analyzingAI ? tr('driverDashboard.compliance.analyzing', 'Analyzing...') : tr('driverDashboard.compliance.runAiAnalysis', 'Run AI Analysis')}
               </button>
               {aiAnalysis && (
                 <div style={{ padding: '12px', background: cvTheme.successBg, color: cvTheme.successText, borderRadius: '8px', marginBottom: '16px' }}>
-                  <strong>Risk Level:</strong> {aiAnalysis.analysis?.risk_level || 'Unknown'}
+                  <strong>{tr('driverDashboard.compliance.riskLevel', 'Risk Level')}:</strong> {aiAnalysis.analysis?.risk_level || tr('common.unknown', 'Unknown')}
                   <p style={{ margin: '8px 0 0', fontSize: '14px' }}>{aiAnalysis.analysis?.summary || ''}</p>
 
                   {Array.isArray(aiAnalysis.analysis?.top_findings) && aiAnalysis.analysis.top_findings.length > 0 && (
                     <div style={{ marginTop: 12 }}>
-                      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>Top Findings</div>
+                      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>{tr('driverDashboard.compliance.topFindings', 'Top Findings')}</div>
                       <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
                         {aiAnalysis.analysis.top_findings.slice(0, 5).map((item, i) => (
                           <li key={`finding-${i}`} style={{ marginBottom: 4 }}>{String(item)}</li>
@@ -2112,7 +2185,7 @@ export default function DriverDashboard() {
 
                   {Array.isArray(aiAnalysis.analysis?.next_actions) && aiAnalysis.analysis.next_actions.length > 0 && (
                     <div style={{ marginTop: 12 }}>
-                      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>Next Actions</div>
+                      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>{tr('driverDashboard.compliance.nextActions', 'Next Actions')}</div>
                       <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
                         {aiAnalysis.analysis.next_actions.slice(0, 5).map((item, i) => (
                           <li key={`action-${i}`} style={{ marginBottom: 4 }}>{String(item)}</li>
@@ -2122,13 +2195,13 @@ export default function DriverDashboard() {
                   )}
                 </div>
               )}
-              <h5 style={{ margin: '16px 0 8px' }}>Tasks</h5>
+              <h5 style={{ margin: '16px 0 8px' }}>{tr('driverDashboard.compliance.tasks', 'Tasks')}</h5>
               {complianceTasks.length > 0 ? complianceTasks.slice(0, 5).map((task, idx) => (
                 <div key={idx} style={{ padding: '8px', background: cvTheme.surfaceAlt, borderRadius: '6px', marginBottom: '8px', fontSize: '14px' }}>
                   <strong>{task.title}</strong>
                   <div style={{ color: cvTheme.muted, fontSize: '12px' }}>{task.description}</div>
                 </div>
-              )) : <p style={{ color: cvTheme.muted, fontSize: '14px' }}>No pending tasks</p>}
+              )) : <p style={{ color: cvTheme.muted, fontSize: '14px' }}>{tr('driverDashboard.compliance.noPendingTasks', 'No pending tasks')}</p>}
             </div>
           </div>
         </div>
@@ -2209,13 +2282,13 @@ export default function DriverDashboard() {
           <div>
             <header className="fp-header">
               <div className="fp-header-titles">
-                <h2>{navGroups.flatMap(g => g.items).find(i => i.key === activeNav)?.label || 'View'}</h2>
-                <p className="fp-subtitle">This is the {activeNav} view. Only the inner area changes.</p>
+                <h2>{navGroups.flatMap(g => g.items).find(i => i.key === activeNav)?.label || tr('driverDashboard.generic.view', 'View')}</h2>
+                <p className="fp-subtitle">{tr('driverDashboard.generic.placeholderDesc', 'This is the view. Only the inner area changes.')}</p>
               </div>
             </header>
             <section className="fp-grid">
               <div className="card">
-                <div className="card-header"><h3>Placeholder</h3></div>
+                <div className="card-header"><h3>{tr('driverDashboard.generic.placeholder', 'Placeholder')}</h3></div>
               </div>
             </section>
           </div>
@@ -2251,13 +2324,13 @@ export default function DriverDashboard() {
         >
           <div style={{ fontWeight: 800, marginBottom: 4 }}>{toast.title}</div>
           <div style={{ fontSize: 13, opacity: 0.95 }}>{toast.body}</div>
-          <div style={{ marginTop: 8, fontSize: 12, opacity: 0.85 }}>Click to open Messaging</div>
+          <div style={{ marginTop: 8, fontSize: 12, opacity: 0.85 }}>{tr('driverDashboard.toast.clickToOpenMessaging', 'Click to open Messaging')}</div>
         </div>
       )}
       <div className="fp-topbar">
         <div className="topbar-row topbar-row-1">
           <div className="topbar-left">
-            <button className="hamburger" aria-label="Open sidebar" onClick={() => setIsSidebarOpen(true)}>
+            <button className="hamburger" aria-label={tr('driverDashboard.topbar.openSidebar', 'Open sidebar')} onClick={() => setIsSidebarOpen(true)}>
               <i className="fa-solid fa-bars" />
             </button>
             <div className="brand-block">
@@ -2265,9 +2338,9 @@ export default function DriverDashboard() {
                 <div className="logo">
                   <div className="logo">
                                     {/* Desktop / large-screen logo */}
-                                    <img src={logo} alt="FreightPower" className="landing-logo-image desktop-logo" />
+                                    <img src={logo} alt={tr('driverDashboard.logoAlt', 'FreightPower')} className="landing-logo-image desktop-logo" />
                                     {/* Responsive compact logo shown at <=768px */}
-                                    <img src={resp_logo} alt="FreightPower" className="landing-logo-image mobile-logo" />
+                                    <img src={resp_logo} alt={tr('driverDashboard.logoAlt', 'FreightPower')} className="landing-logo-image mobile-logo" />
                                   </div>
                 </div>
                       <div className="user-profile dd-user-profile">
@@ -2280,8 +2353,8 @@ export default function DriverDashboard() {
                           }}
                         />
                         <div className="user-info user-info-desktop dd-user-info">
-                          <div className="user-name">{profileData.name || 'Driver'}</div>
-                          <div className="user-role dd-user-role">{profileData.role}</div>
+                          <div className="user-name">{profileData.name || tr('driverDashboard.home.defaultName', 'Driver')}</div>
+                          <div className="user-role dd-user-role">{isPostHire ? tr('driverDashboard.role.activeDriver', 'Active Driver') : tr('driverDashboard.role.preHireDriver', 'Pre-Hire Driver')}</div>
                         </div>
                       </div>
 
@@ -2295,10 +2368,10 @@ export default function DriverDashboard() {
               <>
                 <span className="dd-posthire-status">
                   <span className="dd-status-dot dd-all-docs-active" />
-                  <span className="dd-status-text">All Docs Active</span>
+                  <span className="dd-status-text">{tr('driverDashboard.postHire.allDocsActive', 'All Docs Active')}</span>
                 </span>
                 <span className="dd-posthire-status">
-                  <span className="dd-status-text">{isAvailable ? 'Available' : 'Unavailable'}</span>
+                  <span className="dd-status-text">{isAvailable ? tr('common.available', 'Available') : tr('common.unavailable', 'Unavailable')}</span>
                   <label className="dd-toggle-switch">
                     <input 
                       type="checkbox" 
@@ -2319,7 +2392,7 @@ export default function DriverDashboard() {
                       type="button"
                       className="notif"
                       onClick={handleNotifToggle}
-                      aria-label="Open notifications tray"
+                      aria-label={tr('driverDashboard.notifications.openTray', 'Open notifications tray')}
                       style={{ position: 'relative' }}
                     >
                     <i className="fa-regular fa-bell notif-icon dd-notif-icon" aria-hidden="true" />
@@ -2327,12 +2400,12 @@ export default function DriverDashboard() {
                     </button>
 
                     {notifOpen && (
-                      <div className="dd-notif-dropdown" role="dialog" aria-label="Notifications">
+                      <div className="dd-notif-dropdown" role="dialog" aria-label={tr('common.notifications', 'Notifications')}>
                         <div className="dd-notif-dropdown-header">
-                          <div className="dd-notif-dropdown-title">Notifications</div>
+                          <div className="dd-notif-dropdown-title">{tr('common.notifications', 'Notifications')}</div>
                           <div className="dd-notif-dropdown-actions">
                             <button type="button" className="btn small ghost-cd" onClick={() => setNotifOpen(false)}>
-                              Close
+                              {tr('common.close', 'Close')}
                             </button>
                           </div>
                         </div>
@@ -2340,10 +2413,10 @@ export default function DriverDashboard() {
                         <div className="dd-notif-dropdown-body" style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
                           <div className="dd-notif-section">
                             <div className="dd-notif-section-title">
-                              Unopened ({(notifItems || []).filter((n) => !n?.is_read).length})
+                              {tr('driverDashboard.notifications.unopened', 'Unopened')} ({(notifItems || []).filter((n) => !n?.is_read).length})
                             </div>
                             {(notifItems || []).filter((n) => !n?.is_read).length === 0 ? (
-                              <div className="dd-notif-empty">No unopened notifications.</div>
+                              <div className="dd-notif-empty">{tr('driverDashboard.notifications.noneUnopened', 'No unopened notifications.')}</div>
                             ) : (
                               (notifItems || [])
                                 .filter((n) => !n?.is_read)
@@ -2355,7 +2428,7 @@ export default function DriverDashboard() {
                                     className="dd-notif-item dd-notif-item--unread"
                                     onClick={() => handleNotifAction(n)}
                                   >
-                                    <div className="dd-notif-item-title">{String(n?.title || 'Notification')}</div>
+                                    <div className="dd-notif-item-title">{String(n?.title || tr('driverDashboard.notifications.notification', 'Notification'))}</div>
                                     <div className="dd-notif-item-body">{String(n?.message || n?.body || '')}</div>
                                     <div className="dd-notif-item-when">{String(n?.relative_time || n?.formatted_time || '')}</div>
                                   </button>
@@ -2364,9 +2437,9 @@ export default function DriverDashboard() {
                           </div>
 
                           <div className="dd-notif-section" style={{ marginTop: 10 }}>
-                            <div className="dd-notif-section-title">Opened</div>
+                            <div className="dd-notif-section-title">{tr('driverDashboard.notifications.opened', 'Opened')}</div>
                             {(notifItems || []).filter((n) => Boolean(n?.is_read)).length === 0 ? (
-                              <div className="dd-notif-empty">No opened notifications.</div>
+                              <div className="dd-notif-empty">{tr('driverDashboard.notifications.noneOpened', 'No opened notifications.')}</div>
                             ) : (
                               (notifItems || [])
                                 .filter((n) => Boolean(n?.is_read))
@@ -2378,7 +2451,7 @@ export default function DriverDashboard() {
                                     className="dd-notif-item"
                                     onClick={() => handleNotifAction(n)}
                                   >
-                                    <div className="dd-notif-item-title">{String(n?.title || 'Notification')}</div>
+                                    <div className="dd-notif-item-title">{String(n?.title || tr('driverDashboard.notifications.notification', 'Notification'))}</div>
                                     <div className="dd-notif-item-body">{String(n?.message || n?.body || '')}</div>
                                     <div className="dd-notif-item-when">{String(n?.relative_time || n?.formatted_time || '')}</div>
                                   </button>
@@ -2387,7 +2460,7 @@ export default function DriverDashboard() {
                           </div>
 
                           {Boolean(notifLoading) && (
-                            <div className="dd-notif-empty">Loading…</div>
+                            <div className="dd-notif-empty">{tr('common.loading', 'Loading…')}</div>
                           )}
 
                           <button
@@ -2406,7 +2479,7 @@ export default function DriverDashboard() {
                               cursor: 'pointer',
                             }}
                           >
-                            Click to see more
+                            {tr('driverDashboard.notifications.seeMore', 'Click to see more')}
                           </button>
                         </div>
                       </div>
@@ -2420,7 +2493,7 @@ export default function DriverDashboard() {
                 {missingRequiredDocsCount > 0 && (
                   <span className="dd-missing-doc-chip">
                     <span className="missing-doc-dot dd-missing-doc-dot" />
-                    <span className="missing-doc-text dd-missing-doc-text">Missing Docs</span>
+                    <span className="missing-doc-text dd-missing-doc-text">{tr('driverDashboard.docs.missingDocs', 'Missing Docs')}</span>
                   </span>
                 )}
                 <div className="dd-notif-bell" style={{ position: 'relative' }}>
@@ -2429,7 +2502,7 @@ export default function DriverDashboard() {
                       type="button"
                       className="notif"
                       onClick={handleNotifToggle}
-                      aria-label="Open notifications tray"
+                      aria-label={tr('driverDashboard.notifications.openTray', 'Open notifications tray')}
                       style={{ position: 'relative' }}
                     >
                     <i className="fa-regular fa-bell notif-icon dd-notif-icon" aria-hidden="true" />
@@ -2437,12 +2510,12 @@ export default function DriverDashboard() {
                     </button>
 
                     {notifOpen && (
-                      <div className="dd-notif-dropdown" role="dialog" aria-label="Notifications">
+                      <div className="dd-notif-dropdown" role="dialog" aria-label={tr('common.notifications', 'Notifications')}>
                         <div className="dd-notif-dropdown-header">
-                          <div className="dd-notif-dropdown-title">Notifications</div>
+                          <div className="dd-notif-dropdown-title">{tr('common.notifications', 'Notifications')}</div>
                           <div className="dd-notif-dropdown-actions">
                             <button type="button" className="btn small ghost-cd" onClick={() => setNotifOpen(false)}>
-                              Close
+                              {tr('common.close', 'Close')}
                             </button>
                           </div>
                         </div>
@@ -2450,10 +2523,10 @@ export default function DriverDashboard() {
                         <div className="dd-notif-dropdown-body" style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
                           <div className="dd-notif-section">
                             <div className="dd-notif-section-title">
-                              Unopened ({(notifItems || []).filter((n) => !n?.is_read).length})
+                              {tr('driverDashboard.notifications.unopened', 'Unopened')} ({(notifItems || []).filter((n) => !n?.is_read).length})
                             </div>
                             {(notifItems || []).filter((n) => !n?.is_read).length === 0 ? (
-                              <div className="dd-notif-empty">No unopened notifications.</div>
+                              <div className="dd-notif-empty">{tr('driverDashboard.notifications.noneUnopened', 'No unopened notifications.')}</div>
                             ) : (
                               (notifItems || [])
                                 .filter((n) => !n?.is_read)
@@ -2465,7 +2538,7 @@ export default function DriverDashboard() {
                                     className="dd-notif-item dd-notif-item--unread"
                                     onClick={() => handleNotifAction(n)}
                                   >
-                                    <div className="dd-notif-item-title">{String(n?.title || 'Notification')}</div>
+                                    <div className="dd-notif-item-title">{String(n?.title || tr('driverDashboard.notifications.notification', 'Notification'))}</div>
                                     <div className="dd-notif-item-body">{String(n?.message || n?.body || '')}</div>
                                     <div className="dd-notif-item-when">{String(n?.relative_time || n?.formatted_time || '')}</div>
                                   </button>
@@ -2474,9 +2547,9 @@ export default function DriverDashboard() {
                           </div>
 
                           <div className="dd-notif-section" style={{ marginTop: 10 }}>
-                            <div className="dd-notif-section-title">Opened</div>
+                            <div className="dd-notif-section-title">{tr('driverDashboard.notifications.opened', 'Opened')}</div>
                             {(notifItems || []).filter((n) => Boolean(n?.is_read)).length === 0 ? (
-                              <div className="dd-notif-empty">No opened notifications.</div>
+                              <div className="dd-notif-empty">{tr('driverDashboard.notifications.noneOpened', 'No opened notifications.')}</div>
                             ) : (
                               (notifItems || [])
                                 .filter((n) => Boolean(n?.is_read))
@@ -2488,7 +2561,7 @@ export default function DriverDashboard() {
                                     className="dd-notif-item"
                                     onClick={() => handleNotifAction(n)}
                                   >
-                                    <div className="dd-notif-item-title">{String(n?.title || 'Notification')}</div>
+                                    <div className="dd-notif-item-title">{String(n?.title || tr('driverDashboard.notifications.notification', 'Notification'))}</div>
                                     <div className="dd-notif-item-body">{String(n?.message || n?.body || '')}</div>
                                     <div className="dd-notif-item-when">{String(n?.relative_time || n?.formatted_time || '')}</div>
                                   </button>
@@ -2497,7 +2570,7 @@ export default function DriverDashboard() {
                           </div>
 
                           {Boolean(notifLoading) && (
-                            <div className="dd-notif-empty">Loading…</div>
+                            <div className="dd-notif-empty">{tr('common.loading', 'Loading…')}</div>
                           )}
 
                           <button
@@ -2516,7 +2589,7 @@ export default function DriverDashboard() {
                               cursor: 'pointer',
                             }}
                           >
-                            Click to see more
+                            {tr('driverDashboard.notifications.seeMore', 'Click to see more')}
                           </button>
                         </div>
                       </div>
@@ -2533,23 +2606,23 @@ export default function DriverDashboard() {
         <aside className={`fp-sidebar ${isSidebarOpen ? 'open' : ''}`}>
           <div className="sidebar-header">
             <div className="brand-row">
-              <div className="logo"><img src={logo} alt="FreightPower" className="landing-logo-image" /></div>
+              <div className="logo"><img src={logo} alt={tr('driverDashboard.logoAlt', 'FreightPower')} className="landing-logo-image" /></div>
             </div>
             <div className="ids mobile-ids">
-              <div className="mobile-id-line"><span className="id-pair"><span className="id-label">{profileData.name || 'Driver'}</span></span></div>
-              <div className="mobile-id-line"><span className="id-pair"><span className="id-label">{profileData.role}</span></span></div>
+              <div className="mobile-id-line"><span className="id-pair"><span className="id-label">{profileData.name || tr('driverDashboard.home.defaultName', 'Driver')}</span></span></div>
+              <div className="mobile-id-line"><span className="id-pair"><span className="id-label">{isPostHire ? tr('driverDashboard.role.activeDriver', 'Active Driver') : tr('driverDashboard.role.preHireDriver', 'Pre-Hire Driver')}</span></span></div>
             </div>
             <div className="chips sidebar-chips">
               {isPostHire ? (
                 <>
-                  <span className="chip green">All Docs Active</span>
+                  <span className="chip green">{tr('driverDashboard.postHire.allDocsActive', 'All Docs Active')}</span>
                   <span className={`chip ${isAvailable ? 'blue' : 'gray'}`}>
-                    {isAvailable ? 'Available' : 'Unavailable'}
+                    {isAvailable ? tr('common.available', 'Available') : tr('common.unavailable', 'Unavailable')}
                   </span>
                   <span className="chip orange">{timeLeftLabel}</span>
                 </>
               ) : (
-                missingRequiredDocsCount > 0 ? <span className="chip yellow">Missing Docs</span> : null
+                missingRequiredDocsCount > 0 ? <span className="chip yellow">{tr('driverDashboard.docs.missingDocs', 'Missing Docs')}</span> : null
               )}
             </div>
           </div>
@@ -2578,17 +2651,17 @@ export default function DriverDashboard() {
             ))}
           </nav>
           <div className="sidebar-dark-control" aria-hidden="false">
-            <span className="dark-label">Dark Mode</span>
+            <span className="dark-label">{t(language, 'dashboard.darkMode', 'Dark Mode')}</span>
             <button
               className="dark-toggle"
               aria-pressed={isDarkMode}
-              aria-label="Toggle dark mode"
+              aria-label={t(language, 'dashboard.toggleDarkMode', 'Toggle dark mode')}
               onClick={() => setIsDarkMode((s) => !s)}
             >
               <span className="dark-toggle-knob" />
             </button>
           </div>
-          <button className="sidebar-close" aria-label="Close sidebar" onClick={() => setIsSidebarOpen(false)}>
+          <button className="sidebar-close" aria-label={t(language, 'dashboard.closeSidebar', 'Close sidebar')} onClick={() => setIsSidebarOpen(false)}>
             <i className="fa-solid fa-xmark" />
           </button>
         </aside>
@@ -2605,14 +2678,14 @@ export default function DriverDashboard() {
         <div className="modal-overlay" onClick={() => setShowSupportModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
             <div className="modal-header">
-              <h3>Get Support</h3>
+              <h3>{t(language, 'support.title', 'Get Support')}</h3>
               <button className="modal-close" onClick={() => setShowSupportModal(false)}>
                 <i className="fa-solid fa-xmark"></i>
               </button>
             </div>
             <form onSubmit={handleSupportSubmit} style={{ padding: '20px' }}>
               <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600' }}>Name</label>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600' }}>{t(language, 'common.name', 'Name')}</label>
                 <input
                   type="text"
                   required
@@ -2625,11 +2698,11 @@ export default function DriverDashboard() {
                     borderRadius: '6px',
                     fontSize: '14px'
                   }}
-                  placeholder="Your name"
+                  placeholder={t(language, 'support.yourName', 'Your name')}
                 />
               </div>
               <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600' }}>Email</label>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600' }}>{t(language, 'common.email', 'Email')}</label>
                 <input
                   type="email"
                   required
@@ -2642,11 +2715,11 @@ export default function DriverDashboard() {
                     borderRadius: '6px',
                     fontSize: '14px'
                   }}
-                  placeholder="your.email@example.com"
+                  placeholder={t(language, 'support.yourEmail', 'your.email@example.com')}
                 />
               </div>
               <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600' }}>Subject</label>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600' }}>{t(language, 'common.subject', 'Subject')}</label>
                 <input
                   type="text"
                   required
@@ -2659,11 +2732,11 @@ export default function DriverDashboard() {
                     borderRadius: '6px',
                     fontSize: '14px'
                   }}
-                  placeholder="Brief description of your issue"
+                  placeholder={t(language, 'support.subjectPlaceholder', 'Brief description of your issue')}
                 />
               </div>
               <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600' }}>Message</label>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600' }}>{t(language, 'common.message', 'Message')}</label>
                 <textarea
                   required
                   value={supportFormData.message}
@@ -2677,7 +2750,7 @@ export default function DriverDashboard() {
                     fontSize: '14px',
                     resize: 'vertical'
                   }}
-                  placeholder="Please describe your issue in detail..."
+                  placeholder={t(language, 'support.messagePlaceholder', 'Please describe your issue in detail...')}
                 />
               </div>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
@@ -2687,14 +2760,16 @@ export default function DriverDashboard() {
                   onClick={() => setShowSupportModal(false)}
                   disabled={supportSubmitting}
                 >
-                  Cancel
+                  {t(language, 'common.cancel', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   className="btn small-cd"
                   disabled={supportSubmitting}
                 >
-                  {supportSubmitting ? 'Sending...' : 'Send Request'}
+                  {supportSubmitting
+                    ? t(language, 'common.sending', 'Sending…')
+                    : t(language, 'common.sendRequest', 'Send Request')}
                 </button>
               </div>
             </form>

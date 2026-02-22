@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import Dict, Any, List, Optional
 import json
 import time
+import hashlib
 from datetime import datetime, timedelta
 
 from firebase_admin import firestore
@@ -17,6 +18,90 @@ from .models import (
 )
 
 router = APIRouter(prefix="/onboarding", tags=["Onboarding"])
+
+
+def _pref_enabled(*, user: Dict[str, Any], uid: str, key: str, default: bool = True) -> bool:
+    """Best-effort read of a user's notification preference.
+
+    Defaults to True when unset to preserve existing behavior.
+    """
+
+    try:
+        prefs = user.get("notification_preferences")
+        if isinstance(prefs, dict) and key in prefs:
+            return bool(prefs.get(key))
+
+        snap = db.collection("users").document(str(uid)).get()
+        if not getattr(snap, "exists", False):
+            return bool(default)
+        d = snap.to_dict() or {}
+        prefs = d.get("notification_preferences")
+        if not isinstance(prefs, dict):
+            return bool(default)
+        if key not in prefs:
+            return bool(default)
+        return bool(prefs.get(key))
+    except Exception:
+        return bool(default)
+
+
+def _compliance_notif_id(uid: str, item_key: str) -> str:
+    raw = f"compliance:{uid}:{item_key}".encode("utf-8")
+    return "comp_" + hashlib.sha1(raw).hexdigest()[:28]
+
+
+def _upsert_compliance_notification(*, uid: str, item_key: str, title: str, message: str, action_url: str, status: str) -> None:
+    """Upsert a compliance notification for a specific required-doc key.
+
+    Keeps 'is_read' sticky if the user already opened it.
+    """
+
+    try:
+        now = int(time.time())
+        notif_id = _compliance_notif_id(str(uid), str(item_key))
+        ref = db.collection("notifications").document(notif_id)
+
+        is_read = False
+        created_at = now
+        try:
+            snap = ref.get()
+            if getattr(snap, "exists", False):
+                existing = snap.to_dict() or {}
+                is_read = bool(existing.get("is_read", False))
+                created_at = int(existing.get("created_at") or now)
+        except Exception:
+            pass
+
+        payload = {
+            "id": notif_id,
+            "user_id": str(uid),
+            "notification_type": "compliance_alert",
+            "title": str(title or "Compliance Alert"),
+            "message": str(message or ""),
+            "resource_type": "compliance",
+            "resource_id": str(item_key),
+            "action_url": str(action_url or "/driver-dashboard?nav=hiring"),
+            "is_read": bool(is_read),
+            "created_at": int(created_at),
+            "updated_at": now,
+            "category": "compliance",
+            "compliance": {
+                "key": str(item_key),
+                "status": str(status or ""),
+            },
+        }
+
+        ref.set(payload, merge=True)
+    except Exception:
+        return
+
+
+def _clear_compliance_notification(*, uid: str, item_key: str) -> None:
+    try:
+        notif_id = _compliance_notif_id(str(uid), str(item_key))
+        db.collection("notifications").document(notif_id).delete()
+    except Exception:
+        return
 
 
 def _normalize_identifier(value: Any) -> str | None:
@@ -1070,6 +1155,34 @@ async def get_driver_required_docs(user: Dict[str, Any] = Depends(get_current_us
 
     total_required = len(items)
     percent = int((completed / total_required) * 100) if total_required else 0
+
+    # If enabled, generate compliance alert notifications that drive the in-app
+    # Notifications UI. Best-effort and deduplicated (one per required key).
+    try:
+        compliance_alerts_on = _pref_enabled(user=user, uid=uid, key="compliance_alerts", default=True)
+        if compliance_alerts_on:
+            for it in items:
+                k = str(it.get("key") or "").strip().lower()
+                if not k:
+                    continue
+                status_text = str(it.get("status") or "").strip()
+
+                if status_text in {"Missing", "Expired", "Expiring Soon"}:
+                    title = f"Compliance Alert: {it.get('title') or k}"
+                    msg = f"Status: {status_text}. Review and resolve in Hiring & Onboarding."
+                    _upsert_compliance_notification(
+                        uid=uid,
+                        item_key=k,
+                        title=title,
+                        message=msg,
+                        action_url="/driver-dashboard?nav=hiring",
+                        status=status_text,
+                    )
+                else:
+                    # If resolved, remove the corresponding active alert.
+                    _clear_compliance_notification(uid=uid, item_key=k)
+    except Exception as e:
+        print(f"Warning: compliance notification generation failed: {e}")
 
     return {
         "required": items,

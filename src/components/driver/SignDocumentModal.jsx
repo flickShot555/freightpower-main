@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import '../../styles/driver/SignDocumentModal.css'
 import { useAuth } from '../../contexts/AuthContext'
+import { useUserSettings } from '../../contexts/UserSettingsContext'
 import { API_URL } from '../../config'
+import { t } from '../../i18n/translate'
 
 export default function SignDocumentModal({ documentItem, onClose, onSigned, mode = 'view' }){
   const [templateHtml, setTemplateHtml] = useState('')
@@ -20,6 +22,9 @@ export default function SignDocumentModal({ documentItem, onClose, onSigned, mod
   const [error, setError] = useState('')
 
   const { currentUser } = useAuth()
+  const { settings } = useUserSettings()
+  const language = settings?.language || 'en'
+  const tr = (key, fallback) => t(language, key, fallback)
 
   useEffect(()=>{
     // lock background scroll while modal open
@@ -34,17 +39,28 @@ export default function SignDocumentModal({ documentItem, onClose, onSigned, mod
   const canSign = Boolean(documentItem?.key) && Boolean(documentItem?.version) && documentItem?.status !== 'Signed'
 
   const isViewOnly = mode === 'view'
-  const titleText = documentItem.title || 'Consent Document'
+  const titleText = documentItem.title || tr('signDocumentModal.defaults.documentTitle', 'Consent Document')
+
+  const SIGN_METHOD_LABELS = {
+    typed: { key: 'signDocumentModal.signMethod.typed', fallback: 'Type name (auto-filled)' },
+    image: { key: 'signDocumentModal.signMethod.image', fallback: 'Signature image (stored)' },
+  }
+
+  const methodLabel = (value) => {
+    const config = SIGN_METHOD_LABELS[value]
+    return config ? tr(config.key, config.fallback) : String(value || '')
+  }
 
   const iframeSrcDoc = useMemo(() => {
     // Always render server-generated template HTML (isolated in iframe).
-    return templateHtml || '<html><body style="font-family: Arial, sans-serif; padding: 16px;">Loading…</body></html>'
-  }, [templateHtml])
+    const loadingText = tr('signDocumentModal.preview.loadingHtml', 'Loading…')
+    return templateHtml || `<html><body style="font-family: Arial, sans-serif; padding: 16px;">${loadingText}</body></html>`
+  }, [templateHtml, language])
 
   const iframeRef = useRef(null)
 
   const apiFetch = async (path, init = {}) => {
-    if (!currentUser) throw new Error('Not signed in')
+    if (!currentUser) throw new Error(tr('signDocumentModal.errors.notSignedIn', 'Not signed in'))
     const token = await currentUser.getIdToken()
     const headers = new Headers(init.headers || {})
     headers.set('Authorization', `Bearer ${token}`)
@@ -118,7 +134,7 @@ export default function SignDocumentModal({ documentItem, onClose, onSigned, mod
       }
     } catch (e) {
       console.error('Template/signature load error:', e)
-      setTemplateError('Could not load the document preview.')
+      setTemplateError(tr('signDocumentModal.errors.previewLoadFailed', 'Could not load the document preview.'))
     } finally {
       setTemplateLoading(false)
     }
@@ -140,11 +156,11 @@ export default function SignDocumentModal({ documentItem, onClose, onSigned, mod
   const handleUploadSignature = async (file) => {
     if (!file) return
     if (!currentUser) {
-      setError('You must be signed in to upload a signature image.')
+      setError(tr('signDocumentModal.errors.mustBeSignedInToUpload', 'You must be signed in to upload a signature image.'))
       return
     }
     if (file.type && file.type !== 'image/png') {
-      setError('Only PNG signature images are allowed.')
+      setError(tr('signDocumentModal.errors.onlyPngAllowed', 'Only PNG signature images are allowed.'))
       return
     }
     setUploadingSignature(true)
@@ -169,7 +185,7 @@ export default function SignDocumentModal({ documentItem, onClose, onSigned, mod
       await loadTemplateAndSignature()
     } catch (e) {
       console.error('Signature upload error:', e)
-      setError('Could not upload signature image. Please try again.')
+      setError(tr('signDocumentModal.errors.signatureUploadFailed', 'Could not upload signature image. Please try again.'))
     } finally {
       setUploadingSignature(false)
     }
@@ -177,19 +193,19 @@ export default function SignDocumentModal({ documentItem, onClose, onSigned, mod
 
   const handleConfirmSign = async () => {
     if (!canSign) {
-      setError('This document cannot be signed right now.')
+      setError(tr('signDocumentModal.errors.cannotSignNow', 'This document cannot be signed right now.'))
       return
     }
     if (!currentUser) {
-      setError('You must be signed in to sign documents.')
+      setError(tr('signDocumentModal.errors.mustBeSignedInToSign', 'You must be signed in to sign documents.'))
       return
     }
     if (!documentItem?.version) {
-      setError('Missing consent version. Please close and reopen.')
+      setError(tr('signDocumentModal.errors.missingVersion', 'Missing consent version. Please close and reopen.'))
       return
     }
     if (signMethod === 'image' && !signatureExists) {
-      setError('Signature image not found. Upload a PNG signature image first.')
+      setError(tr('signDocumentModal.errors.signatureImageMissing', 'Signature image not found. Upload a PNG signature image first.'))
       return
     }
 
@@ -233,7 +249,7 @@ export default function SignDocumentModal({ documentItem, onClose, onSigned, mod
       onClose()
     } catch (e) {
       console.error('Sign error:', e)
-      setError(e?.message || 'Could not sign the document. Please try again.')
+      setError(e?.message || tr('signDocumentModal.errors.signFailed', 'Could not sign the document. Please try again.'))
     } finally {
       setSubmitting(false)
     }
@@ -242,10 +258,10 @@ export default function SignDocumentModal({ documentItem, onClose, onSigned, mod
   const handleRevoke = async () => {
     if (!documentItem?.key) return
     if (!currentUser) {
-      setError('You must be signed in to revoke consents.')
+      setError(tr('signDocumentModal.errors.mustBeSignedInToRevoke', 'You must be signed in to revoke consents.'))
       return
     }
-    const ok = window.confirm('Revoke this consent? This may immediately block marketplace access.')
+    const ok = window.confirm(tr('signDocumentModal.confirms.revoke', 'Revoke this consent? This may immediately block marketplace access.'))
     if (!ok) return
 
     setSubmitting(true)
@@ -272,7 +288,7 @@ export default function SignDocumentModal({ documentItem, onClose, onSigned, mod
       onClose()
     } catch (e) {
       console.error('Revoke error:', e)
-      setError('Could not revoke consent. Please try again.')
+      setError(tr('signDocumentModal.errors.revokeFailed', 'Could not revoke consent. Please try again.'))
     } finally {
       setSubmitting(false)
     }
@@ -280,7 +296,7 @@ export default function SignDocumentModal({ documentItem, onClose, onSigned, mod
 
   const buildPdfFromIframe = async () => {
     const body = iframeRef.current?.contentDocument?.body
-    if (!body) throw new Error('Document preview is not ready yet.')
+    if (!body) throw new Error(tr('signDocumentModal.errors.previewNotReady', 'Document preview is not ready yet.'))
 
     const { jsPDF } = await import('jspdf')
     const doc = new jsPDF({ unit: 'pt', format: 'letter' })
@@ -304,7 +320,7 @@ export default function SignDocumentModal({ documentItem, onClose, onSigned, mod
       doc.save(`freightpower_${safeKey}.pdf`)
     } catch (e) {
       console.error('Export PDF error:', e)
-      setError(e?.message || 'Could not export PDF.')
+      setError(e?.message || tr('signDocumentModal.errors.exportPdfFailed', 'Could not export PDF.'))
     } finally {
       setExportingPdf(false)
     }
@@ -321,8 +337,8 @@ export default function SignDocumentModal({ documentItem, onClose, onSigned, mod
 
       if (navigator?.canShare && navigator.canShare({ files: [file] }) && navigator?.share) {
         await navigator.share({
-          title: documentItem?.title || 'Signed Document',
-          text: 'Signed document attachment',
+          title: documentItem?.title || tr('signDocumentModal.share.defaultTitle', 'Signed Document'),
+          text: tr('signDocumentModal.share.defaultText', 'Signed document attachment'),
           files: [file]
         })
       } else {
@@ -331,7 +347,7 @@ export default function SignDocumentModal({ documentItem, onClose, onSigned, mod
       }
     } catch (e) {
       console.error('Share PDF error:', e)
-      setError(e?.message || 'Could not share PDF.')
+      setError(e?.message || tr('signDocumentModal.errors.sharePdfFailed', 'Could not share PDF.'))
     } finally {
       setExportingPdf(false)
     }
@@ -343,23 +359,23 @@ export default function SignDocumentModal({ documentItem, onClose, onSigned, mod
         <div className="fpdd-sig-header">
           <div className="fpdd-sig-header-left">
             <div className="fpdd-sig-titles">
-              <h3>{isViewOnly ? 'View Document' : 'Sign Document'}</h3>
+              <h3>{isViewOnly ? tr('signDocumentModal.header.view', 'View Document') : tr('signDocumentModal.header.sign', 'Sign Document')}</h3>
               <div className="fpdd-sig-doctitle">{titleText}</div>
-              <div className="fpdd-sig-subsmall">Legally binding digital signature — ESIGN/UETA compliant</div>
+              <div className="fpdd-sig-subsmall">{tr('signDocumentModal.subheader.legalLine', 'Legally binding digital signature — ESIGN/UETA compliant')}</div>
             </div>
           </div>
-          <button className="fpdd-sig-close" onClick={onClose} aria-label="Close">✕</button>
+          <button className="fpdd-sig-close" onClick={onClose} aria-label={tr('common.close', 'Close')}>✕</button>
         </div>
 
         <div className="fpdd-sig-body">
           <div className="fpdd-sig-left">
-            <h4 className="fpdd-section-title">Document Preview</h4>
+            <h4 className="fpdd-section-title">{tr('signDocumentModal.preview.title', 'Document Preview')}</h4>
             <div className="fpdd-sig-preview" style={{ padding: 0 }}>
               {templateError ? (
                 <div style={{ padding: 14 }} className="fpdd-preview-row">{templateError}</div>
               ) : (
                 <iframe
-                  title="consent-template"
+                  title={tr('signDocumentModal.preview.iframeTitle', 'Consent template')}
                   ref={iframeRef}
                   srcDoc={iframeSrcDoc}
                   style={{ width: '100%', height: 430, border: 'none', display: 'block' }}
@@ -369,19 +385,19 @@ export default function SignDocumentModal({ documentItem, onClose, onSigned, mod
 
             {!isViewOnly && (
               <>
-                <h4 className="fpdd-section-title" style={{ marginTop: 12 }}>Signature</h4>
+                <h4 className="fpdd-section-title" style={{ marginTop: 12 }}>{tr('signDocumentModal.signature.title', 'Signature')}</h4>
                 <div className="fpdd-info-card">
                   <div className="fpdd-sig-fields" style={{ alignItems: 'flex-end' }}>
                     <div className="fpdd-sig-field" style={{ flex: 1 }}>
-                      <label>Signing Method</label>
+                      <label>{tr('signDocumentModal.signature.signingMethod', 'Signing Method')}</label>
                       <select value={signMethod} onChange={e => setSignMethod(e.target.value)}>
-                        <option value="typed">Type name (auto-filled)</option>
-                        <option value="image">Signature image (stored)</option>
+                        <option value="typed">{methodLabel('typed')}</option>
+                        <option value="image">{methodLabel('image')}</option>
                       </select>
                     </div>
                     <div className="fpdd-sig-field" style={{ flex: 1 }}>
-                      <label>Driver Name (auto-fetched)</label>
-                      <input value={driverName || 'Driver'} readOnly />
+                      <label>{tr('signDocumentModal.signature.driverName', 'Driver Name (auto-fetched)')}</label>
+                      <input value={driverName || tr('signDocumentModal.defaults.driverName', 'Driver')} readOnly />
                     </div>
                   </div>
 
@@ -389,17 +405,17 @@ export default function SignDocumentModal({ documentItem, onClose, onSigned, mod
                     <div style={{ marginTop: 10 }}>
                       {signatureExists && signaturePreviewUrl ? (
                         <div>
-                          <div className="fpdd-preview-row" style={{ marginBottom: 8 }}>Signature image on file:</div>
+                          <div className="fpdd-preview-row" style={{ marginBottom: 8 }}>{tr('signDocumentModal.signature.imageOnFile', 'Signature image on file:')}</div>
                           <img
                             src={signaturePreviewUrl}
-                            alt="Stored signature"
+                            alt={tr('signDocumentModal.signature.storedAlt', 'Stored signature')}
                             style={{ maxWidth: '100%', maxHeight: 120, borderRadius: 8 }}
                           />
                         </div>
                       ) : (
                         <div>
                           <div className="fpdd-preview-row" style={{ marginBottom: 8 }}>
-                            No signature image found. Upload a PNG signature image to continue.
+                            {tr('signDocumentModal.signature.noImageFound', 'No signature image found. Upload a PNG signature image to continue.')}
                           </div>
                           <input
                             type="file"
@@ -422,23 +438,23 @@ export default function SignDocumentModal({ documentItem, onClose, onSigned, mod
 
           {!isViewOnly && (
             <button className="btn small-cd" onClick={handleConfirmSign} disabled={submitting || templateLoading || !canSign}>
-              {submitting ? 'Signing…' : 'Confirm & Sign'}
+              {submitting ? tr('signDocumentModal.actions.signing', 'Signing…') : tr('signDocumentModal.actions.confirmSign', 'Confirm & Sign')}
             </button>
           )}
 
           {documentItem?.status === 'Signed' && (
             <button className="btn small ghost-cd" onClick={handleRevoke} disabled={submitting}>
-              Revoke Consent
+              {tr('signDocumentModal.actions.revokeConsent', 'Revoke Consent')}
             </button>
           )}
 
           {isViewOnly && (
             <div className="fpdd-sig-secondary" style={{marginTop:12}}>
               <button className="btn small ghost-cd" onClick={handleExportPdf} disabled={exportingPdf || templateLoading}>
-                {exportingPdf ? 'Preparing…' : 'Export as PDF'}
+                {exportingPdf ? tr('signDocumentModal.actions.preparing', 'Preparing…') : tr('signDocumentModal.actions.exportPdf', 'Export as PDF')}
               </button>
               <button className="btn small ghost-cd" onClick={handleSharePdf} disabled={exportingPdf || templateLoading}>
-                {exportingPdf ? 'Preparing…' : 'Share (PDF attachment)'}
+                {exportingPdf ? tr('signDocumentModal.actions.preparing', 'Preparing…') : tr('signDocumentModal.actions.sharePdf', 'Share (PDF attachment)')}
               </button>
             </div>
           )}

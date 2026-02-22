@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import '../../styles/driver/ConsentESignature.css';
 import SignDocumentModal from './SignDocumentModal';
 import { useAuth } from '../../contexts/AuthContext';
+import { useUserSettings } from '../../contexts/UserSettingsContext';
 import { API_URL } from '../../config';
+import { t } from '../../i18n/translate';
 
 
 export default function ConsentESignature() {
@@ -11,6 +13,34 @@ export default function ConsentESignature() {
   const [modalMode, setModalMode] = useState('view'); // view | sign
 
   const { currentUser } = useAuth();
+  const { settings } = useUserSettings();
+  const language = settings?.language || 'en';
+  const tr = (key, fallback) => t(language, key, fallback);
+
+  const CATEGORY_LABELS = {
+    Operational: { key: 'consentEsign.category.operational', fallback: 'Operational' },
+    Consent: { key: 'consentEsign.category.consent', fallback: 'Consent' },
+    Policy: { key: 'consentEsign.category.policy', fallback: 'Policy' },
+    CDL: { key: 'consentEsign.category.cdl', fallback: 'CDL' },
+  };
+
+  const STATUS_LABELS = {
+    Signed: { key: 'consentEsign.status.signed', fallback: 'Signed' },
+    Pending: { key: 'consentEsign.status.pending', fallback: 'Pending' },
+    Unsigned: { key: 'consentEsign.status.unsigned', fallback: 'Unsigned' },
+    Revoked: { key: 'consentEsign.status.revoked', fallback: 'Revoked' },
+  };
+
+  const trCategory = (value) => {
+    const config = CATEGORY_LABELS[value];
+    return config ? tr(config.key, config.fallback) : String(value || '');
+  };
+
+  const trStatus = (value) => {
+    const config = STATUS_LABELS[value];
+    return config ? tr(config.key, config.fallback) : String(value || '');
+  };
+
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -45,7 +75,8 @@ export default function ConsentESignature() {
         category: c.category || 'Consent',
         status: c.revoked_at ? 'Revoked' : (c.status || 'Unsigned'),
         note: c.note || '',
-        carrier: c.scope === 'per_carrier' ? (c.carrier_name ? `Carrier: ${c.carrier_name}` : (c.carrier_id ? `Carrier: ${c.carrier_id}` : '')) : '',
+        carrier_name: c.carrier_name || null,
+        carrier_id: c.carrier_id || null,
         due: '',
         version: c.version,
         scope: c.scope || 'global',
@@ -57,7 +88,7 @@ export default function ConsentESignature() {
       setDocuments(normalized);
     } catch (e) {
       console.error('Consent load error:', e);
-      setError('Could not load consent documents.');
+      setError(tr('consentEsign.errors.loadFailed', 'Could not load consent documents.'));
       setDocuments([]);
     } finally {
       setLoading(false);
@@ -101,20 +132,20 @@ export default function ConsentESignature() {
     <div className="fpdd-consent-root">
         <header className="header-consent-driver">
           <div className="fp-header-titles">
-            <h2>Consent & E-Signature</h2>
-            <p className="fp-subtitle">Review, sign, and manage your required documents</p>
+            <h2>{tr('consentEsign.title', 'Consent & E-Signature')}</h2>
+            <p className="fp-subtitle">{tr('consentEsign.subtitle', 'Review, sign, and manage your required documents')}</p>
           </div>
           <div className="fpdd-consent-cta">
-          <button className="btn small-cd" onClick={() => setActiveTab('consent')}>View Pending Consents</button>
+          <button className="btn small-cd" onClick={() => setActiveTab('consent')}>{tr('consentEsign.viewPendingConsents', 'View Pending Consents')}</button>
         </div>
         </header>
 
       <div className="fpdd-consent-tabs">
-        <button className={`fpdd-tab ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>All Documents</button>
-        <button className={`fpdd-tab ${activeTab === 'operational' ? 'active' : ''}`} onClick={() => setActiveTab('operational')}>Operational</button>
-        <button className={`fpdd-tab ${activeTab === 'consent' ? 'active' : ''}`} onClick={() => setActiveTab('consent')}>Consent Forms</button>
-        <button className={`fpdd-tab ${activeTab === 'policy' ? 'active' : ''}`} onClick={() => setActiveTab('policy')}>Policy & Compliance</button>
-        <button className={`fpdd-tab ${activeTab === 'cdl' ? 'active' : ''}`} onClick={() => setActiveTab('cdl')}>CDL Forms</button>
+        <button className={`fpdd-tab ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>{tr('consentEsign.tabs.all', 'All Documents')}</button>
+        <button className={`fpdd-tab ${activeTab === 'operational' ? 'active' : ''}`} onClick={() => setActiveTab('operational')}>{tr('consentEsign.tabs.operational', 'Operational')}</button>
+        <button className={`fpdd-tab ${activeTab === 'consent' ? 'active' : ''}`} onClick={() => setActiveTab('consent')}>{tr('consentEsign.tabs.consentForms', 'Consent Forms')}</button>
+        <button className={`fpdd-tab ${activeTab === 'policy' ? 'active' : ''}`} onClick={() => setActiveTab('policy')}>{tr('consentEsign.tabs.policyCompliance', 'Policy & Compliance')}</button>
+        <button className={`fpdd-tab ${activeTab === 'cdl' ? 'active' : ''}`} onClick={() => setActiveTab('cdl')}>{tr('consentEsign.tabs.cdlForms', 'CDL Forms')}</button>
       </div>
 
       <section className="fpdd-consent-list-area">
@@ -122,8 +153,8 @@ export default function ConsentESignature() {
           {loading && (
             <div className="fpdd-consent-card">
               <div className="fpdd-consent-card-left">
-                <div className="fpdd-consent-title-row"><h3>Loading...</h3></div>
-                <p className="fpdd-consent-note">Fetching your consent documents.</p>
+                <div className="fpdd-consent-title-row"><h3>{tr('common.loading', 'Loading…')}</h3></div>
+                <p className="fpdd-consent-note">{tr('consentEsign.loading.fetching', 'Fetching your consent documents.')}</p>
               </div>
             </div>
           )}
@@ -131,11 +162,11 @@ export default function ConsentESignature() {
           {!loading && error && (
             <div className="fpdd-consent-card">
               <div className="fpdd-consent-card-left">
-                <div className="fpdd-consent-title-row"><h3>Unable to load</h3></div>
+                <div className="fpdd-consent-title-row"><h3>{tr('consentEsign.errors.unableToLoadTitle', 'Unable to load')}</h3></div>
                 <p className="fpdd-consent-note">{error}</p>
               </div>
               <div className="fpdd-consent-card-right">
-                <button className="btn small-cd" onClick={loadConsents}>Retry</button>
+                <button className="btn small-cd" onClick={loadConsents}>{tr('consentEsign.retry', 'Retry')}</button>
               </div>
             </div>
           )}
@@ -145,13 +176,18 @@ export default function ConsentESignature() {
               <div className="fpdd-consent-card-left">
                 <div className="fpdd-consent-title-row">
                   <h3>{d.title}</h3>
-                  <div className={`int-status-badge ${d.category === 'Operational' ? 'active' : d.category === 'Policy' ? 'pending' : 'revoked'}`}>{d.category}</div>
-                  <div className={`int-status-badge ${d.status === 'Signed' ? 'active' : d.status === 'Pending' ? 'pending' : 'revoked'}`}>{d.status}</div>
+                  <div className={`int-status-badge ${d.category === 'Operational' ? 'active' : d.category === 'Policy' ? 'pending' : 'revoked'}`}>{trCategory(d.category)}</div>
+                  <div className={`int-status-badge ${d.status === 'Signed' ? 'active' : d.status === 'Pending' ? 'pending' : 'revoked'}`}>{trStatus(d.status)}</div>
                 </div>
                 <p className="fpdd-consent-note">{d.note}</p>
                 <div className="fpdd-consent-meta">
-                  {d.carrier && <span className="fpdd-meta-item">{d.carrier}</span>}
-                  {d.due && <span className="fpdd-meta-item">Due: {d.due}</span>}
+                  {d.scope === 'per_carrier' && (
+                    <span className="fpdd-meta-item">
+                      {tr('consentEsign.meta.carrierPrefix', 'Carrier: ')}
+                      {d.carrier_name ? d.carrier_name : (d.carrier_id ? d.carrier_id : tr('consentEsign.meta.carrierUnknown', 'Unknown carrier'))}
+                    </span>
+                  )}
+                  {d.due && <span className="fpdd-meta-item">{tr('consentEsign.meta.duePrefix', 'Due: ')}{d.due}</span>}
                 </div>
               </div>
               <div className="fpdd-consent-card-right">
@@ -162,7 +198,7 @@ export default function ConsentESignature() {
                     setModalMode('view');
                   }}
                 >
-                  View
+                  {tr('common.view', 'View')}
                 </button>
                 <button
                   className="btn small-cd"
@@ -172,9 +208,9 @@ export default function ConsentESignature() {
                   }}
                   disabled={d.status === 'Signed'}
                 >
-                  Sign
+                  {tr('consentEsign.actions.sign', 'Sign')}
                 </button>
-                <button className="fpdd-more-btn" aria-label="more">⋯</button>
+                <button className="fpdd-more-btn" aria-label={tr('consentEsign.actions.moreAria', 'More')}>⋯</button>
               </div>
             </div>
           ))}
@@ -182,15 +218,15 @@ export default function ConsentESignature() {
 
         <div className="fpdd-consent-sidebar">
           <div className="fpdd-sidebar-card" style={{ marginTop: '20px' }}>
-            <h4>Recent Activity</h4>
+            <h4>{tr('consentEsign.recent.title', 'Recent Activity')}</h4>
             <table className="fpdd-recent-table">
               <thead>
                 <tr>
-                  <th>Document</th>
-                  <th>Category</th>
-                  <th>Status</th>
-                  <th>Signed Date</th>
-                  <th>Actions</th>
+                  <th>{tr('consentEsign.recent.table.document', 'Document')}</th>
+                  <th>{tr('consentEsign.recent.table.category', 'Category')}</th>
+                  <th>{tr('common.status', 'Status')}</th>
+                  <th>{tr('consentEsign.recent.table.signedDate', 'Signed Date')}</th>
+                  <th>{tr('consentEsign.recent.table.actions', 'Actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -200,19 +236,19 @@ export default function ConsentESignature() {
                     <td><span className={`fpdd-recent-cat ${r.category.toLowerCase()}`}>{r.category}</span></td>
                     <td>
                       {r.status === 'Signed' ? (
-                        <span className="int-status-badge active">Signed</span>
+                        <span className="int-status-badge active">{trStatus('Signed')}</span>
                       ) : r.status === 'Pending' ? (
-                        <span className="int-status-badge pending"> Pending</span>
+                        <span className="int-status-badge pending">{trStatus('Pending')}</span>
                       ) : (
-                        <span className="int-status-badge revoked">Unsigned</span>
+                        <span className="int-status-badge revoked">{trStatus('Unsigned')}</span>
                       )}
                     </td>
-                    <td>{r.date || '—'}</td>
+                    <td>{r.date || tr('consentEsign.placeholder.dash', '—')}</td>
                     <td className="fpdd-recent-actions">
                       {r.status === 'Signed' ? (
                         <button
                           className="fpdd-action-btn"
-                          aria-label={`open ${r.doc} document actions`}
+                          aria-label={tr('consentEsign.recent.actionsAriaPrefix', 'Open ') + r.doc + tr('consentEsign.recent.actionsAriaSuffix', ' document actions')}
                           onClick={() => {
                             if (!r?.document) return;
                             setModalDoc(r.document);
@@ -222,7 +258,7 @@ export default function ConsentESignature() {
                           <i className="fa-solid fa-share-nodes fpdd-action-icon" aria-hidden="true" />
                         </button>
                       ) : (
-                        <span className="fpdd-action-empty">—</span>
+                        <span className="fpdd-action-empty">{tr('consentEsign.placeholder.dash', '—')}</span>
                       )}
                     </td>
                   </tr>

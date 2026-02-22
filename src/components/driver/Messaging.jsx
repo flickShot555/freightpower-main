@@ -1,7 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import '../../styles/carrier/Messaging.css';
 import { getJson, openEventSource, postJson } from '../../api/http';
 import { AUTO_REFRESH_MS } from '../../constants/refresh';
+import { useUserSettings } from '../../contexts/UserSettingsContext';
+import { t } from '../../i18n/translate';
 
 function initials(value) {
   const s = String(value || '').trim();
@@ -17,6 +19,14 @@ function fmtTime(ts) {
 }
 
 export default function Messaging({ initialThreadId = null } = {}) {
+  const { settings } = useUserSettings();
+  const language = settings?.language || 'English';
+  const tr = (key, fallback) => t(language, key, fallback);
+
+  const adminName = tr('messaging.adminName', 'Admin');
+  const conversationFallback = tr('messaging.conversationFallback', 'Conversation');
+  const avatarAlt = tr('messaging.avatarAlt', 'Avatar');
+
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [threads, setThreads] = useState([]);
   const [selectedThread, setSelectedThread] = useState(null);
@@ -37,6 +47,14 @@ export default function Messaging({ initialThreadId = null } = {}) {
   const messagesAreaRef = React.useRef(null);
   const messagesEndRef = React.useRef(null);
   const stickToBottomRef = React.useRef(true);
+  const pendingInitialScrollRef = React.useRef(false);
+
+  // Payload refs to avoid state updates (and re-renders) when data is unchanged.
+  const threadsPayloadRef = React.useRef('');
+  const adminThreadsPayloadRef = React.useRef('');
+  const unreadPayloadRef = React.useRef('');
+  const lastUnreadTotalRef = React.useRef(null);
+  const adminMessagesPayloadRef = React.useRef('');
 
   const [showChatMobile, setShowChatMobile] = useState(false);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 900);
@@ -78,6 +96,15 @@ export default function Messaging({ initialThreadId = null } = {}) {
     }
   };
 
+  // Scroll after the DOM commits; more reliable than requestAnimationFrame right after setState.
+  useLayoutEffect(() => {
+    if (!pendingInitialScrollRef.current) return;
+    if (!selectedThread) return;
+    if (threadLoading) return;
+    scrollToBottom('auto');
+    pendingInitialScrollRef.current = false;
+  }, [selectedThread?.id, threadLoading, messages.length]);
+
   const mergeChronologicalUnique = (primary = [], secondary = []) => {
     const map = new Map();
     [...(primary || []), ...(secondary || [])].forEach((m) => {
@@ -94,20 +121,32 @@ export default function Messaging({ initialThreadId = null } = {}) {
   async function refreshThreads() {
     const data = await getJson('/messaging/threads?limit=200', { timeoutMs: 45000, requestLabel: 'GET /messaging/threads?limit=200' });
     const next = data.threads || [];
-    setThreads(next);
-    try {
-      localStorage.setItem('messaging:driver:threads', JSON.stringify({ ts: Date.now(), threads: next }));
-    } catch {
-      // ignore
+    const nextPayload = JSON.stringify(next ?? []);
+    if (nextPayload !== threadsPayloadRef.current) {
+      threadsPayloadRef.current = nextPayload;
+      setThreads(next);
+      try {
+        localStorage.setItem('messaging:driver:threads', JSON.stringify({ ts: Date.now(), threads: next }));
+      } catch {
+        // ignore
+      }
     }
   }
 
   async function refreshUnread() {
     const data = await getJson('/messaging/unread/summary', { timeoutMs: 30000, requestLabel: 'GET /messaging/unread/summary' });
-    setUnreadSummary(data || { total_unread: 0, threads: {}, channels: {} });
+    const nextSummary = data || { total_unread: 0, threads: {}, channels: {} };
+    const nextPayload = JSON.stringify(nextSummary);
+    if (nextPayload !== unreadPayloadRef.current) {
+      unreadPayloadRef.current = nextPayload;
+      setUnreadSummary(nextSummary);
+    }
     try {
-      const total = Number(data?.total_unread || 0);
-      window.dispatchEvent(new CustomEvent('messaging:unread', { detail: { total_unread: total } }));
+      const total = Number(nextSummary?.total_unread || 0);
+      if (lastUnreadTotalRef.current !== total) {
+        lastUnreadTotalRef.current = total;
+        window.dispatchEvent(new CustomEvent('messaging:unread', { detail: { total_unread: total } }));
+      }
     } catch {
       // ignore
     }
@@ -132,7 +171,11 @@ export default function Messaging({ initialThreadId = null } = {}) {
       };
     });
     items.sort((a, b) => (b.last_message_at || 0) - (a.last_message_at || 0));
-    setAdminThreads(items);
+    const nextPayload = JSON.stringify(items ?? []);
+    if (nextPayload !== adminThreadsPayloadRef.current) {
+      adminThreadsPayloadRef.current = nextPayload;
+      setAdminThreads(items);
+    }
   }
 
   async function selectThread(thread) {
@@ -145,6 +188,8 @@ export default function Messaging({ initialThreadId = null } = {}) {
     setThreadLoading(true);
     setMessages([]);
 
+    pendingInitialScrollRef.current = true;
+
     // Reset scroll pin when opening a thread.
     stickToBottomRef.current = true;
 
@@ -155,7 +200,7 @@ export default function Messaging({ initialThreadId = null } = {}) {
         if (loadSeqRef.current !== seq) return;
         setMessages(first.messages || []);
         setThreadLoading(false);
-        requestAnimationFrame(() => scrollToBottom('auto'));
+        pendingInitialScrollRef.current = true;
 
         // Background fill (up to 200)
         getJson(`/messaging/notifications/channels/${thread.channel_id}/messages?limit=200`, { timeoutMs: 30000, requestLabel: 'GET /messaging/notifications/channel/messages?limit=200' })
@@ -184,7 +229,7 @@ export default function Messaging({ initialThreadId = null } = {}) {
       if (loadSeqRef.current !== seq) return;
       setMessages(data.messages || []);
       setThreadLoading(false);
-      requestAnimationFrame(() => scrollToBottom('auto'));
+      pendingInitialScrollRef.current = true;
 
       getJson(`/messaging/threads/${thread.id}/messages?limit=200`, { timeoutMs: 30000, requestLabel: 'GET /messaging/thread/messages?limit=200' })
         .then((full) => {
@@ -284,7 +329,7 @@ export default function Messaging({ initialThreadId = null } = {}) {
           await attempt();
         }
       } catch (e) {
-        if (!cancelled) setError(e?.message || 'Failed to load messaging');
+        if (!cancelled) setError(e?.message || tr('messaging.failedLoad', 'Failed to load messaging'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -383,7 +428,15 @@ export default function Messaging({ initialThreadId = null } = {}) {
       refreshUnread().catch(() => {});
       if (selectedThread?.kind === 'admin_channel') {
         getJson(`/messaging/notifications/channels/${selectedThread.channel_id}/messages?limit=200`)
-          .then((data) => { if (alive) setMessages(data.messages || []); })
+          .then((data) => {
+            if (!alive) return;
+            const next = data.messages || [];
+            const nextPayload = JSON.stringify(next ?? []);
+            if (nextPayload !== adminMessagesPayloadRef.current) {
+              adminMessagesPayloadRef.current = nextPayload;
+              setMessages(next);
+            }
+          })
           .catch(() => {});
       }
     }, AUTO_REFRESH_MS);
@@ -416,8 +469,8 @@ export default function Messaging({ initialThreadId = null } = {}) {
     <>
       <header className="messaging-header">
         <div className="header-content">
-          <h1>Messaging</h1>
-          <p className="header-subtitle">Chat with your carrier</p>
+          <h1>{tr('messaging.title', 'Messaging')}</h1>
+          <p className="header-subtitle">{tr('messaging.subtitle', 'Chat with your carrier')}</p>
         </div>
       </header>
 
@@ -435,13 +488,13 @@ export default function Messaging({ initialThreadId = null } = {}) {
                       await postJson('/messaging/driver/threads/my-carrier', {});
                       await Promise.all([refreshThreads(), refreshAdminThreads()]);
                     } catch (e) {
-                      setError(e?.message || 'Refresh failed');
+                      setError(e?.message || tr('messaging.refreshFailed', 'Refresh failed'));
                     } finally {
                       setLoading(false);
                     }
                   }}
                 >
-                  Refresh
+                  {tr('common.refresh', 'Refresh')}
                 </button>
               </div>
 
@@ -449,7 +502,7 @@ export default function Messaging({ initialThreadId = null } = {}) {
                 <i className="fa-solid fa-search"></i>
                 <input
                   type="text"
-                  placeholder="Search conversations..."
+                  placeholder={tr('messaging.searchPlaceholder', 'Search conversations...')}
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                 />
@@ -458,11 +511,11 @@ export default function Messaging({ initialThreadId = null } = {}) {
 
             <div className="chats-list">
               {error && <div style={{ padding: 12, color: '#b91c1c' }}>{error}</div>}
-              {loading && <div style={{ padding: 12, opacity: 0.8 }}>Loading…</div>}
+              {loading && <div style={{ padding: 12, opacity: 0.8 }}>{tr('common.loading', 'Loading…')}</div>}
 
               {!loading && filteredAdminThreads.length > 0 && (
                 <div style={{ padding: '8px 20px 4px', fontSize: 12, fontWeight: 800, color: msgTheme.muted }}>
-                  Admin Notifications
+                  {tr('messaging.adminNotifications', 'Admin Notifications')}
                 </div>
               )}
               {filteredAdminThreads.map((t) => (
@@ -474,13 +527,13 @@ export default function Messaging({ initialThreadId = null } = {}) {
                   <div className="chat-avatar" style={{ background: '#fee2e2' }}>
                     <div style={{ position: 'relative', width: 36, height: 36 }}>
                       <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {initials('Admin')}
+                        {initials(adminName)}
                       </div>
                     </div>
                   </div>
                   <div className="chat-info">
-                    <div className="chat-title">{t.display_title || 'Admin'}</div>
-                    <div className="chat-last">{t.last_message?.text || 'One-way notifications'}</div>
+                    <div className="chat-title">{t.display_title || adminName}</div>
+                    <div className="chat-last">{t.last_message?.text || tr('messaging.oneWayNotifications', 'One-way notifications')}</div>
                   </div>
                   <div className="chat-meta">
                     <span className="chat-time">{fmtTime(t.last_message_at)}</span>
@@ -492,7 +545,7 @@ export default function Messaging({ initialThreadId = null } = {}) {
               ))}
 
               {!loading && filteredThreads.length === 0 && (
-                <div style={{ padding: 12, opacity: 0.8 }}>No conversations yet.</div>
+                <div style={{ padding: 12, opacity: 0.8 }}>{tr('messaging.noConversations', 'No conversations yet.')}</div>
               )}
 
               {filteredThreads.map(t => (
@@ -509,7 +562,7 @@ export default function Messaging({ initialThreadId = null } = {}) {
                       {t.other_photo_url && (
                         <img
                           src={t.other_photo_url}
-                          alt="avatar"
+                          alt={avatarAlt}
                           style={{ position: 'absolute', inset: 0, width: 36, height: 36, borderRadius: '50%', objectFit: 'cover' }}
                           onError={(e) => { e.currentTarget.remove(); }}
                         />
@@ -517,7 +570,7 @@ export default function Messaging({ initialThreadId = null } = {}) {
                     </div>
                   </div>
                   <div className="chat-info">
-                    <div className="chat-title">{t.display_title || t.other_display_name || t.title || 'Conversation'}</div>
+                    <div className="chat-title">{t.display_title || t.other_display_name || t.title || conversationFallback}</div>
                     <div className="chat-last">{t.last_message?.text || ''}</div>
                   </div>
                   <div className="chat-meta">
@@ -549,7 +602,7 @@ export default function Messaging({ initialThreadId = null } = {}) {
                     {selectedThread.other_photo_url && (
                       <img
                         src={selectedThread.other_photo_url}
-                        alt="avatar"
+                        alt={avatarAlt}
                         style={{ position: 'absolute', inset: 0, width: 44, height: 44, borderRadius: '50%', objectFit: 'cover' }}
                         onError={(e) => { e.currentTarget.remove(); }}
                       />
@@ -557,7 +610,7 @@ export default function Messaging({ initialThreadId = null } = {}) {
                   </div>
                 </div>
                 <div>
-                  <div className="header-title">{selectedThread.display_title || selectedThread.other_display_name || selectedThread.title || 'Conversation'}</div>
+                  <div className="header-title">{selectedThread.display_title || selectedThread.other_display_name || selectedThread.title || conversationFallback}</div>
                 </div>
               </div>
               <div className="header-actions">
@@ -577,12 +630,12 @@ export default function Messaging({ initialThreadId = null } = {}) {
             >
               {threadLoading && (
                 <div style={{ padding: 16, opacity: 0.85, fontWeight: 700, color: msgTheme.muted }}>
-                  Loading conversation…
+                  {tr('messaging.loadingConversation', 'Loading conversation…')}
                 </div>
               )}
               {!threadLoading && messages.length === 0 && (
                 <div style={{ padding: 16, opacity: 0.8 }}>
-                  No messages yet.
+                  {tr('messaging.noMessages', 'No messages yet.')}
                 </div>
               )}
               {messages.map((m) => (
@@ -599,14 +652,14 @@ export default function Messaging({ initialThreadId = null } = {}) {
 
             {selectedThread.kind === 'admin_channel' ? (
               <div className="message-input-area" style={{ justifyContent: 'center', opacity: 0.85 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: msgTheme.muted }}>Admin notifications are one-way.</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: msgTheme.muted }}>{tr('messaging.adminOneWay', 'Admin notifications are one-way.')}</div>
               </div>
             ) : (
               <div className="message-input-area">
                 <input
                   className="message-input"
                   type="text"
-                  placeholder="Type your message..."
+                  placeholder={tr('messaging.typeMessage', 'Type your message...')}
                   value={message}
                   onChange={e => setMessage(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSend()}
@@ -623,7 +676,7 @@ export default function Messaging({ initialThreadId = null } = {}) {
           <main className="main-chat">
             <div className="messages-area">
               <div style={{ padding: 18, opacity: 0.85, fontWeight: 700, color: msgTheme.muted }}>
-                Select a conversation to start.
+                {tr('messaging.selectConversation', 'Select a conversation to start.')}
               </div>
             </div>
           </main>

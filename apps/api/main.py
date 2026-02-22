@@ -7638,6 +7638,41 @@ async def get_notifications(
     Authorization: All authenticated users
     """
     uid = user['uid']
+
+    def _pref_on(key: str, default: bool = True) -> bool:
+        try:
+            prefs = user.get("notification_preferences")
+            if isinstance(prefs, dict) and key in prefs:
+                return bool(prefs.get(key))
+        except Exception:
+            pass
+        return bool(default)
+
+    messages_on = _pref_on("messages", True)
+    compliance_on = _pref_on("compliance_alerts", True)
+
+    def _allowed_by_prefs(n: Dict[str, Any]) -> bool:
+        try:
+            typ = str(n.get("notification_type") or "").strip().lower()
+            cat = str(n.get("category") or "").strip().lower()
+            resource = str(n.get("resource_type") or "").strip().lower()
+
+            is_compliance = (typ == "compliance_alert") or (cat == "compliance") or (resource == "compliance")
+            if is_compliance and not compliance_on:
+                return False
+
+            is_message = (
+                typ.startswith("message")
+                or "messag" in typ
+                or cat in {"messaging", "messages"}
+                or resource in {"message", "messaging", "thread", "conversation"}
+            )
+            if is_message and not messages_on:
+                return False
+        except Exception:
+            return True
+
+        return True
     
     try:
         notifications_ref = db.collection("notifications").where("user_id", "==", uid)
@@ -7655,6 +7690,9 @@ async def get_notifications(
             notif_data = doc.to_dict()
             notif_data['id'] = doc.id
             notifications_list.append(notif_data)
+
+        # Apply per-user preference filters before sorting/pagination.
+        notifications_list = [n for n in notifications_list if _allowed_by_prefs(n)]
         
         # Sort by created_at descending
         notifications_list.sort(key=lambda x: x.get('created_at', 0), reverse=True)
@@ -7685,13 +7723,9 @@ async def get_notifications(
             
             notifications.append(notif_data)
         
-        # Get total count
-        total_ref = db.collection("notifications").where("user_id", "==", uid)
-        total_count = len(list(total_ref.stream()))
-        
-        # Get unread count
-        unread_ref = db.collection("notifications").where("user_id", "==", uid).where("is_read", "==", False)
-        unread_count = len(list(unread_ref.stream()))
+        # Counts should match the filtered list.
+        total_count = len(notifications_list)
+        unread_count = len([n for n in notifications_list if not n.get("is_read")])
         
         return JSONResponse(content={
             "notifications": notifications,
