@@ -1,5 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import '../../styles/carrier/HelpHub.css';
+import {
+  chatWithRoleAssistant,
+  getRoleAssistantConversation,
+  listRoleAssistantConversations,
+} from '../../api/roleAssistant';
 
 const HelpHub = () => {
   const [activeTab, setActiveTab] = useState('ai-assistant');
@@ -10,6 +15,20 @@ const HelpHub = () => {
   const [searchTickets, setSearchTickets] = useState('');
   const [searchResources, setSearchResources] = useState('');
   const [calendarView, setCalendarView] = useState('Monthly');
+  const [conversationId, setConversationId] = useState('');
+  const [messages, setMessages] = useState([
+    {
+      id: 'seed-assistant',
+      role: 'assistant',
+      content:
+        "Hello! I'm your FreightPower AI assistant. I can help you with loads, compliance, documentation, and more. What can I help you with today?",
+      created_at: Date.now() / 1000,
+    },
+  ]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState('');
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const chatEndRef = useRef(null);
 
   // Sample data for tickets
   const tickets = [
@@ -139,16 +158,89 @@ const HelpHub = () => {
     { key: 'schedule-support', label: 'Schedule Support', }
   ];
 
-  const handleSendMessage = () => {
-    if (message.trim()) {
-      // Handle message sending logic here
-      console.log('Sending message:', message);
-      setMessage('');
+  const loadConversation = async (id) => {
+    const cid = String(id || '').trim();
+    if (!cid) return;
+    setHistoryLoading(true);
+    try {
+      const data = await getRoleAssistantConversation(cid, 200);
+      setMessages(Array.isArray(data?.messages) ? data.messages : []);
+      setConversationId(cid);
+    } catch (e) {
+      setChatError(e?.message || 'Failed to load conversation');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const data = await listRoleAssistantConversations(20);
+        if (!alive) return;
+        const first = Array.isArray(data?.conversations) ? data.conversations[0] : null;
+        if (first?.conversation_id) {
+          await loadConversation(first.conversation_id);
+        }
+      } catch {
+        // Keep seeded message.
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, chatLoading, historyLoading]);
+
+  const handleSendMessage = async (raw) => {
+    const text = String(raw ?? message).trim();
+    if (!text || chatLoading) return;
+    setChatError('');
+    setChatLoading(true);
+    setMessage('');
+
+    setMessages((prev) => [
+      ...prev,
+      { id: `local-user-${Date.now()}`, role: 'user', content: text, created_at: Date.now() / 1000 },
+    ]);
+
+    try {
+      const response = await chatWithRoleAssistant({
+        message: text,
+        conversation_id: conversationId || undefined,
+        include_history: true,
+        max_history_messages: 30,
+        auto_tool_inference: true,
+      });
+      const cid = String(response?.conversation_id || '').trim();
+      if (cid) {
+        setConversationId(cid);
+        await loadConversation(cid);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `local-assistant-${Date.now()}`,
+            role: 'assistant',
+            content: String(response?.reply || ''),
+            created_at: Number(response?.created_at || Date.now() / 1000),
+          },
+        ]);
+      }
+    } catch (e) {
+      setChatError(e?.message || 'Failed to send message');
+    } finally {
+      setChatLoading(false);
     }
   };
 
   const handleQuickCommand = (command) => {
     setMessage(command);
+    handleSendMessage(command);
   };
 
   const handleKeyPress = (e) => {
@@ -200,14 +292,47 @@ const HelpHub = () => {
                 </div>
 
                 <div className="chat-messages">
-                  <div className="message ai-message">
-                    <div className="message-avatar">
-                      <i className="fa-solid fa-robot"></i>
+                  {messages.map((m) => (
+                    <div key={m.id} className={`message ${m.role === 'user' ? 'user-message' : 'ai-message'}`}>
+                      <div className="message-avatar">
+                        <i className={`fa-solid ${m.role === 'user' ? 'fa-user' : 'fa-robot'}`}></i>
+                      </div>
+                      <div className="message-content">
+                        <p>{m.content}</p>
+                      </div>
                     </div>
-                    <div className="message-content">
-                      <p>Hello! I'm your FreightPower AI assistant. I can help you with loads, compliance, documentation, and more. What can I help you with today?</p>
+                  ))}
+                  {historyLoading && (
+                    <div className="message ai-message">
+                      <div className="message-avatar">
+                        <i className="fa-solid fa-robot"></i>
+                      </div>
+                      <div className="message-content">
+                        <p>Loading conversation...</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
+                  {chatLoading && (
+                    <div className="message ai-message">
+                      <div className="message-avatar">
+                        <i className="fa-solid fa-robot"></i>
+                      </div>
+                      <div className="message-content">
+                        <p>Thinking...</p>
+                      </div>
+                    </div>
+                  )}
+                  {chatError && (
+                    <div className="message ai-message">
+                      <div className="message-avatar">
+                        <i className="fa-solid fa-triangle-exclamation"></i>
+                      </div>
+                      <div className="message-content">
+                        <p>{chatError}</p>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
                 </div>
 
                 <div className="chat-input-container">
@@ -218,6 +343,7 @@ const HelpHub = () => {
                       onKeyPress={handleKeyPress}
                       placeholder="Type your message..."
                       rows="1"
+                      disabled={chatLoading}
                     />
                     <div className="input-actions">
                       <button className="attach-btn">
@@ -225,8 +351,8 @@ const HelpHub = () => {
                       </button>
                       <button 
                         className="send-btn"
-                        onClick={handleSendMessage}
-                        disabled={!message.trim()}
+                        onClick={() => handleSendMessage()}
+                        disabled={!message.trim() || chatLoading}
                       >
                         <i className="fa-solid fa-paper-plane"></i>
                       </button>

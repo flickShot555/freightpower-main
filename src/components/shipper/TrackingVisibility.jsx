@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import '../../styles/shipper/TrackingVisibility.css';
 import HereMap from '../common/HereMap';
 import ShipmentStatusProgressBar from './ShipmentStatusProgressBar';
@@ -547,7 +547,7 @@ export default function TrackingVisibility({ initialLoadId = null }) {
   };
 
   const loadStatusLabel = headerBadge(loadStatusValue(effectiveSelected));
-  const loadRoute = `${String(effectiveSelected?.origin || effectiveSelected?.load_origin || 'N/A')} → ${String(effectiveSelected?.destination || effectiveSelected?.load_destination || 'N/A')}`;
+  const loadRoute = `${String(effectiveSelected?.origin || effectiveSelected?.load_origin || 'N/A')} â†’ ${String(effectiveSelected?.destination || effectiveSelected?.load_destination || 'N/A')}`;
   const etaStrong = fmtDateOrTbd(effectiveSelected?.delivery_date);
   const deliveredAgo = fmtRelative(effectiveSelected?.delivered_at);
   const showLate = false;
@@ -568,13 +568,48 @@ export default function TrackingVisibility({ initialLoadId = null }) {
 
   const loadDetailVal = (v) => {
     const s = String(v ?? '').trim();
-    return s || '—';
+    return s || 'â€”';
   };
 
   const pickupStrong = fmtDateOrTbd(effectiveSelected?.pickup_date || effectiveSelected?.pickup);
-  const equipmentStrong = loadDetailVal(effectiveSelected?.equipment_type || effectiveSelected?.equipment || '—');
-  const weightStrong = effectiveSelected?.weight ? `${effectiveSelected.weight} lbs` : '—';
-  const rateStrong = effectiveSelected?.rate ? `$${effectiveSelected.rate}` : (effectiveSelected?.price || '—');
+  const equipmentStrong = loadDetailVal(effectiveSelected?.equipment_type || effectiveSelected?.equipment || 'â€”');
+  const weightStrong = effectiveSelected?.weight ? `${effectiveSelected.weight} lbs` : 'â€”';
+  const rateStrong = effectiveSelected?.rate ? `$${effectiveSelected.rate}` : (effectiveSelected?.price || 'â€”');
+
+  const trackingEmptyInsight = useMemo(() => {
+    if (loading) {
+      return 'Loading load and tracking data for your selected filters.';
+    }
+    if ((filteredLoads || []).length === 0) {
+      return 'No loads match your current filters. Expand date range or status to see tracking candidates.';
+    }
+    if ((filteredTrackedLoads || []).length === 0) {
+      return `${filteredLoads.length} filtered load(s) found, but none are in transit yet. Live GPS appears once a load is in transit.`;
+    }
+    if ((mapMarkers || []).length === 0) {
+      return `${filteredTrackedLoads.length} in-transit load(s) found, but no valid GPS pings are available yet.`;
+    }
+    return `${mapMarkers.length} tracked load(s) are currently streaming location updates.`;
+  }, [loading, filteredLoads, filteredTrackedLoads, mapMarkers]);
+
+  const trackingLoadInsight = useMemo(() => {
+    if (!effectiveSelected) return trackingEmptyInsight;
+    const status = loadStatusValue(effectiveSelected);
+    const loadNo = shortLoadNo(effectiveSelected);
+    if (status === 'in_transit') {
+      const tsMs = parseDateToMs(selectedTrackingItem?.gps_updated_at);
+      if (tsMs) {
+        const mins = Math.max(0, Math.floor((Date.now() - tsMs) / 60000));
+        const rel = mins < 60 ? `${mins}m ago` : `${Math.floor(mins / 60)}h ago`;
+        return `Load ${loadNo} is in transit with last GPS update ${rel}. Monitor ETA and send proactive updates if route risk changes.`;
+      }
+      return `Load ${loadNo} is in transit, but no recent GPS timestamp is available. Confirm driver tracking signal to improve visibility.`;
+    }
+    if (status === 'delivered' || status === 'completed' || status === 'settled') {
+      return `Load ${loadNo} is delivered. Confirm POD and billing milestones to close the shipment workflow.`;
+    }
+    return `Load ${loadNo} is not yet in transit. Tracking intelligence becomes richer after dispatch and first GPS ping.`;
+  }, [effectiveSelected, selectedTrackingItem, trackingEmptyInsight]);
 
   return (
     <div className="tracking-root">
@@ -703,7 +738,7 @@ export default function TrackingVisibility({ initialLoadId = null }) {
               <div className="load-body">
                 <div className="ai-insight-card">
                   <div className="tr-ai-icon"><i className="fa-regular fa-lightbulb"/></div>
-                  <div className="ai-text"><strong>AI Insight:</strong> When a load enters In Transit, it will appear here with live GPS pings.</div>
+                  <div className="ai-text"><strong>AI Insight:</strong> {trackingEmptyInsight}</div>
                 </div>
               </div>
             </div>
@@ -733,7 +768,7 @@ export default function TrackingVisibility({ initialLoadId = null }) {
             <div className="load-body">
               <div className="ai-insight-card">
                 <div className="tr-ai-icon"><i className="fa-regular fa-lightbulb"/></div>
-                <div className="ai-text"><strong>AI Insight:</strong> Tracking signals and exception intelligence will appear here as live pings and events are ingested.</div>
+                <div className="ai-text"><strong>AI Insight:</strong> {trackingLoadInsight}</div>
               </div>
 
               <div className="tv-load-details">
@@ -777,7 +812,7 @@ export default function TrackingVisibility({ initialLoadId = null }) {
               const num = shortLoadNo(l);
               const o = String(l?.origin || l?.load_origin || '').trim();
               const d = String(l?.destination || l?.load_destination || '').trim();
-              const route = o && d ? `${o} → ${d}` : '';
+              const route = o && d ? `${o} â†’ ${d}` : '';
               return route ? `Load #${num} (${route})` : (num ? `Load #${num}` : id);
             }}
           />
@@ -792,7 +827,7 @@ export default function TrackingVisibility({ initialLoadId = null }) {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={6}>Loading…</td></tr>
+                  <tr><td colSpan={6}>Loadingâ€¦</td></tr>
                 ) : (filteredLoads || []).length === 0 ? (
                   <tr><td colSpan={6}>No loads found</td></tr>
                 ) : (
@@ -820,8 +855,8 @@ export default function TrackingVisibility({ initialLoadId = null }) {
                         style={{ cursor: id ? 'pointer' : 'default' }}
                       >
                         <td>{shortLoadNo(l)}</td>
-                        <td>{String(l?.assigned_carrier_name || l?.carrier_name || loc?.carrier_name || '—')}</td>
-                        <td>{String(l?.assigned_driver_name || l?.driver_name || loc?.driver_name || '—')}</td>
+                        <td>{String(l?.assigned_carrier_name || l?.carrier_name || loc?.carrier_name || 'â€”')}</td>
+                        <td>{String(l?.assigned_driver_name || l?.driver_name || loc?.driver_name || 'â€”')}</td>
                         <td>{badge.label}</td>
                         <td>{eta}</td>
                         <td><i className="fa-solid fa-ellipsis-h"></i></td>

@@ -176,6 +176,9 @@ export default function ShipperDashboard() {
   // Dashboard stats state
   const [dashboardStats, setDashboardStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [shipperInsights, setShipperInsights] = useState(null);
+  const [shipperInsightsLoading, setShipperInsightsLoading] = useState(false);
+  const [shipperInsightsError, setShipperInsightsError] = useState('');
 
   // Home "Active Loads" list data (kept lightweight; Tracking page fetches full view)
   const [homeLoadsLoading, setHomeLoadsLoading] = useState(false);
@@ -306,6 +309,57 @@ export default function ShipperDashboard() {
     fetchStats();
   }, [currentUser]);
 
+  useEffect(() => {
+    let alive = true;
+    if (!currentUser) return;
+
+    const fetchShipperInsights = async () => {
+      setShipperInsightsLoading(true);
+      setShipperInsightsError('');
+      try {
+        const token = await currentUser.getIdToken();
+        const res = await fetch(`${API_URL}/shipper/dashboard/insights`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          if (!alive) return;
+          setShipperInsightsError(String(body?.detail || 'Failed to load shipper insights'));
+          return;
+        }
+        const data = await res.json();
+        if (!alive) return;
+        setShipperInsights(data || null);
+      } catch (e) {
+        if (!alive) return;
+        setShipperInsightsError(String(e?.message || 'Failed to load shipper insights'));
+      } finally {
+        if (alive) setShipperInsightsLoading(false);
+      }
+    };
+
+    fetchShipperInsights();
+    const onFocus = () => fetchShipperInsights();
+    const onVisibility = () => {
+      if (!document.hidden) fetchShipperInsights();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    const id = setInterval(() => {
+      if (!document.hidden && activeNav === 'home') fetchShipperInsights();
+    }, 60000);
+
+    return () => {
+      alive = false;
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+      clearInterval(id);
+    };
+  }, [activeNav, currentUser]);
+
   // Fetch a small set of loads used by the Home placeholders.
   useEffect(() => {
     fetchHomeLoads();
@@ -423,6 +477,12 @@ export default function ShipperDashboard() {
     }
   };
 
+  const runShipperInsightAction = (actionTarget) => {
+    const target = String(actionTarget || '').trim();
+    if (!target) return;
+    handleNavClick(target);
+  };
+
   // --- FILTER DROPDOWNS STATE ---
   const [openDropdown, setOpenDropdown] = useState(null);
   const [selectedRange, setSelectedRange] = useState('Last 30 Days');
@@ -453,6 +513,18 @@ export default function ShipperDashboard() {
 
     const totalCount = Number(dashboardStats?.total_loads || 0) || (homeLoads || []).length;
     const activeCount = Number(dashboardStats?.active_loads || 0) || activeLoads.length;
+    const shipperAiHeadline = String(
+      shipperInsights?.ai_insights?.headline ||
+        'Load activity and market changes are reflected here.'
+    );
+    const shipperAiBullets = (Array.isArray(shipperInsights?.ai_insights?.bullets) ? shipperInsights.ai_insights.bullets : [])
+      .map((x) => String(x || '').trim())
+      .filter(Boolean);
+    const shipperAiSuggestions = (Array.isArray(shipperInsights?.ai_suggestions) ? shipperInsights.ai_suggestions : [])
+      .map((s, idx) => ({
+        id: String(s?.id || `shipper_ai_${idx}`),
+        action_target: String(s?.action_target || ''),
+      }));
 
     const shortLoadLabel = (l) => {
       const num = String(l?.load_number || '').trim();
@@ -640,10 +712,26 @@ export default function ShipperDashboard() {
         <section className="fp-grid" style={{gridTemplateColumns:'repeat(3,1fr)',gap:18}}>
           <div className="card ai-insights">
             <h3>AI Insights</h3>
-            <div className="insight">Top Lane Alert<br/>MN → IL averaging $2.95/mi (+8%)</div>
+            <div className="insight">{shipperAiHeadline}</div>
+            {shipperInsightsLoading && (
+              <div className="muted" style={{ marginTop: 8 }}>Loading insights...</div>
+            )}
+            {shipperInsightsError && (
+              <div className="muted" style={{ marginTop: 8, color: '#b42318' }}>{shipperInsightsError}</div>
+            )}
             <ul className="muted">
-              <li>Demand spike in Midwest corridors</li>
-              <li>Fuel costs stabilizing</li>
+              {(shipperAiBullets.length > 0 ? shipperAiBullets : [
+                'Demand and coverage signals are generated from your current load activity.',
+                'Open marketplace and carrier bids for real-time opportunities.',
+              ]).slice(0, 3).map((line, idx) => (
+                <li
+                  key={`shipper-ai-bullet-${idx}`}
+                  style={{ cursor: shipperAiSuggestions[idx]?.action_target ? 'pointer' : 'default' }}
+                  onClick={() => runShipperInsightAction(shipperAiSuggestions[idx]?.action_target)}
+                >
+                  {line}
+                </li>
+              ))}
             </ul>
           </div>
 
@@ -1120,3 +1208,4 @@ export default function ShipperDashboard() {
     </div>
   );
 }
+

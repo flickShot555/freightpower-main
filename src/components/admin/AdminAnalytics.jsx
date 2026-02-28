@@ -1,25 +1,111 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import '../../styles/admin/AdminAnalytics.css';
 import { downloadJson } from '../../utils/fileDownload';
+import { useAuth } from '../../contexts/AuthContext';
+import { API_URL } from '../../config';
 
 export default function AdminAnalytics() {
+  const { currentUser } = useAuth();
   const [range, setRange] = useState('7d');
+  const [aiInsightsPayload, setAiInsightsPayload] = useState(null);
+  const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
+  const [aiInsightsError, setAiInsightsError] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchAiInsights = async () => {
+      if (!currentUser) return;
+      if (isMounted) {
+        setAiInsightsLoading(true);
+        setAiInsightsError('');
+      }
+      try {
+        const token = await currentUser.getIdToken();
+        const response = await fetch(`${API_URL}/admin/dashboard/ai-insights`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        if (isMounted) setAiInsightsPayload(payload);
+      } catch (error) {
+        console.error('Failed to fetch admin AI insights:', error);
+        if (isMounted) setAiInsightsError('Live AI insights are unavailable. Showing fallback recommendations.');
+      } finally {
+        if (isMounted) setAiInsightsLoading(false);
+      }
+    };
+
+    fetchAiInsights();
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser, range]);
+
+  const aiInsightCards = useMemo(() => {
+    const rows = Array.isArray(aiInsightsPayload?.ai_insights) ? aiInsightsPayload.ai_insights : [];
+    const normalized = rows
+      .map((row, idx) => ({
+        id: String(row?.id || `admin_ai_insight_${idx}`),
+        title: String(row?.title || ''),
+        detail: String(row?.detail || ''),
+        actionLabel: String(row?.action_label || 'Open'),
+        actionTarget: String(row?.action_target || ''),
+      }))
+      .filter((row) => row.title && row.detail);
+    if (normalized.length > 0) return normalized.slice(0, 3);
+    return [
+      {
+        id: 'admin_ai_fallback_docs',
+        title: 'Compliance Monitoring',
+        detail: 'Review pending compliance and document queues to keep operations healthy.',
+        actionLabel: 'Open Compliance',
+        actionTarget: 'compliance',
+      },
+      {
+        id: 'admin_ai_fallback_support',
+        title: 'Support Queue',
+        detail: 'Monitor pending support requests and escalation trends.',
+        actionLabel: 'Open Support',
+        actionTarget: 'support',
+      },
+      {
+        id: 'admin_ai_fallback_tracking',
+        title: 'Tracking Health',
+        detail: 'Audit tracking coverage and delayed load patterns.',
+        actionLabel: 'Open Tracking',
+        actionTarget: 'tracking',
+      },
+    ];
+  }, [aiInsightsPayload]);
+
+  const aiSummaryText = useMemo(() => {
+    const summary = String(aiInsightsPayload?.summary || '').trim();
+    if (summary) return summary;
+    return 'AI insights are generated from current admin metrics and compliance signals.';
+  }, [aiInsightsPayload]);
 
   const handleExport = () => {
     const payload = {
       exported_at: new Date().toISOString(),
       range,
       snapshot: {
-        live_loads_active: 124,
-        live_loads_delayed: 8,
-        docs_verified_percent: 92,
-        drivers_online: 84,
-        drivers_offline: 5,
-        ai_accuracy_percent: 95,
-        ai_issues: 9,
+        ...(aiInsightsPayload?.metrics || {}),
+        overall_efficiency_percent: aiInsightsPayload?.overall_efficiency_percent,
+        compliance_rate_percent: aiInsightsPayload?.compliance_rate_percent,
+        compliance_delta_percent: aiInsightsPayload?.compliance_delta_percent,
       },
+      ai_insights: aiInsightCards,
     };
     downloadJson(`admin_analytics_${range}`, payload);
+  };
+
+  const runAiInsightAction = (target) => {
+    const actionTarget = String(target || '').trim();
+    if (!actionTarget) return;
+    window.location.href = `/admin/dashboard?nav=${encodeURIComponent(actionTarget)}`;
   };
 
   return (
@@ -119,26 +205,22 @@ export default function AdminAnalytics() {
       <section className="adm-analytics-insights">
         <div className="card adm-insights">
           <div className="insights-header"><h3>AI Insights & Recommendations</h3></div>
-          <p className="muted">FreightPower is running at <strong>94% overall efficiency</strong>. 3 carriers repeatedly delayed loads this week. 2 integrations unstable. Compliance up <span className="positive">+4%</span> since last audit.</p>
+          <p className="muted">
+            {aiSummaryText}
+            {aiInsightsLoading ? ' Refreshing now...' : ''}
+            {aiInsightsError ? ` ${aiInsightsError}` : ''}
+          </p>
 
           <div className="insight-cards">
-            <div className="insight-card">
-              <h4>Resolve Carrier Delays</h4>
-              <p className="muted">Assign backup drivers for 3 late carriers</p>
-              <button className="btn small-cd">Apply Fix</button>
-            </div>
-
-            <div className="insight-card">
-              <h4>Improve Doc Rate</h4>
-              <p className="muted">Automate missing upload alerts</p>
-              <button className="btn small-cd">Enable Automation</button>
-            </div>
-
-            <div className="insight-card">
-              <h4>Stabilize Integration</h4>
-              <p className="muted">Retry failed sync with Provider API</p>
-              <button className="btn small-cd">Retry Now</button>
-            </div>
+            {aiInsightCards.map((card) => (
+              <div className="insight-card" key={card.id}>
+                <h4>{card.title}</h4>
+                <p className="muted">{card.detail}</p>
+                <button className="btn small-cd" onClick={() => runAiInsightAction(card.actionTarget)}>
+                  {card.actionLabel}
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       </section>

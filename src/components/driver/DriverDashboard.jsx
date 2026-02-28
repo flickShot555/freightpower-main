@@ -350,6 +350,9 @@ export default function DriverDashboard() {
   const [hasConsent, setHasConsent] = useState(false);
   const [requiredDocsSnapshot, setRequiredDocsSnapshot] = useState(null);
   const [marketplaceViewsCount, setMarketplaceViewsCount] = useState(0);
+  const [dashboardInsights, setDashboardInsights] = useState(null);
+  const [dashboardInsightsLoading, setDashboardInsightsLoading] = useState(false);
+  const [dashboardInsightsError, setDashboardInsightsError] = useState('');
   const [profileData, setProfileData] = useState({
     name: '',
     profilePicture: null,
@@ -488,6 +491,69 @@ export default function DriverDashboard() {
       fetchRequiredDocs();
     }
   }, [currentUser, compliancePrefEnabled, fetchRequiredDocs]);
+
+  const fetchDashboardInsights = useCallback(async () => {
+    if (!currentUser) return;
+    setDashboardInsightsLoading(true);
+    setDashboardInsightsError('');
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch(`${API_URL}/driver/dashboard/insights`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setDashboardInsightsError(String(body?.detail || 'Failed to load dashboard insights'));
+        return;
+      }
+
+      const data = await res.json();
+      setDashboardInsights(data || null);
+
+      const views = Number(data?.marketplace_activity?.views_count);
+      if (Number.isFinite(views)) {
+        setMarketplaceViewsCount(Math.max(0, views));
+      }
+      if (typeof data?.marketplace_activity?.availability_on === 'boolean') {
+        setIsAvailable(Boolean(data.marketplace_activity.availability_on));
+      }
+    } catch (e) {
+      setDashboardInsightsError(String(e?.message || 'Failed to load dashboard insights'));
+    } finally {
+      setDashboardInsightsLoading(false);
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    fetchDashboardInsights();
+
+    const onDocsUpdated = () => fetchDashboardInsights();
+    const onConsentUpdated = () => fetchDashboardInsights();
+    const onFocus = () => fetchDashboardInsights();
+    const onVisibility = () => {
+      if (!document.hidden) fetchDashboardInsights();
+    };
+
+    window.addEventListener('fp:documents-updated', onDocsUpdated);
+    window.addEventListener('fp:consent-updated', onConsentUpdated);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    const intervalId = window.setInterval(() => {
+      if (!document.hidden && activeNav === 'home') {
+        fetchDashboardInsights();
+      }
+    }, 60 * 1000);
+
+    return () => {
+      window.removeEventListener('fp:documents-updated', onDocsUpdated);
+      window.removeEventListener('fp:consent-updated', onConsentUpdated);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.clearInterval(intervalId);
+    };
+  }, [activeNav, currentUser, fetchDashboardInsights]);
 
   // Poll messaging unread summary (used for sidebar badge)
   useEffect(() => {
@@ -690,6 +756,99 @@ export default function DriverDashboard() {
     }).length;
   }, [requiredDocsSnapshot]);
 
+  const dashboardAiSuggestions = useMemo(() => {
+    const rows = Array.isArray(dashboardInsights?.ai_suggestions) ? dashboardInsights.ai_suggestions : [];
+    if (rows.length > 0) {
+      return rows
+        .map((r, idx) => ({
+          id: String(r?.id || `ai_${idx}`),
+          title: String(r?.title || ''),
+          detail: String(r?.detail || ''),
+          action_label: String(r?.action_label || tr('common.open', 'Open')),
+          action_type: String(r?.action_type || 'nav'),
+          action_target: String(r?.action_target || 'settings'),
+          priority: String(r?.priority || 'medium'),
+        }))
+        .filter((x) => x.title && x.detail);
+    }
+
+    const fallback = [];
+    if (missingRequiredDocsCount > 0) {
+      fallback.push({
+        id: 'fallback_missing_docs',
+        title: tr('driverDashboard.home.ai.completeDocuments', 'Complete Missing Documents'),
+        detail: `${missingRequiredDocsCount} ${tr('driverDashboard.home.ai.missingDocumentsCount', 'required document(s) still need attention.')}`,
+        action_label: tr('driverDashboard.home.ai.reviewDocuments', 'Review Documents'),
+        action_type: 'nav',
+        action_target: 'hiring',
+        priority: 'high',
+      });
+    }
+    if (!isAvailable) {
+      fallback.push({
+        id: 'fallback_availability',
+        title: tr('driverDashboard.home.ai.marketplaceReadyTitle', 'Marketplace Ready'),
+        detail: tr('driverDashboard.home.ai.marketplaceReadyText', 'Turn on availability to be discovered'),
+        action_label: tr('driverDashboard.home.ai.turnOnAvailability', 'Turn On Availability'),
+        action_type: 'toggle_availability',
+        action_target: 'availability',
+        priority: 'medium',
+      });
+    }
+    if (fallback.length === 0) {
+      fallback.push({
+        id: 'fallback_profile_tip',
+        title: tr('driverDashboard.home.ai.profileTipTitle', 'Profile Tip'),
+        detail: tr('driverDashboard.home.ai.profileTipText', 'Add experience details to attract carriers'),
+        action_label: tr('driverDashboard.home.goToProfile', 'Go to Profile'),
+        action_type: 'nav',
+        action_target: 'settings',
+        priority: 'low',
+      });
+    }
+    return fallback.slice(0, 5);
+  }, [dashboardInsights, isAvailable, missingRequiredDocsCount, tr]);
+
+  const dashboardServiceProviders = useMemo(() => {
+    const rows = Array.isArray(dashboardInsights?.service_providers) ? dashboardInsights.service_providers : [];
+    if (rows.length > 0) {
+      return rows.map((r, idx) => ({
+        id: String(r?.id || `provider_${idx}`),
+        category: String(r?.category || 'other').toLowerCase(),
+        name: String(r?.name || tr('driverDashboard.home.serviceProvider', 'Service Provider')),
+        action_type: String(r?.action_type || 'nav'),
+        action_target: String(r?.action_target || 'marketplace'),
+      }));
+    }
+
+    return [
+      { id: 'fallback_legal', category: 'legal', name: tr('driverDashboard.home.services.legalHelp', 'Legal Help'), action_type: 'nav', action_target: 'marketplace' },
+      { id: 'fallback_roadside', category: 'roadside', name: tr('driverDashboard.home.services.roadside', 'Roadside'), action_type: 'nav', action_target: 'marketplace' },
+      { id: 'fallback_parking', category: 'parking', name: tr('driverDashboard.home.services.parking', 'Parking'), action_type: 'nav', action_target: 'marketplace' },
+      { id: 'fallback_fuel', category: 'fuel', name: tr('driverDashboard.home.services.fuel', 'Fuel'), action_type: 'nav', action_target: 'marketplace' },
+    ];
+  }, [dashboardInsights, tr]);
+
+  const dashboardQuickActions = useMemo(() => {
+    const rows = Array.isArray(dashboardInsights?.quick_actions) ? dashboardInsights.quick_actions : [];
+    if (rows.length > 0) {
+      return rows.map((r, idx) => ({
+        id: String(r?.id || `quick_${idx}`),
+        label: String(r?.label || tr('common.open', 'Open')),
+        icon: String(r?.icon || 'fa-solid fa-bolt'),
+        action_type: String(r?.action_type || 'nav'),
+        action_target: String(r?.action_target || 'settings'),
+      }));
+    }
+
+    return [
+      { id: 'fallback_upload', label: t(language, 'dashboard.uploadDocument', 'Upload Document'), icon: 'fa-solid fa-upload', action_type: 'upload_document', action_target: 'documents' },
+      { id: 'fallback_marketplace', label: t(language, 'dashboard.browseMarketplace', 'Browse Marketplace'), icon: 'fa-solid fa-store', action_type: 'nav', action_target: 'marketplace' },
+      { id: 'fallback_consent', label: t(language, 'dashboard.completeConsent', 'Complete Consent'), icon: 'fa-solid fa-pen', action_type: 'nav', action_target: 'esign' },
+      { id: 'fallback_support', label: t(language, 'dashboard.getSupport', 'Get Support'), icon: 'fa-solid fa-headset', action_type: 'open_support', action_target: 'support' },
+    ];
+  }, [dashboardInsights, language, tr]);
+
   // Handle availability toggle
   const handleAvailabilityToggle = async () => {
     if (availabilityLoading || !currentUser) return;
@@ -711,6 +870,7 @@ export default function DriverDashboard() {
       if (response.ok) {
         setIsAvailable(newAvailability);
         console.log(`✅ Availability updated to: ${newAvailability ? 'Available' : 'Unavailable'}`);
+        fetchDashboardInsights();
       } else {
         console.error('Failed to update availability');
         alert(tr('driverDashboard.availability.updateFailed', 'Failed to update availability. Please try again.'));
@@ -760,6 +920,44 @@ export default function DriverDashboard() {
       }
     }
   };
+
+  const providerIconClass = (category) => {
+    const c = String(category || '').toLowerCase();
+    if (c === 'legal') return 'fa-solid fa-gavel';
+    if (c === 'roadside') return 'fa-solid fa-wrench';
+    if (c === 'parking') return 'fa-solid fa-parking';
+    if (c === 'fuel') return 'fa-solid fa-gas-pump';
+    return 'fa-solid fa-briefcase';
+  };
+
+  const runDashboardAction = useCallback((actionType, actionTarget) => {
+    const type = String(actionType || '').toLowerCase();
+    const target = String(actionTarget || '').trim();
+
+    if (type === 'nav' && target) {
+      handleNavClick(target);
+      return;
+    }
+    if (type === 'upload_document') {
+      handleDocumentUpload();
+      return;
+    }
+    if (type === 'open_support') {
+      setShowSupportModal(true);
+      return;
+    }
+    if (type === 'toggle_availability') {
+      handleAvailabilityToggle();
+      return;
+    }
+    if ((type === 'url' || type === 'route') && target) {
+      navigate(target);
+      return;
+    }
+    if (target) {
+      handleNavClick(target);
+    }
+  }, [handleAvailabilityToggle, handleDocumentUpload, handleNavClick, navigate]);
 
   // Handle support form submission
   const handleSupportSubmit = async (e) => {
@@ -1059,6 +1257,15 @@ export default function DriverDashboard() {
   }, [isPostHire, currentUser]);
 
   function HomeView() {
+    const insightViews = Number(dashboardInsights?.marketplace_activity?.views_count);
+    const effectiveViewsCount = Number.isFinite(insightViews) ? Math.max(0, insightViews) : marketplaceViewsCount;
+    const marketplaceSummary = String(
+      dashboardInsights?.marketplace_activity?.summary
+      || (effectiveViewsCount > 0
+        ? tr('driverDashboard.home.marketplaceDescHasViews', 'This week carriers have shown interest in your profile')
+        : tr('driverDashboard.home.marketplaceDescNoViews', 'No views this week. Toggle availability to be discovered by carriers'))
+    );
+
     return (
       <>
         <header className="fp-header">
@@ -1203,19 +1410,17 @@ export default function DriverDashboard() {
           <div className="card dd-marketplace-card">
             <div className="card-header">
               <h3>{tr('driverDashboard.home.marketplaceActivity', 'Marketplace Activity')}</h3>
-              {marketplaceViewsCount > 0 && (
-                <span className="dd-marketplace-new dd-marketplace-green">{marketplaceViewsCount} {tr('driverDashboard.home.newLabel', 'New')}</span>
+              {effectiveViewsCount > 0 && (
+                <span className="dd-marketplace-new dd-marketplace-green">{effectiveViewsCount} {tr('driverDashboard.home.newLabel', 'New')}</span>
               )}
             </div>
             <div className="dd-marketplace-content dd-center dd-marketplace-padding">
               <div className="dd-marketplace-eye">
                 <i className="fa-solid fa-eye dd-marketplace-eye-icon"></i>
               </div>
-              <div className="dd-marketplace-viewed">{marketplaceViewsCount} {tr('driverDashboard.home.carriersViewedYou', 'Carriers Viewed You')}</div>
+              <div className="dd-marketplace-viewed">{effectiveViewsCount} {tr('driverDashboard.home.carriersViewedYou', 'Carriers Viewed You')}</div>
               <div className="dd-marketplace-desc">
-                {marketplaceViewsCount > 0 
-                  ? tr('driverDashboard.home.marketplaceDescHasViews', 'This week carriers have shown interest in your profile')
-                  : tr('driverDashboard.home.marketplaceDescNoViews', 'No views this week. Toggle availability to be discovered by carriers')}
+                {marketplaceSummary}
               </div>
               <button 
                 className="btn small-cd"
@@ -1232,18 +1437,25 @@ export default function DriverDashboard() {
               <div className="card-header">
                 <h3>{tr('driverDashboard.home.aiSuggestions', 'AI Suggestions')}</h3>
               </div>
-              <div className="dd-ai-suggestion">
-                <div className="dd-suggestion-title">{tr('driverDashboard.home.ai.medicalCardExpiring', 'Medical Card Expiring')}</div>
-                <div className="dd-suggestion-text">{tr('driverDashboard.home.ai.expiresInDays', 'Expires in 15 days')}</div>
-              </div>
-              <div className="dd-ai-suggestion">
-                <div className="dd-suggestion-title">{tr('driverDashboard.home.ai.profileTipTitle', 'Profile Tip')}</div>
-                <div className="dd-suggestion-text">{tr('driverDashboard.home.ai.profileTipText', 'Add experience details to attract carriers')}</div>
-              </div>
-              <div className="dd-ai-suggestion">
-                <div className="dd-suggestion-title">{tr('driverDashboard.home.ai.marketplaceReadyTitle', 'Marketplace Ready')}</div>
-                <div className="dd-suggestion-text">{tr('driverDashboard.home.ai.marketplaceReadyText', 'Turn on availability to be discovered')}</div>
-              </div>
+              {dashboardInsightsLoading && (
+                <div className="dd-suggestion-text">{tr('common.loading', 'Loading…')}</div>
+              )}
+              {dashboardInsightsError && (
+                <div className="dd-suggestion-text">{dashboardInsightsError}</div>
+              )}
+              {dashboardAiSuggestions.map((s) => (
+                <div className="dd-ai-suggestion" key={s.id}>
+                  <div className="dd-suggestion-title">{s.title}</div>
+                  <div className="dd-suggestion-text">{s.detail}</div>
+                  <button
+                    type="button"
+                    className="dd-suggestion-link"
+                    onClick={() => runDashboardAction(s.action_type, s.action_target)}
+                  >
+                    {s.action_label || tr('common.open', 'Open')}
+                  </button>
+                </div>
+              ))}
             </div>
           )}
 
@@ -1260,38 +1472,17 @@ export default function DriverDashboard() {
               </span>
             </div>
             <div className="dd-service-grid">
-              <div 
-                className="dd-service-item dd-center"
-                onClick={() => handleNavClick('marketplace')}
-                style={{ cursor: 'pointer' }}
-              >
-                <i className="fa-solid fa-gavel" />
-                <div>{tr('driverDashboard.home.services.legalHelp', 'Legal Help')}</div>
-              </div>
-              <div 
-                className="dd-service-item dd-center"
-                onClick={() => handleNavClick('marketplace')}
-                style={{ cursor: 'pointer' }}
-              >
-                <i className="fa-solid fa-wrench" />
-                <div>{tr('driverDashboard.home.services.roadside', 'Roadside')}</div>
-              </div>
-              <div 
-                className="dd-service-item dd-center"
-                onClick={() => handleNavClick('marketplace')}
-                style={{ cursor: 'pointer' }}
-              >
-                <i className="fa-solid fa-parking" />
-                <div>{tr('driverDashboard.home.services.parking', 'Parking')}</div>
-              </div>
-              <div 
-                className="dd-service-item dd-center"
-                onClick={() => handleNavClick('marketplace')}
-                style={{ cursor: 'pointer' }}
-              >
-                <i className="fa-solid fa-gas-pump" />
-                <div>{tr('driverDashboard.home.services.fuel', 'Fuel')}</div>
-              </div>
+              {dashboardServiceProviders.map((provider) => (
+                <div
+                  key={provider.id}
+                  className="dd-service-item dd-center"
+                  onClick={() => runDashboardAction(provider.action_type, provider.action_target)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <i className={providerIconClass(provider.category)} />
+                  <div>{provider.name}</div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -1308,34 +1499,16 @@ export default function DriverDashboard() {
                 onChange={handleFileSelected}
                 accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
               />
-              <button 
-                className="btn small-cd"
-                onClick={handleDocumentUpload}
-              >
-                <i className="fa-solid fa-upload"></i>
-                {t(language, 'dashboard.uploadDocument', 'Upload Document')}
-              </button>
-              <button 
-                className="btn small-cd"
-                onClick={() => handleNavClick('marketplace')}
-              >
-                <i className="fa-solid fa-store"></i>
-                {t(language, 'dashboard.browseMarketplace', 'Browse Marketplace')}
-              </button>
-              <button 
-                className="btn small-cd"
-                onClick={() => handleNavClick('esign')}
-              >
-                <i className="fa-solid fa-pen"></i>
-                {t(language, 'dashboard.completeConsent', 'Complete Consent')}
-              </button>
-              <button 
-                className="btn small ghost-cd"
-                onClick={() => setShowSupportModal(true)}
-              >
-                <i className="fa-solid fa-headset"></i>
-                {t(language, 'dashboard.getSupport', 'Get Support')}
-              </button>
+              {dashboardQuickActions.map((action) => (
+                <button
+                  key={action.id}
+                  className="btn small-cd"
+                  onClick={() => runDashboardAction(action.action_type, action.action_target)}
+                >
+                  <i className={action.icon}></i>
+                  {action.label}
+                </button>
+              ))}
             </div>
           </div>
         </section>
@@ -1929,16 +2102,22 @@ export default function DriverDashboard() {
                 <div className="dd-section-title">
                   <span>{tr('driverDashboard.postHire.aiSuggestions', 'AI Suggestions')}</span>
                 </div>
-                <div className="dd-suggestion-item">
-                  <div className="dd-suggestion-title">{tr('driverDashboard.postHire.ai.fuelStopRecommended', 'Fuel Stop Recommended')}</div>
-                  <div className="dd-suggestion-text">{tr('driverDashboard.postHire.ai.fuelStopRecommendedDesc', 'Pilot at Exit 142 - Best price in 50 miles ahead')}</div>
-                  <button className="dd-suggestion-link">{tr('driverDashboard.postHire.navigate', 'Navigate')}</button>
-                </div>
-                <div className="dd-suggestion-item">
-                  <div className="dd-suggestion-title">{tr('driverDashboard.postHire.ai.breakRequiredSoon', 'Break Required Soon')}</div>
-                  <div className="dd-suggestion-text">{tr('driverDashboard.postHire.ai.breakRequiredSoonDesc', '30-min break needed in 45 minutes')}</div>
-                  <button className="dd-suggestion-link">{tr('driverDashboard.postHire.ai.findRestAreas', 'Find Rest Areas')}</button>
-                </div>
+                {dashboardInsightsLoading && (
+                  <div className="dd-suggestion-text">{tr('common.loading', 'Loading…')}</div>
+                )}
+                {(dashboardAiSuggestions || []).slice(0, 3).map((s) => (
+                  <div className="dd-suggestion-item" key={`posthire_${s.id}`}>
+                    <div className="dd-suggestion-title">{s.title}</div>
+                    <div className="dd-suggestion-text">{s.detail}</div>
+                    <button
+                      type="button"
+                      className="dd-suggestion-link"
+                      onClick={() => runDashboardAction(s.action_type, s.action_target)}
+                    >
+                      {s.action_label || tr('common.open', 'Open')}
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>

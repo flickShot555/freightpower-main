@@ -39,6 +39,9 @@ export default function CarrierDashboard() {
   const [marketplaceLoads, setMarketplaceLoads] = useState([]);
   const [availableDriversCount, setAvailableDriversCount] = useState(0);
   const [vehicleCounts, setVehicleCounts] = useState(null); // aggregated across associated drivers
+  const [carrierInsights, setCarrierInsights] = useState(null);
+  const [carrierInsightsLoading, setCarrierInsightsLoading] = useState(false);
+  const [carrierInsightsError, setCarrierInsightsError] = useState('');
   
   const [activeNav, setActiveNav] = useState('home');
   const [initialThreadId, setInitialThreadId] = useState(null);
@@ -341,6 +344,53 @@ export default function CarrierDashboard() {
     fetchDashboardData();
   }, [currentUser]);
 
+  useEffect(() => {
+    let alive = true;
+    if (!currentUser) return;
+
+    const fetchCarrierInsights = async () => {
+      setCarrierInsightsLoading(true);
+      setCarrierInsightsError('');
+      try {
+        const token = await currentUser.getIdToken();
+        const res = await fetch(`${API_URL}/carrier/dashboard/insights`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          if (!alive) return;
+          setCarrierInsightsError(String(body?.detail || 'Failed to load carrier insights'));
+          return;
+        }
+        const data = await res.json();
+        if (!alive) return;
+        setCarrierInsights(data || null);
+      } catch (e) {
+        if (!alive) return;
+        setCarrierInsightsError(String(e?.message || 'Failed to load carrier insights'));
+      } finally {
+        if (alive) setCarrierInsightsLoading(false);
+      }
+    };
+
+    fetchCarrierInsights();
+    const onFocus = () => fetchCarrierInsights();
+    const onVisibility = () => {
+      if (!document.hidden) fetchCarrierInsights();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    const id = setInterval(() => {
+      if (!document.hidden && activeNav === 'home') fetchCarrierInsights();
+    }, 60000);
+    return () => {
+      alive = false;
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+      clearInterval(id);
+    };
+  }, [activeNav, currentUser]);
+
   // Fetch messaging unread summary once (no polling)
   useEffect(() => {
     let alive = true;
@@ -634,6 +684,12 @@ export default function CarrierDashboard() {
     }
   };
 
+  const runCarrierInsightAction = (actionTarget) => {
+    const target = String(actionTarget || '').trim();
+    if (!target) return;
+    handleNavClick(target);
+  };
+
   // Handle Report Fraud
   const handleReportFraud = (e) => {
     e?.preventDefault?.();
@@ -728,6 +784,36 @@ export default function CarrierDashboard() {
 
   // Small router for the inner content area so the sidebar & topbar remain mounted
   function HomeView() {
+    const carrierAiSuggestions = (Array.isArray(carrierInsights?.ai_suggestions) ? carrierInsights.ai_suggestions : [])
+      .map((s, idx) => ({
+        id: String(s?.id || `carrier_ai_${idx}`),
+        title: String(s?.title || ''),
+        detail: String(s?.detail || ''),
+        action_label: String(s?.action_label || 'Open'),
+        action_target: String(s?.action_target || ''),
+      }))
+      .filter((s) => s.title && s.detail);
+
+    const fallbackCarrierAiSuggestions = [
+      {
+        id: 'fallback_compliance',
+        title: 'Compliance Renewal',
+        detail: 'Review expiring carrier documents to avoid operational risk.',
+        action_label: 'Open Compliance',
+        action_target: 'compliance',
+      },
+      {
+        id: 'fallback_marketplace',
+        title: 'Load Opportunity',
+        detail: 'Review marketplace opportunities and assign drivers for active lanes.',
+        action_label: 'Open Marketplace',
+        action_target: 'marketplace',
+      },
+    ];
+
+    const renderedCarrierAiSuggestions =
+      carrierAiSuggestions.length > 0 ? carrierAiSuggestions : fallbackCarrierAiSuggestions;
+
     return (
       <>
         <header className="fp-header">
@@ -838,9 +924,26 @@ export default function CarrierDashboard() {
               <h3>AI Suggestions</h3>
               <i className="fa-solid fa-robot cd-card-icon small" aria-hidden="true" />
             </div>
+            {carrierInsightsLoading && (
+              <div className="muted" style={{ padding: '8px 0' }}>Loading insights...</div>
+            )}
+            {carrierInsightsError && (
+              <div className="muted" style={{ padding: '8px 0', color: '#b42318' }}>{carrierInsightsError}</div>
+            )}
             <ul>
-              <li>Renew insurance in 12 days to avoid compliance issues</li>
-              <li>3 high-paying loads available in your area</li>
+              {renderedCarrierAiSuggestions.slice(0, 3).map((s) => (
+                <li key={s.id} style={{ marginBottom: 10 }}>
+                  <div style={{ fontWeight: 600 }}>{s.title}</div>
+                  <div className="muted" style={{ fontSize: 13 }}>{s.detail}</div>
+                  <button
+                    className="btn ghost-cd small"
+                    style={{ marginTop: 6 }}
+                    onClick={() => runCarrierInsightAction(s.action_target)}
+                  >
+                    {s.action_label}
+                  </button>
+                </li>
+              ))}
             </ul>
           </div>
 

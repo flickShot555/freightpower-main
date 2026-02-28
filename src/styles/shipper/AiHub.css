@@ -36,13 +36,35 @@
 .assistant-input{ display:flex; gap:8px; margin-bottom:12px }
 .assistant-input input{ flex:1; padding:8px 10px; border-radius:100px; border:1px solid #e5e7eb; font-size:14px; }
 .assistant-quick .pill{ background:#f8fafc; padding:8px; border-radius:6px; display:flex; margin-top:8px; font-size: 14px; }
+.assistant-quick-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px }
+.assistant-quick-grid .pill{ width:100%; border:1px solid #e5e7eb; cursor:pointer; justify-content:center }
+.assistant-chatlog{ max-height:420px; overflow:auto; display:flex; flex-direction:column; gap:10px; padding:6px 2px }
+.assistant-msg{ padding:10px; border-radius:10px; border:1px solid #eef2f7; background:#f9fafb }
+.assistant-msg.user{ background:#eff6ff; border-color:#bfdbfe }
+.assistant-msg.assistant{ background:#f8fafc; border-color:#e2e8f0 }
+.assistant-msg-role{ font-size:12px; font-weight:700; margin-bottom:4px; color:#334155 }
+.assistant-msg-text{ font-size:13px; color:#0f172a; white-space:pre-wrap; word-break:break-word }
+.assistant-msg-time{ margin-top:6px; font-size:11px; color:#64748b }
+.assistant-error{ margin:8px 0; padding:8px 10px; border-radius:8px; background:#fef2f2; border:1px solid #fecaca; color:#991b1b; font-size:12px }
+.assistant-toolbox{ margin-top:12px; padding-top:12px; border-top:1px solid #e5e7eb }
+.assistant-tool-input{ width:100%; padding:8px 10px; border-radius:8px; border:1px solid #e5e7eb; font-size:13px; margin-bottom:8px }
+.assistant-tool-actions{ display:flex; gap:8px; flex-wrap:wrap }
 .dark-root .ffahub-right.card{ background:#1f2937; border-color:#353535; box-shadow: 0 6px 18px rgba(0,0,0,0.2) }
 .dark-root .assistant-input input{ background:#2c2c2c; border-color:#3c3c3c; color:#f9fafb }
 .dark-root .assistant-input input::placeholder{ color:#9ca3af }
 .dark-root .assistant-quick .pill{ background:#353535; color:#f9fafb; border:1px solid #3c3c3c }
+.dark-root .assistant-msg{ background:#2c2c2c; border-color:#3c3c3c }
+.dark-root .assistant-msg.user{ background:#1e3a8a; border-color:#1d4ed8 }
+.dark-root .assistant-msg-role{ color:#e2e8f0 }
+.dark-root .assistant-msg-text{ color:#f9fafb }
+.dark-root .assistant-msg-time{ color:#9ca3af }
+.dark-root .assistant-error{ background:#3f1d1d; border-color:#7f1d1d; color:#fecaca }
+.dark-root .assistant-toolbox{ border-top-color:#3c3c3c }
+.dark-root .assistant-tool-input{ background:#2c2c2c; border-color:#3c3c3c; color:#f9fafb }
 
 @media (max-width:900px){ .ffahub-grid{ grid-template-columns: 1fr } .ffahub-topcards{ grid-template-columns: 1fr } .ffahub-topcards { grid-template-columns: repeat(2,1fr) } .ffahub-right{ width:100% } }
 @media (max-width:480px){ .ffahub-topcards { grid-template-columns: 1fr } }
+@media (max-width:640px){ .assistant-quick-grid{ grid-template-columns:1fr } }
 
 /* Dark mode - ensure card variants are overridden in dark theme (higher specificity) */
 .dark-root .ffahub-topcards .ffahub-card,

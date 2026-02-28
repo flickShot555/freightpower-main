@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "run:all": "powershell -ExecutionPolicy Bypass -File .\\run_all.ps1"
   },
   "dependencies": {
       "jspdf": "^2.5.2",

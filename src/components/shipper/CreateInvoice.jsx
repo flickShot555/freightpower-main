@@ -1,9 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import '../../styles/shipper/CreateInvoice.css';
 import InvoicePreview from './InvoicePreview';
+import { useAuth } from '../../contexts/AuthContext';
+import { API_URL } from '../../config';
 
 export default function CreateInvoice({ onClose }) {
+  const { currentUser } = useAuth();
   const [showPreview, setShowPreview] = useState(false);
+  const [invoiceInsights, setInvoiceInsights] = useState(null);
+  const [invoiceInsightsLoading, setInvoiceInsightsLoading] = useState(false);
+  const [invoiceInsightsError, setInvoiceInsightsError] = useState('');
 
   function openPreview() {
     setShowPreview(true);
@@ -11,6 +17,64 @@ export default function CreateInvoice({ onClose }) {
 
   function closePreview() {
     setShowPreview(false);
+  }
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchInsights = async () => {
+      if (!currentUser) return;
+      if (isMounted) {
+        setInvoiceInsightsLoading(true);
+        setInvoiceInsightsError('');
+      }
+      try {
+        const token = await currentUser.getIdToken();
+        const response = await fetch(`${API_URL}/shipper/dashboard/insights`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        if (isMounted) setInvoiceInsights(payload);
+      } catch (error) {
+        console.error('Failed to fetch invoice AI suggestion:', error);
+        if (isMounted) setInvoiceInsightsError('Live invoice guidance is unavailable right now.');
+      } finally {
+        if (isMounted) setInvoiceInsightsLoading(false);
+      }
+    };
+
+    fetchInsights();
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser]);
+
+  const invoiceSuggestion = useMemo(() => {
+    const suggestions = Array.isArray(invoiceInsights?.ai_suggestions) ? invoiceInsights.ai_suggestions : [];
+    const deliveredRow = suggestions.find((row) => String(row?.id || '').includes('billing'));
+    const preferred = deliveredRow || suggestions[0] || null;
+    if (preferred) {
+      return {
+        title: String(preferred.title || 'AI Suggestion'),
+        detail: String(preferred.detail || 'Review your latest delivered loads and billing tasks.'),
+        actionLabel: String(preferred.action_label || 'Open'),
+        actionTarget: String(preferred.action_target || 'bills'),
+      };
+    }
+    return {
+      title: 'AI Suggestion',
+      detail: 'Review delivered loads with complete documents and generate invoices to avoid billing delays.',
+      actionLabel: 'Open Bills',
+      actionTarget: 'bills',
+    };
+  }, [invoiceInsights]);
+
+  function handleSuggestionAction() {
+    const target = String(invoiceSuggestion.actionTarget || 'bills').trim();
+    window.location.href = `/shipper-dashboard?nav=${encodeURIComponent(target)}`;
   }
 
   return (
@@ -35,12 +99,17 @@ export default function CreateInvoice({ onClose }) {
           <div className="ai-suggestion ai-suggestion-teal">
             <div className="ai-left">
               <div>
-                <div className="muted-ai-sugg">AI Suggestion</div>
-                <div className="ai-box-small">Load #8237 (FedEx Logistics) delivered yesterday with POD attached. Create invoice?</div>
+                <div className="muted-ai-sugg">{invoiceSuggestion.title}</div>
+                <div className="ai-box-small">
+                  {invoiceInsightsLoading ? 'Loading AI billing guidance...' : invoiceSuggestion.detail}
+                  {invoiceInsightsError ? ` ${invoiceInsightsError}` : ''}
+                </div>
               </div>
             </div>
             <div>
-              <button className="btn small ghost-cd dd-btn">Yes</button>
+              <button className="btn small ghost-cd dd-btn" onClick={handleSuggestionAction}>
+                {invoiceSuggestion.actionLabel}
+              </button>
             </div>
           </div>
 

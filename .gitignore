@@ -61,3 +61,8 @@ apps/data/kb/
 coverage/
 .coverage
 .cache/
+
+# Local planning/setup notes (do not commit)
+DRIVER_DASHBOARD_AI_IMPLEMENTATION_GOALS.md
+LOCAL_SETUP.md
+agent.md

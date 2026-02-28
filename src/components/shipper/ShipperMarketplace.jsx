@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import '../../styles/shipper/ShipperMarketplace.css';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_URL } from '../../config';
@@ -76,6 +76,9 @@ export default function ShipperMarketplace() {
   const [carriersLoading, setCarriersLoading] = useState(false);
   const [providersLoading, setProvidersLoading] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
+  const [shipperInsights, setShipperInsights] = useState(null);
+  const [shipperInsightsLoading, setShipperInsightsLoading] = useState(false);
+  const [shipperInsightsError, setShipperInsightsError] = useState('');
 
   const categories = ['All Categories', 'Factoring', 'Insurance', 'Compliance', 'Legal', 'Repair', 'Medical', 'Testing', 'Dispatch'];
 
@@ -222,6 +225,56 @@ export default function ShipperMarketplace() {
     };
     
     fetchShipperLoads();
+  }, [currentUser]);
+
+  useEffect(() => {
+    let alive = true;
+    if (!currentUser) return;
+
+    const fetchShipperInsights = async () => {
+      setShipperInsightsLoading(true);
+      setShipperInsightsError('');
+      try {
+        const token = await currentUser.getIdToken();
+        const res = await fetch(`${API_URL}/shipper/dashboard/insights`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          if (!alive) return;
+          setShipperInsightsError(String(body?.detail || 'Failed to load market insights'));
+          return;
+        }
+        const data = await res.json();
+        if (!alive) return;
+        setShipperInsights(data || null);
+      } catch (e) {
+        if (!alive) return;
+        setShipperInsightsError(String(e?.message || 'Failed to load market insights'));
+      } finally {
+        if (alive) setShipperInsightsLoading(false);
+      }
+    };
+
+    fetchShipperInsights();
+    const onFocus = () => fetchShipperInsights();
+    const onVisibility = () => {
+      if (!document.hidden) fetchShipperInsights();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    const id = setInterval(() => {
+      if (!document.hidden) fetchShipperInsights();
+    }, 60000);
+    return () => {
+      alive = false;
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+      clearInterval(id);
+    };
   }, [currentUser]);
 
   // Fetch offers for a load
@@ -523,7 +576,7 @@ export default function ShipperMarketplace() {
   // Convert shipper loads to listings format
   const allListings = shipperLoads.map(load => ({
     id: load.load_id,
-    lane: `${load.origin} → ${load.destination}`,
+    lane: `${load.origin} â†’ ${load.destination}`,
     equipment: load.equipment_type || 'N/A',
     offerCount: load.offers ? load.offers.length : 0,
     postedOn: load.created_at ? new Date(load.created_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A',
@@ -555,6 +608,62 @@ export default function ShipperMarketplace() {
     { name: 'Atlas Hauling', subtitle: 'Strong delivery score', region: 'South', equipment: 'Flatbed', match: '95%', compliance: 'Valid', actionText: 'View', avatarIcon: 'fa-solid fa-box', avatarClass: 'match-purple' },
     { name: 'Skyline Logistics', subtitle: '2 matching lanes', region: 'West', equipment: 'Van', match: '92%', compliance: 'Insurance Expiring', actionText: 'Save', avatarIcon: 'fa-solid fa-shipping-fast', avatarClass: 'match-orange' }
   ];
+
+  const marketInsights = (Array.isArray(shipperInsights?.market_insights) ? shipperInsights.market_insights : [])
+    .map((x, idx) => ({
+      id: String(x?.id || `market_insight_${idx}`),
+      title: String(x?.title || ''),
+      detail: String(x?.detail || ''),
+      action_target: String(x?.action_target || ''),
+      action_label: String(x?.action_label || 'Open'),
+    }))
+    .filter((x) => x.title && x.detail);
+
+  const marketInsightFallback = [
+    {
+      id: 'fallback_rate',
+      title: 'Rate Signals',
+      detail: 'Market rate patterns are generated from your active and posted load network.',
+      action_target: 'marketplace',
+      action_label: 'Open Marketplace',
+    },
+    {
+      id: 'fallback_carriers',
+      title: 'Carrier Activity',
+      detail: 'Review carrier bids and marketplace coverage opportunities.',
+      action_target: 'carrier-bids',
+      action_label: 'Open Carrier Bids',
+    },
+    {
+      id: 'fallback_lane',
+      title: 'Lane Performance',
+      detail: 'Monitor your top-performing lanes and adjust posting strategy.',
+      action_target: 'my-loads',
+      action_label: 'Open My Loads',
+    },
+  ];
+
+  const displayedMarketInsights = marketInsights.length > 0 ? marketInsights : marketInsightFallback;
+
+  const analysisSummaryText = (() => {
+    const summary = shipperInsights?.summary || {};
+    const activeLoads = Number(summary?.active_loads || 0);
+    const postedLoads = Number(summary?.posted_loads || 0);
+    const pendingOffers = Number(summary?.pending_offers || 0);
+    const topLane = String(summary?.top_lane || '').trim();
+    const topLaneCount = Number(summary?.top_lane_count || 0);
+    if (activeLoads > 0 || postedLoads > 0 || pendingOffers > 0) {
+      const lanePart = topLane && topLaneCount > 0 ? `Top lane ${topLane} appears in ${topLaneCount} load(s).` : '';
+      return `AI analyzed ${activeLoads} active load(s), ${postedLoads} posted load(s), and ${pendingOffers} pending offer(s). ${lanePart}`.trim();
+    }
+    return 'AI analysis uses your load and offer activity to recommend lane and carrier actions.';
+  })();
+
+  const runMarketInsightAction = (actionTarget) => {
+    const target = String(actionTarget || '').trim();
+    if (!target || target === 'marketplace') return;
+    window.location.href = `/shipper-dashboard?nav=${encodeURIComponent(target)}`;
+  };
 
   return (
     <div className="shipper-marketplace">
@@ -839,7 +948,7 @@ export default function ShipperMarketplace() {
         <div className="recommendation-cards">
           <div className="recommendation-card best-fit">
             <div className="recommendation-content">
-              <h4>Best Fit for CHI → DAL Route</h4>
+              <h4>Best Fit for CHI â†’ DAL Route</h4>
               <p>Based on equipment type, route history, and ratings</p>
               <div className="recommendation-summary">
                 <span className="summary-item">3 carriers recommended</span>
@@ -910,7 +1019,7 @@ export default function ShipperMarketplace() {
             <div key={index} className="table-row">
               <div className="listing-id">{load.load_id}</div>
               <div className="lane">
-                <div>{load.origin} → {load.destination}</div>
+                <div>{load.origin} â†’ {load.destination}</div>
                 {load.additional_routes && load.additional_routes.length > 0 && (
                   <div style={{
                     fontSize: '11px',
@@ -975,7 +1084,7 @@ export default function ShipperMarketplace() {
       <div className="listings-summary">
           <div className="summary-box">
             <i className="fa-solid fa-circle-info" />
-            <span>{marketplaceLoads.length} active tendered {marketplaceLoads.length === 1 ? 'load' : 'loads'} awaiting carrier bids · {marketplaceLoads.filter(l => l.offers && l.offers.length > 0).length} with offers</span>
+            <span>{marketplaceLoads.length} active tendered {marketplaceLoads.length === 1 ? 'load' : 'loads'} awaiting carrier bids Â· {marketplaceLoads.filter(l => l.offers && l.offers.length > 0).length} with offers</span>
           </div>
         </div>
         </div>
@@ -1092,7 +1201,7 @@ export default function ShipperMarketplace() {
           <div className="listings-summary">
             <div className="summary-box">
               <i className="fa-solid fa-circle-info" />
-              <span>{carriers.length} carriers available · Filter by region, equipment, and rating to find the best match for your loads.</span>
+              <span>{carriers.length} carriers available Â· Filter by region, equipment, and rating to find the best match for your loads.</span>
             </div>
           </div>
         </div>
@@ -1182,7 +1291,7 @@ export default function ShipperMarketplace() {
                         textTransform: 'uppercase',
                         letterSpacing: '0.5px'
                       }}>
-                        ★ Featured
+                        â˜… Featured
                       </div>
                     )}
                     
@@ -1284,7 +1393,7 @@ export default function ShipperMarketplace() {
           <div className="listings-summary">
             <div className="summary-box">
               <i className="fa-solid fa-circle-info" />
-              <span>{serviceProviders.length} service providers available · Browse by category to find specialized services for your business needs.</span>
+              <span>{serviceProviders.length} service providers available Â· Browse by category to find specialized services for your business needs.</span>
             </div>
           </div>
         </div>
@@ -1326,7 +1435,7 @@ export default function ShipperMarketplace() {
           <div className="listings-summary">
           <div className="summary-box">
             <i className="fa-solid fa-circle-info" />
-            <span>4 insurance providers offer same-day cargo coverage · 3 compliance partners have auto-renew integration support.</span>
+            <span>4 insurance providers offer same-day cargo coverage Â· 3 compliance partners have auto-renew integration support.</span>
           </div>
         </div>
         </div>
@@ -1355,7 +1464,7 @@ export default function ShipperMarketplace() {
           <div className="listings-summary">
           <div className="summary-box">
             <i className="fa-solid fa-circle-info" />
-            <span>6 tools matches your company type · 3 automation ready · 2 integrations pre-approved.</span>
+            <span>6 tools matches your company type Â· 3 automation ready Â· 2 integrations pre-approved.</span>
           </div>
         </div>
         </div>
@@ -1415,7 +1524,7 @@ export default function ShipperMarketplace() {
                   </div>
                   <div className="match-percent">96%</div>
                 </div>
-                <div className="match-cta"><button className="btn small-cd">Contact ›</button></div>
+                <div className="match-cta"><button className="btn small-cd">Contact â€º</button></div>
               </div>
 
               <div className="match-card">
@@ -1430,7 +1539,7 @@ export default function ShipperMarketplace() {
                   </div>
                   <div className="match-percent">92%</div>
                 </div>
-                <div className="match-cta"><button className="btn small-cd">Connect ›</button></div>
+                <div className="match-cta"><button className="btn small-cd">Connect â€º</button></div>
               </div>
 
               <div className="match-card">
@@ -1445,7 +1554,7 @@ export default function ShipperMarketplace() {
                   </div>
                   <div className="match-percent">90%</div>
                 </div>
-                <div className="match-cta"><button className="btn small-cd">View ›</button></div>
+                <div className="match-cta"><button className="btn small-cd">View â€º</button></div>
               </div>
             </div>
           </div>
@@ -1464,7 +1573,7 @@ export default function ShipperMarketplace() {
                   </div>
                   <div className="match-percent">98%</div>
                 </div>
-                <div className="match-cta"><button className="btn small-cd">Connect ›</button></div>
+                <div className="match-cta"><button className="btn small-cd">Connect â€º</button></div>
               </div>
 
               <div className="match-card">
@@ -1479,7 +1588,7 @@ export default function ShipperMarketplace() {
                   </div>
                   <div className="match-percent">95%</div>
                 </div>
-                <div className="match-cta"><button className="btn small-cd">View ›</button></div>
+                <div className="match-cta"><button className="btn small-cd">View â€º</button></div>
               </div>
 
               <div className="match-card">
@@ -1494,28 +1603,44 @@ export default function ShipperMarketplace() {
                   </div>
                   <div className="match-percent">91%</div>
                 </div>
-                <div className="match-cta"><button className="btn small-cd">Connect ›</button></div>
+                <div className="match-cta"><button className="btn small-cd">Connect â€º</button></div>
               </div>
             </div>
           </div>
           <div className='headings-ai-tab' style={{ marginTop: '20px' }}>Rate & market Insights</div>
           <div className="aii-insights-row">
-              <div className="match-card insight-green">
-                <div className="aii-insight-title">Rate Increase</div>
-                <div className="aii-insight-desc">MN → TX reefer rates are up 4.2% — consider posting more loads.</div>
-                <div className="aii-insight-cta"><button className="btn small-cd">Post Load</button></div>
+            {displayedMarketInsights.map((insight, idx) => {
+              const classByIndex = ['insight-green', 'insight-blue', 'insight-purple'][idx % 3];
+              return (
+                <div key={insight.id || `market-insight-${idx}`} className={`match-card ${classByIndex}`}>
+                  <div className="aii-insight-title">{insight.title}</div>
+                  <div className="aii-insight-desc">{insight.detail}</div>
+                  <div className="aii-insight-cta">
+                    <button
+                      className="btn small-cd"
+                      onClick={() => runMarketInsightAction(insight.action_target)}
+                    >
+                      {insight.action_label || 'Open'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            {shipperInsightsLoading && (
+              <div className="match-card">
+                <div className="aii-insight-title">Refreshing insights</div>
+                <div className="aii-insight-desc">Loading the latest market view for your account.</div>
               </div>
-              <div className="match-card insight-blue">
-                <div className="aii-insight-title">New Carriers</div>
-                <div className="aii-insight-desc">5 new carriers available in your service area.</div>
-                <div className="aii-insight-cta"><button className="btn small-cd">View Carriers</button></div>
+            )}
+            {shipperInsightsError && !shipperInsightsLoading && (
+              <div className="match-card">
+                <div className="aii-insight-title">Insights fallback</div>
+                <div className="aii-insight-desc">
+                  Showing baseline guidance because live insights are temporarily unavailable.
+                </div>
               </div>
-              <div className="match-card insight-purple">
-                <div className="aii-insight-title">Top Lane</div>
-                <div className="aii-insight-desc">Top performing lane: Midwest → South (avg $2.92/mi).</div>
-                <div className="aii-insight-cta"><button className="btn small-cd ">Save Insight</button></div>
-              </div>
-            </div>
+            )}
+          </div>
             <div className='headings-ai-tab' style={{ marginTop: '20px' }}>Opportunities</div>
             <div className="opps-list">
               <div className="opp-item">
@@ -1523,7 +1648,7 @@ export default function ShipperMarketplace() {
                   <div className="opp-icon opp-icon-warning"><i className="fa-solid fa-shield-halved"/></div>
                   <div>
                     <div className="opp-title">Insurance Provider Missing</div>
-                    <div className="opp-desc">You haven't connected an insurance provider — save up to 12% on coverage.</div>
+                    <div className="opp-desc">You haven't connected an insurance provider â€” save up to 12% on coverage.</div>
                   </div>
                 </div>
                 <div className="opp-cta"><button className="btn small-cd">Connect</button></div>
@@ -1534,7 +1659,7 @@ export default function ShipperMarketplace() {
                   <div className="opp-icon opp-icon-alert"><i className="fa-solid fa-triangle-exclamation"/></div>
                   <div>
                     <div className="opp-title">Compliance Documents Expiring</div>
-                    <div className="opp-desc">2 compliance documents expiring soon — connect with FleetGuard.</div>
+                    <div className="opp-desc">2 compliance documents expiring soon â€” connect with FleetGuard.</div>
                   </div>
                 </div>
                 <div className="opp-cta"><button className="btn small-cd">Fix Compliance</button></div>
@@ -1545,7 +1670,7 @@ export default function ShipperMarketplace() {
                   <div className="opp-icon opp-icon-integration"><i className="fa-solid fa-plug"/></div>
                   <div>
                     <div className="opp-title">Integration Opportunities</div>
-                    <div className="opp-desc">3 tech tools integrate directly with your current setup — Connect now.</div>
+                    <div className="opp-desc">3 tech tools integrate directly with your current setup â€” Connect now.</div>
                   </div>
                 </div>
                 <div className="opp-cta"><button className="btn small-cd">Connect Now</button></div>
@@ -1556,7 +1681,7 @@ export default function ShipperMarketplace() {
               <div className="ai-analysis-left"><div className="aai-icon"><i className="fa-solid fa-robot"/></div></div>
               <div className="ai-analysis-body">
                 <div className="ai-analysis-title">AI Analysis Complete</div>
-                <div className="ai-analysis-desc">AI scanned 1,243 regional carriers • Found 18 matches above 90% fit • 4 service providers recommended based on your last 5 loads.</div>
+                <div className="ai-analysis-desc">{analysisSummaryText}</div>
               </div>
             </div>
 
@@ -1600,13 +1725,13 @@ export default function ShipperMarketplace() {
                   color: '#64748b'
                 }}
               >
-                ×
+                Ã—
               </button>
             </div>
 
             <div style={{ marginBottom: '25px', padding: '15px', background: '#f8fafc', borderRadius: '8px' }}>
               <div style={{ fontSize: '16px', fontWeight: '600', color: '#1e293b', marginBottom: '8px' }}>
-                {selectedLoadForOffers.origin} → {selectedLoadForOffers.destination}
+                {selectedLoadForOffers.origin} â†’ {selectedLoadForOffers.destination}
               </div>
               <div style={{ fontSize: '14px', color: '#64748b' }}>
                 Equipment: {selectedLoadForOffers.equipment_type || 'N/A'} | 
@@ -1694,9 +1819,9 @@ export default function ShipperMarketplace() {
                                    offer.status === 'rejected' ? '#ef4444' : '#3b82f6',
                         color: 'white'
                       }}>
-                        {offer.status === 'accepted' ? '✓ Accepted' :
-                         offer.status === 'rejected' ? '✗ Rejected' :
-                         '⏳ Pending'}
+                        {offer.status === 'accepted' ? 'âœ“ Accepted' :
+                         offer.status === 'rejected' ? 'âœ— Rejected' :
+                         'â³ Pending'}
                       </span>
 
                       {offer.status === 'pending' && (
