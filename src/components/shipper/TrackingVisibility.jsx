@@ -18,6 +18,9 @@ export default function TrackingVisibility({ initialLoadId = null }) {
   const [selectedLoad, setSelectedLoad] = useState(null);
   const [trackingItems, setTrackingItems] = useState([]);
   const trackingTimerRef = useRef(null);
+  const loadsRequestRef = useRef(null);
+  const selectedLoadRequestRef = useRef(null);
+  const trackingRequestRef = useRef(null);
   const [mapInstance, setMapInstance] = useState(null);
 
   const normalizeStatus = (s) =>
@@ -212,12 +215,18 @@ export default function TrackingVisibility({ initialLoadId = null }) {
 
   const fetchLoads = async () => {
     if (!currentUser) return;
+    if (loadsRequestRef.current) {
+      loadsRequestRef.current.abort();
+    }
+    const controller = new AbortController();
+    loadsRequestRef.current = controller;
     setLoading(true);
     setError('');
     try {
       const token = await currentUser.getIdToken();
       const res = await fetch(`${API_URL}/loads?exclude_drafts=true&page=1&page_size=200`, {
         headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
       });
       if (!res.ok) {
         setLoads([]);
@@ -228,9 +237,13 @@ export default function TrackingVisibility({ initialLoadId = null }) {
       const list = Array.isArray(data?.loads) ? data.loads : [];
       setLoads(list);
     } catch (e) {
+      if (e?.name === 'AbortError') return;
       setLoads([]);
       setError(e?.message || 'Failed to load shipments');
     } finally {
+      if (loadsRequestRef.current === controller) {
+        loadsRequestRef.current = null;
+      }
       setLoading(false);
     }
   };
@@ -238,16 +251,27 @@ export default function TrackingVisibility({ initialLoadId = null }) {
   const fetchSelectedLoad = async (loadId) => {
     const id = String(loadId || '').trim();
     if (!currentUser || !id) return;
+    if (selectedLoadRequestRef.current) {
+      selectedLoadRequestRef.current.abort();
+    }
+    const controller = new AbortController();
+    selectedLoadRequestRef.current = controller;
     try {
       const token = await currentUser.getIdToken();
       const res = await fetch(`${API_URL}/loads/${encodeURIComponent(id)}`, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        signal: controller.signal,
       });
       if (!res.ok) return;
       const data = await res.json();
       setSelectedLoad(data?.load || data);
-    } catch {
+    } catch (e) {
+      if (e?.name === 'AbortError') return;
       // ignore; keep whatever we had
+    } finally {
+      if (selectedLoadRequestRef.current === controller) {
+        selectedLoadRequestRef.current = null;
+      }
     }
   };
 
@@ -266,17 +290,32 @@ export default function TrackingVisibility({ initialLoadId = null }) {
 
   const fetchTrackingLocations = async () => {
     if (!currentUser) return;
+    if (trackingRequestRef.current) {
+      trackingRequestRef.current.abort();
+    }
+    const controller = new AbortController();
+    trackingRequestRef.current = controller;
     try {
       const token = await currentUser.getIdToken();
-      const res = await fetch(`${API_URL}/tracking/loads/locations?active_only=true&limit=300`, {
+      const selectedId = String(selectedLoadId || '').trim();
+      const baseUrl = selectedId
+        ? `${API_URL}/tracking/loads/locations?active_only=true&limit=20&load_id=${encodeURIComponent(selectedId)}`
+        : `${API_URL}/tracking/loads/locations?active_only=true&limit=120`;
+      const res = await fetch(baseUrl, {
         headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
       });
       if (!res.ok) return;
       const data = await res.json();
       const items = Array.isArray(data?.items) ? data.items : [];
       setTrackingItems(items);
-    } catch {
+    } catch (e) {
+      if (e?.name === 'AbortError') return;
       // ignore (best-effort realtime)
+    } finally {
+      if (trackingRequestRef.current === controller) {
+        trackingRequestRef.current = null;
+      }
     }
   };
 
@@ -293,9 +332,30 @@ export default function TrackingVisibility({ initialLoadId = null }) {
         clearInterval(trackingTimerRef.current);
         trackingTimerRef.current = null;
       }
+      if (trackingRequestRef.current) {
+        trackingRequestRef.current.abort();
+        trackingRequestRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser]);
+  }, [currentUser, selectedLoadId]);
+
+  useEffect(() => {
+    return () => {
+      if (loadsRequestRef.current) {
+        loadsRequestRef.current.abort();
+        loadsRequestRef.current = null;
+      }
+      if (selectedLoadRequestRef.current) {
+        selectedLoadRequestRef.current.abort();
+        selectedLoadRequestRef.current = null;
+      }
+      if (trackingRequestRef.current) {
+        trackingRequestRef.current.abort();
+        trackingRequestRef.current = null;
+      }
+    };
+  }, []);
 
   const inTransitLoads = useMemo(() => {
     return (loads || []).filter((l) => isInTransitStatus(loadStatusValue(l)));

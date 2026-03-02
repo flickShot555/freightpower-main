@@ -1,10 +1,51 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import '../../styles/carrier/HelpHub.css';
 import {
   chatWithRoleAssistant,
   getRoleAssistantConversation,
   listRoleAssistantConversations,
 } from '../../api/roleAssistant';
+
+function normalizeMessageText(text) {
+  return String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function isSameMessageApprox(a, b) {
+  const roleA = String(a?.role || '').trim().toLowerCase();
+  const roleB = String(b?.role || '').trim().toLowerCase();
+  if (!roleA || roleA !== roleB) return false;
+
+  const textA = normalizeMessageText(a?.content);
+  const textB = normalizeMessageText(b?.content);
+  if (!textA || textA !== textB) return false;
+
+  const tsA = Number(a?.created_at || 0);
+  const tsB = Number(b?.created_at || 0);
+  if (!Number.isFinite(tsA) || !Number.isFinite(tsB) || tsA <= 0 || tsB <= 0) return true;
+  return Math.abs(tsA - tsB) <= 15;
+}
+
+function mergeRemoteWithLocalPending(remoteMessages, currentMessages) {
+  const remote = Array.isArray(remoteMessages) ? remoteMessages : [];
+  const current = Array.isArray(currentMessages) ? currentMessages : [];
+  const pendingLocal = current.filter((m) => String(m?.id || '').startsWith('local-'));
+  if (pendingLocal.length === 0) return remote;
+  const merged = [...remote];
+  pendingLocal.forEach((m) => {
+    const duplicateExists = remote.some((r) => isSameMessageApprox(r, m));
+    if (!duplicateExists) {
+      merged.push(m);
+    }
+  });
+  merged.sort((a, b) => Number(a?.created_at || 0) - Number(b?.created_at || 0));
+  const deduped = [];
+  merged.forEach((m) => {
+    const last = deduped[deduped.length - 1];
+    if (last && isSameMessageApprox(last, m)) return;
+    deduped.push(m);
+  });
+  return deduped;
+}
 
 const HelpHub = () => {
   const [activeTab, setActiveTab] = useState('ai-assistant');
@@ -29,6 +70,11 @@ const HelpHub = () => {
   const [chatError, setChatError] = useState('');
   const [historyLoading, setHistoryLoading] = useState(false);
   const chatEndRef = useRef(null);
+  const historyAbortRef = useRef(null);
+  const listAbortRef = useRef(null);
+  const syncTimerRef = useRef(null);
+  const hasUserInteractedRef = useRef(false);
+  const sendInFlightRef = useRef(false);
 
   // Sample data for tickets
   const tickets = [
@@ -158,30 +204,69 @@ const HelpHub = () => {
     { key: 'schedule-support', label: 'Schedule Support', }
   ];
 
-  const loadConversation = async (id) => {
+  const refreshConversations = useCallback(async () => {
+    if (listAbortRef.current) {
+      listAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    listAbortRef.current = controller;
+    try {
+      const data = await listRoleAssistantConversations(20, { signal: controller.signal });
+      return Array.isArray(data?.conversations) ? data.conversations : [];
+    } catch (e) {
+      if (e?.name === 'AbortError' || String(e?.message || '').toLowerCase().includes('request cancelled')) {
+        return [];
+      }
+      throw e;
+    } finally {
+      if (listAbortRef.current === controller) {
+        listAbortRef.current = null;
+      }
+    }
+  }, []);
+
+  const loadConversation = async (id, options = {}) => {
     const cid = String(id || '').trim();
     if (!cid) return;
+    const preserveLocal = Boolean(options?.preserveLocal);
+    const skipIfUserInteracted = Boolean(options?.skipIfUserInteracted);
+    if (historyAbortRef.current) {
+      historyAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    historyAbortRef.current = controller;
     setHistoryLoading(true);
     try {
-      const data = await getRoleAssistantConversation(cid, 200);
-      setMessages(Array.isArray(data?.messages) ? data.messages : []);
+      const data = await getRoleAssistantConversation(cid, 200, { signal: controller.signal });
+      if (skipIfUserInteracted && hasUserInteractedRef.current) {
+        return;
+      }
+      const rows = Array.isArray(data?.messages) ? data.messages : [];
+      setMessages((prev) => (preserveLocal ? mergeRemoteWithLocalPending(rows, prev) : rows));
       setConversationId(cid);
     } catch (e) {
+      if (e?.name === 'AbortError' || String(e?.message || '').toLowerCase().includes('request cancelled')) {
+        return;
+      }
       setChatError(e?.message || 'Failed to load conversation');
     } finally {
+      if (historyAbortRef.current === controller) {
+        historyAbortRef.current = null;
+      }
       setHistoryLoading(false);
     }
   };
 
   useEffect(() => {
     let alive = true;
+    hasUserInteractedRef.current = false;
     (async () => {
       try {
-        const data = await listRoleAssistantConversations(20);
-        if (!alive) return;
-        const first = Array.isArray(data?.conversations) ? data.conversations[0] : null;
+        const list = await refreshConversations();
+        if (!alive || hasUserInteractedRef.current) return;
+        const first = Array.isArray(list) ? list[0] : null;
         if (first?.conversation_id) {
-          await loadConversation(first.conversation_id);
+          await loadConversation(first.conversation_id, { preserveLocal: true, skipIfUserInteracted: true });
         }
       } catch {
         // Keep seeded message.
@@ -189,8 +274,20 @@ const HelpHub = () => {
     })();
     return () => {
       alive = false;
+      if (historyAbortRef.current) {
+        historyAbortRef.current.abort();
+        historyAbortRef.current = null;
+      }
+      if (listAbortRef.current) {
+        listAbortRef.current.abort();
+        listAbortRef.current = null;
+      }
+      if (syncTimerRef.current) {
+        window.clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = null;
+      }
     };
-  }, []);
+  }, [refreshConversations]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -198,7 +295,17 @@ const HelpHub = () => {
 
   const handleSendMessage = async (raw) => {
     const text = String(raw ?? message).trim();
-    if (!text || chatLoading) return;
+    if (!text || chatLoading || sendInFlightRef.current) return;
+    sendInFlightRef.current = true;
+    hasUserInteractedRef.current = true;
+    if (historyAbortRef.current) {
+      historyAbortRef.current.abort();
+      historyAbortRef.current = null;
+    }
+    if (listAbortRef.current) {
+      listAbortRef.current.abort();
+      listAbortRef.current = null;
+    }
     setChatError('');
     setChatLoading(true);
     setMessage('');
@@ -217,24 +324,29 @@ const HelpHub = () => {
         auto_tool_inference: true,
       });
       const cid = String(response?.conversation_id || '').trim();
+      const assistantMessage = {
+        id: `local-assistant-${Date.now()}`,
+        role: 'assistant',
+        content: String(response?.reply || ''),
+        created_at: Number(response?.created_at || Date.now() / 1000),
+      };
       if (cid) {
         setConversationId(cid);
-        await loadConversation(cid);
+        setMessages((prev) => [...prev, assistantMessage]);
+        if (syncTimerRef.current) {
+          window.clearTimeout(syncTimerRef.current);
+        }
+        syncTimerRef.current = window.setTimeout(() => {
+          loadConversation(cid, { preserveLocal: true });
+        }, 900);
       } else {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `local-assistant-${Date.now()}`,
-            role: 'assistant',
-            content: String(response?.reply || ''),
-            created_at: Number(response?.created_at || Date.now() / 1000),
-          },
-        ]);
+        setMessages((prev) => [...prev, assistantMessage]);
       }
     } catch (e) {
       setChatError(e?.message || 'Failed to send message');
     } finally {
       setChatLoading(false);
+      sendInFlightRef.current = false;
     }
   };
 

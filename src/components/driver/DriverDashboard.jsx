@@ -62,6 +62,13 @@ export default function DriverDashboard() {
   // Lightweight toast for admin notifications
   const [toast, setToast] = useState(null);
   const lastAdminMsgAtRef = React.useRef(0);
+  const dashboardInsightsAbortRef = React.useRef(null);
+  const profileRequestAbortRef = React.useRef(null);
+  const requiredDocsAbortRef = React.useRef(null);
+  const unreadSummaryAbortRef = React.useRef(null);
+  const notificationsAbortRef = React.useRef(null);
+  const shouldLoadProfileData = ['home', 'docs', 'hiring', 'compliance', 'esign', 'settings'].includes(activeNav);
+  const shouldLoadRequiredDocs = ['home', 'docs', 'hiring', 'compliance', 'esign'].includes(activeNav);
 
   const shouldHideNotificationForPrefs = useCallback((n) => {
     const toText = (v) => String(v || '').toLowerCase();
@@ -117,6 +124,11 @@ export default function DriverDashboard() {
 
   const fetchNotifications = async () => {
     if (!currentUser) return;
+    if (notificationsAbortRef.current) {
+      notificationsAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    notificationsAbortRef.current = controller;
     setNotifLoading(true);
     try {
       const token = await currentUser.getIdToken();
@@ -125,6 +137,7 @@ export default function DriverDashboard() {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
       });
       if (!res.ok) return;
       const data = await res.json();
@@ -132,9 +145,15 @@ export default function DriverDashboard() {
       const filtered = raw.filter((n) => !shouldHideNotificationForPrefs(n));
       setNotifItems(filtered);
       setNotifUnread(filtered.filter((n) => !n?.is_read).length);
-    } catch {
+    } catch (e) {
+      if (e?.name === 'AbortError' || String(e?.message || '').toLowerCase().includes('request cancelled')) {
+        return;
+      }
       // ignore
     } finally {
+      if (notificationsAbortRef.current === controller) {
+        notificationsAbortRef.current = null;
+      }
       setNotifLoading(false);
     }
   };
@@ -376,18 +395,30 @@ export default function DriverDashboard() {
 
   // Fetch onboarding data on mount
   useEffect(() => {
+    if (profileRequestAbortRef.current) {
+      profileRequestAbortRef.current.abort();
+      profileRequestAbortRef.current = null;
+    }
     const fetchProfile = async () => {
       if (!currentUser) {
         setProfileLoading(false);
         return;
       }
+      if (!shouldLoadProfileData) {
+        setProfileLoading(false);
+        return;
+      }
+      const controller = new AbortController();
+      profileRequestAbortRef.current = controller;
+      setProfileLoading(true);
       try {
         const token = await currentUser.getIdToken();
         const response = await fetch(`${API_URL}/onboarding/data`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
-          }
+          },
+          signal: controller.signal,
         });
         if (response.ok) {
           const data = await response.json();
@@ -418,7 +449,8 @@ export default function DriverDashboard() {
 
         // Fetch onboarding coach for progress/score if available
         const coachRes = await fetch(`${API_URL}/onboarding/coach-status`, {
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: { 'Authorization': `Bearer ${token}` },
+          signal: controller.signal,
         });
         if (coachRes.ok) {
           const coach = await coachRes.json();
@@ -427,20 +459,34 @@ export default function DriverDashboard() {
           }
         }
       } catch (error) {
+        if (error?.name === 'AbortError' || String(error?.message || '').toLowerCase().includes('request cancelled')) {
+          return;
+        }
         console.error('Error fetching profile:', error);
       } finally {
+        if (profileRequestAbortRef.current === controller) {
+          profileRequestAbortRef.current = null;
+        }
         setProfileLoading(false);
       }
     };
     fetchProfile();
-  }, [currentUser, isPostHire]);
+    return () => {
+      if (profileRequestAbortRef.current) {
+        profileRequestAbortRef.current.abort();
+        profileRequestAbortRef.current = null;
+      }
+    };
+  }, [currentUser, isPostHire, shouldLoadProfileData]);
 
-  const fetchRequiredDocs = useCallback(async () => {
+  const fetchRequiredDocs = useCallback(async (options = {}) => {
     if (!currentUser) return;
+    const signal = options?.signal;
     try {
       const token = await currentUser.getIdToken();
       const res = await fetch(`${API_URL}/onboarding/driver/required-docs`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'Authorization': `Bearer ${token}` },
+        signal,
       });
       if (!res.ok) return;
       const data = await res.json();
@@ -461,17 +507,41 @@ export default function DriverDashboard() {
       const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
       setDocumentCompletion(percent);
     } catch (e) {
+      if (e?.name === 'AbortError' || String(e?.message || '').toLowerCase().includes('request cancelled')) {
+        return;
+      }
       console.error('Error fetching required docs:', e);
     }
   }, [currentUser]);
 
   useEffect(() => {
-    fetchRequiredDocs();
+    if (!shouldLoadRequiredDocs) {
+      if (requiredDocsAbortRef.current) {
+        requiredDocsAbortRef.current.abort();
+        requiredDocsAbortRef.current = null;
+      }
+      return;
+    }
 
-    const onDocsUpdated = () => fetchRequiredDocs();
-    const onConsentUpdated = () => fetchRequiredDocs();
+    const runRequiredDocsFetch = () => {
+      if (requiredDocsAbortRef.current) {
+        requiredDocsAbortRef.current.abort();
+      }
+      const controller = new AbortController();
+      requiredDocsAbortRef.current = controller;
+      fetchRequiredDocs({ signal: controller.signal }).finally(() => {
+        if (requiredDocsAbortRef.current === controller) {
+          requiredDocsAbortRef.current = null;
+        }
+      });
+    };
+
+    runRequiredDocsFetch();
+
+    const onDocsUpdated = () => runRequiredDocsFetch();
+    const onConsentUpdated = () => runRequiredDocsFetch();
     const onVisibility = () => {
-      if (!document.hidden) fetchRequiredDocs();
+      if (!document.hidden) runRequiredDocsFetch();
     };
 
     window.addEventListener('fp:documents-updated', onDocsUpdated);
@@ -481,25 +551,44 @@ export default function DriverDashboard() {
       window.removeEventListener('fp:documents-updated', onDocsUpdated);
       window.removeEventListener('fp:consent-updated', onConsentUpdated);
       document.removeEventListener('visibilitychange', onVisibility);
+      if (requiredDocsAbortRef.current) {
+        requiredDocsAbortRef.current.abort();
+        requiredDocsAbortRef.current = null;
+      }
     };
-  }, [fetchRequiredDocs]);
+  }, [fetchRequiredDocs, shouldLoadRequiredDocs]);
 
   // Ensure compliance notifications are generated/cleaned up when enabling the toggle.
   useEffect(() => {
     if (!currentUser) return;
-    if (compliancePrefEnabled) {
-      fetchRequiredDocs();
+    if (compliancePrefEnabled && shouldLoadRequiredDocs) {
+      if (requiredDocsAbortRef.current) {
+        requiredDocsAbortRef.current.abort();
+      }
+      const controller = new AbortController();
+      requiredDocsAbortRef.current = controller;
+      fetchRequiredDocs({ signal: controller.signal }).finally(() => {
+        if (requiredDocsAbortRef.current === controller) {
+          requiredDocsAbortRef.current = null;
+        }
+      });
     }
-  }, [currentUser, compliancePrefEnabled, fetchRequiredDocs]);
+  }, [currentUser, compliancePrefEnabled, fetchRequiredDocs, shouldLoadRequiredDocs]);
 
   const fetchDashboardInsights = useCallback(async () => {
     if (!currentUser) return;
+    if (dashboardInsightsAbortRef.current) {
+      dashboardInsightsAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    dashboardInsightsAbortRef.current = controller;
     setDashboardInsightsLoading(true);
     setDashboardInsightsError('');
     try {
       const token = await currentUser.getIdToken();
       const res = await fetch(`${API_URL}/driver/dashboard/insights`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'Authorization': `Bearer ${token}` },
+        signal: controller.signal,
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -518,21 +607,36 @@ export default function DriverDashboard() {
         setIsAvailable(Boolean(data.marketplace_activity.availability_on));
       }
     } catch (e) {
+      if (e?.name === 'AbortError' || String(e?.message || '').toLowerCase().includes('request cancelled')) {
+        return;
+      }
       setDashboardInsightsError(String(e?.message || 'Failed to load dashboard insights'));
     } finally {
+      if (dashboardInsightsAbortRef.current === controller) {
+        dashboardInsightsAbortRef.current = null;
+      }
       setDashboardInsightsLoading(false);
     }
   }, [currentUser]);
 
   useEffect(() => {
     if (!currentUser) return;
+    if (activeNav !== 'home') {
+      if (dashboardInsightsAbortRef.current) {
+        dashboardInsightsAbortRef.current.abort();
+        dashboardInsightsAbortRef.current = null;
+      }
+      return;
+    }
     fetchDashboardInsights();
 
     const onDocsUpdated = () => fetchDashboardInsights();
     const onConsentUpdated = () => fetchDashboardInsights();
-    const onFocus = () => fetchDashboardInsights();
+    const onFocus = () => {
+      if (activeNav === 'home') fetchDashboardInsights();
+    };
     const onVisibility = () => {
-      if (!document.hidden) fetchDashboardInsights();
+      if (!document.hidden && activeNav === 'home') fetchDashboardInsights();
     };
 
     window.addEventListener('fp:documents-updated', onDocsUpdated);
@@ -552,6 +656,10 @@ export default function DriverDashboard() {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisibility);
       window.clearInterval(intervalId);
+      if (dashboardInsightsAbortRef.current) {
+        dashboardInsightsAbortRef.current.abort();
+        dashboardInsightsAbortRef.current = null;
+      }
     };
   }, [activeNav, currentUser, fetchDashboardInsights]);
 
@@ -563,12 +671,19 @@ export default function DriverDashboard() {
       setMessagingUnread(0);
       return;
     }
+    if (activeNav === 'help') return;
 
     const tick = async () => {
+      if (unreadSummaryAbortRef.current) {
+        unreadSummaryAbortRef.current.abort();
+      }
+      const controller = new AbortController();
+      unreadSummaryAbortRef.current = controller;
       try {
         const token = await currentUser.getIdToken();
         const res = await fetch(`${API_URL}/messaging/unread/summary`, {
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: { 'Authorization': `Bearer ${token}` },
+          signal: controller.signal,
         });
         if (!res.ok) return;
         const data = await res.json();
@@ -602,8 +717,15 @@ export default function DriverDashboard() {
             }
           }
         }
-      } catch (_) {
+      } catch (e) {
+        if (e?.name === 'AbortError' || String(e?.message || '').toLowerCase().includes('request cancelled')) {
+          return;
+        }
         // ignore
+      } finally {
+        if (unreadSummaryAbortRef.current === controller) {
+          unreadSummaryAbortRef.current = null;
+        }
       }
     };
 
@@ -612,8 +734,12 @@ export default function DriverDashboard() {
     return () => {
       alive = false;
       clearInterval(id);
+      if (unreadSummaryAbortRef.current) {
+        unreadSummaryAbortRef.current.abort();
+        unreadSummaryAbortRef.current = null;
+      }
     };
-  }, [currentUser, messagesPrefEnabled]);
+  }, [activeNav, currentUser, messagesPrefEnabled]);
 
   // Reset admin notification watermark when the toggle is disabled.
   useEffect(() => {
@@ -624,6 +750,15 @@ export default function DriverDashboard() {
       setMsgTrayUnreadSummary({ total_unread: 0, threads: {}, channels: {} });
     }
   }, [messagesPrefEnabled]);
+
+  useEffect(() => {
+    return () => {
+      if (notificationsAbortRef.current) {
+        notificationsAbortRef.current.abort();
+        notificationsAbortRef.current = null;
+      }
+    };
+  }, []);
 
   // Fetch notification unread count on mount (no polling)
   useEffect(() => {

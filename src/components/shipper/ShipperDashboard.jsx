@@ -179,6 +179,7 @@ export default function ShipperDashboard() {
   const [shipperInsights, setShipperInsights] = useState(null);
   const [shipperInsightsLoading, setShipperInsightsLoading] = useState(false);
   const [shipperInsightsError, setShipperInsightsError] = useState('');
+  const shipperInsightsAbortRef = React.useRef(null);
 
   // Home "Active Loads" list data (kept lightweight; Tracking page fetches full view)
   const [homeLoadsLoading, setHomeLoadsLoading] = useState(false);
@@ -311,9 +312,20 @@ export default function ShipperDashboard() {
 
   useEffect(() => {
     let alive = true;
-    if (!currentUser) return;
+    if (!currentUser || activeNav !== 'home') {
+      if (shipperInsightsAbortRef.current) {
+        shipperInsightsAbortRef.current.abort();
+        shipperInsightsAbortRef.current = null;
+      }
+      return;
+    }
 
     const fetchShipperInsights = async () => {
+      if (shipperInsightsAbortRef.current) {
+        shipperInsightsAbortRef.current.abort();
+      }
+      const controller = new AbortController();
+      shipperInsightsAbortRef.current = controller;
       setShipperInsightsLoading(true);
       setShipperInsightsError('');
       try {
@@ -323,6 +335,7 @@ export default function ShipperDashboard() {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
+          signal: controller.signal,
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
@@ -334,9 +347,15 @@ export default function ShipperDashboard() {
         if (!alive) return;
         setShipperInsights(data || null);
       } catch (e) {
+        if (e?.name === 'AbortError' || String(e?.message || '').toLowerCase().includes('request cancelled')) {
+          return;
+        }
         if (!alive) return;
         setShipperInsightsError(String(e?.message || 'Failed to load shipper insights'));
       } finally {
+        if (shipperInsightsAbortRef.current === controller) {
+          shipperInsightsAbortRef.current = null;
+        }
         if (alive) setShipperInsightsLoading(false);
       }
     };
@@ -357,6 +376,10 @@ export default function ShipperDashboard() {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisibility);
       clearInterval(id);
+      if (shipperInsightsAbortRef.current) {
+        shipperInsightsAbortRef.current.abort();
+        shipperInsightsAbortRef.current = null;
+      }
     };
   }, [activeNav, currentUser]);
 

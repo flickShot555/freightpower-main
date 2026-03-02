@@ -57,6 +57,9 @@ _ROLE_LABEL = {
     "carrier": "Carrier",
     "driver": "Driver",
 }
+_ROLE_LOAD_QUERY_LIMIT = 250
+_ROLE_LOAD_SCAN_LIMIT = 600
+_LLM_TIMEOUT_SECONDS = 20.0
 
 
 class AssistantRequest(BaseModel):
@@ -265,6 +268,8 @@ def _collect_role_loads(uid: str, role_scope: str) -> List[Dict[str, Any]]:
 
     def _add_stream(stream) -> None:
         for snap in stream:
+            if len(rows) >= _ROLE_LOAD_SCAN_LIMIT:
+                break
             d = snap.to_dict() or {}
             load_id = str(d.get("load_id") or snap.id or "").strip()
             if not load_id or load_id in seen:
@@ -292,15 +297,19 @@ def _collect_role_loads(uid: str, role_scope: str) -> List[Dict[str, Any]]:
         query_fields = []
 
     for field in query_fields:
+        if len(rows) >= _ROLE_LOAD_SCAN_LIMIT:
+            break
         try:
-            _add_stream(loads_ref.where(field, "==", uid).stream())
+            _add_stream(loads_ref.where(field, "==", uid).limit(_ROLE_LOAD_QUERY_LIMIT).stream())
         except Exception:
             pass
 
     if not rows:
         # Last-resort scan if the above lookups fail (e.g. local emulator quirks).
         try:
-            for snap in loads_ref.stream():
+            for snap in loads_ref.limit(_ROLE_LOAD_SCAN_LIMIT).stream():
+                if len(rows) >= _ROLE_LOAD_SCAN_LIMIT:
+                    break
                 d = snap.to_dict() or {}
                 load_id = str(d.get("load_id") or snap.id or "").strip()
                 if not load_id or load_id in seen:
@@ -806,12 +815,17 @@ def _compose_llm_reply(
         llm_messages.append({"role": "user", "content": normalized_message})
 
     try:
-        client = Groq(api_key=settings.GROQ_API_KEY)
+        client = Groq(
+            api_key=settings.GROQ_API_KEY,
+            timeout=_LLM_TIMEOUT_SECONDS,
+            max_retries=1,
+        )
         resp = client.chat.completions.create(
             model=settings.GROQ_TEXT_MODEL,
             messages=llm_messages,
             temperature=0.2,
             max_tokens=500,
+            timeout=_LLM_TIMEOUT_SECONDS,
         )
         text = (resp.choices[0].message.content or "").strip()
         return text or _compose_fallback_reply(

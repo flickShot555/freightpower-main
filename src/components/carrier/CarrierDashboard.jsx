@@ -42,6 +42,7 @@ export default function CarrierDashboard() {
   const [carrierInsights, setCarrierInsights] = useState(null);
   const [carrierInsightsLoading, setCarrierInsightsLoading] = useState(false);
   const [carrierInsightsError, setCarrierInsightsError] = useState('');
+  const carrierInsightsAbortRef = React.useRef(null);
   
   const [activeNav, setActiveNav] = useState('home');
   const [initialThreadId, setInitialThreadId] = useState(null);
@@ -346,15 +347,27 @@ export default function CarrierDashboard() {
 
   useEffect(() => {
     let alive = true;
-    if (!currentUser) return;
+    if (!currentUser || activeNav !== 'home') {
+      if (carrierInsightsAbortRef.current) {
+        carrierInsightsAbortRef.current.abort();
+        carrierInsightsAbortRef.current = null;
+      }
+      return;
+    }
 
     const fetchCarrierInsights = async () => {
+      if (carrierInsightsAbortRef.current) {
+        carrierInsightsAbortRef.current.abort();
+      }
+      const controller = new AbortController();
+      carrierInsightsAbortRef.current = controller;
       setCarrierInsightsLoading(true);
       setCarrierInsightsError('');
       try {
         const token = await currentUser.getIdToken();
         const res = await fetch(`${API_URL}/carrier/dashboard/insights`, {
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: { 'Authorization': `Bearer ${token}` },
+          signal: controller.signal,
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
@@ -366,17 +379,25 @@ export default function CarrierDashboard() {
         if (!alive) return;
         setCarrierInsights(data || null);
       } catch (e) {
+        if (e?.name === 'AbortError' || String(e?.message || '').toLowerCase().includes('request cancelled')) {
+          return;
+        }
         if (!alive) return;
         setCarrierInsightsError(String(e?.message || 'Failed to load carrier insights'));
       } finally {
+        if (carrierInsightsAbortRef.current === controller) {
+          carrierInsightsAbortRef.current = null;
+        }
         if (alive) setCarrierInsightsLoading(false);
       }
     };
 
     fetchCarrierInsights();
-    const onFocus = () => fetchCarrierInsights();
+    const onFocus = () => {
+      if (activeNav === 'home') fetchCarrierInsights();
+    };
     const onVisibility = () => {
-      if (!document.hidden) fetchCarrierInsights();
+      if (!document.hidden && activeNav === 'home') fetchCarrierInsights();
     };
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onVisibility);
@@ -388,6 +409,10 @@ export default function CarrierDashboard() {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisibility);
       clearInterval(id);
+      if (carrierInsightsAbortRef.current) {
+        carrierInsightsAbortRef.current.abort();
+        carrierInsightsAbortRef.current = null;
+      }
     };
   }, [activeNav, currentUser]);
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '../../styles/shipper/AiHub.css';
 import {
   chatWithShipperAssistant,
@@ -15,6 +15,47 @@ function fmtTime(ts) {
   }
 }
 
+function normalizeMessageText(text) {
+  return String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function isSameMessageApprox(a, b) {
+  const roleA = String(a?.role || '').trim().toLowerCase();
+  const roleB = String(b?.role || '').trim().toLowerCase();
+  if (!roleA || roleA !== roleB) return false;
+
+  const textA = normalizeMessageText(a?.content);
+  const textB = normalizeMessageText(b?.content);
+  if (!textA || textA !== textB) return false;
+
+  const tsA = Number(a?.created_at || 0);
+  const tsB = Number(b?.created_at || 0);
+  if (!Number.isFinite(tsA) || !Number.isFinite(tsB) || tsA <= 0 || tsB <= 0) return true;
+  return Math.abs(tsA - tsB) <= 15;
+}
+
+function mergeRemoteWithLocalPending(remoteMessages, currentMessages) {
+  const remote = Array.isArray(remoteMessages) ? remoteMessages : [];
+  const current = Array.isArray(currentMessages) ? currentMessages : [];
+  const pendingLocal = current.filter((m) => String(m?.id || '').startsWith('local-'));
+  if (pendingLocal.length === 0) return remote;
+  const merged = [...remote];
+  pendingLocal.forEach((m) => {
+    const duplicateExists = remote.some((r) => isSameMessageApprox(r, m));
+    if (!duplicateExists) {
+      merged.push(m);
+    }
+  });
+  merged.sort((a, b) => Number(a?.created_at || 0) - Number(b?.created_at || 0));
+  const deduped = [];
+  merged.forEach((m) => {
+    const last = deduped[deduped.length - 1];
+    if (last && isSameMessageApprox(last, m)) return;
+    deduped.push(m);
+  });
+  return deduped;
+}
+
 export default function AiHub() {
   const [conversationId, setConversationId] = useState('');
   const [conversations, setConversations] = useState([]);
@@ -27,6 +68,11 @@ export default function AiHub() {
   const [offerId, setOfferId] = useState('');
   const [carrierId, setCarrierId] = useState('');
   const messagesEndRef = useRef(null);
+  const historyAbortRef = useRef(null);
+  const listAbortRef = useRef(null);
+  const syncTimerRef = useRef(null);
+  const hasUserInteractedRef = useRef(false);
+  const sendInFlightRef = useRef(false);
 
   const quickCommands = useMemo(
     () => [
@@ -62,57 +108,109 @@ export default function AiHub() {
     []
   );
 
-  const refreshConversations = async () => {
+  const refreshConversations = useCallback(async () => {
+    if (listAbortRef.current) {
+      listAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    listAbortRef.current = controller;
     try {
-      const data = await listShipperAssistantConversations(40);
+      const data = await listShipperAssistantConversations(40, { signal: controller.signal });
       const rows = Array.isArray(data?.conversations) ? data.conversations : [];
       setConversations(rows);
       return rows;
     } catch (e) {
+      if (e?.name === 'AbortError' || String(e?.message || '').toLowerCase().includes('request cancelled')) {
+        return [];
+      }
       setError(e?.message || 'Failed to load assistant conversations');
       return [];
+    } finally {
+      if (listAbortRef.current === controller) {
+        listAbortRef.current = null;
+      }
     }
-  };
+  }, []);
 
-  const loadConversation = async (id) => {
+  const loadConversation = async (id, options = {}) => {
     const cid = String(id || '').trim();
     if (!cid) return;
+    const preserveLocal = Boolean(options?.preserveLocal);
+    const skipIfUserInteracted = Boolean(options?.skipIfUserInteracted);
+    if (historyAbortRef.current) {
+      historyAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    historyAbortRef.current = controller;
     setConvLoading(true);
     setError('');
     try {
-      const data = await getShipperAssistantConversation(cid, 200);
+      const data = await getShipperAssistantConversation(cid, 200, { signal: controller.signal });
+      if (skipIfUserInteracted && hasUserInteractedRef.current) {
+        return;
+      }
       const rows = Array.isArray(data?.messages) ? data.messages : [];
       setConversationId(cid);
-      setMessages(rows);
+      setMessages((prev) => (preserveLocal ? mergeRemoteWithLocalPending(rows, prev) : rows));
     } catch (e) {
+      if (e?.name === 'AbortError' || String(e?.message || '').toLowerCase().includes('request cancelled')) {
+        return;
+      }
       setError(e?.message || 'Failed to load conversation');
     } finally {
+      if (historyAbortRef.current === controller) {
+        historyAbortRef.current = null;
+      }
       setConvLoading(false);
     }
   };
 
   useEffect(() => {
     let alive = true;
+    hasUserInteractedRef.current = false;
     (async () => {
       const rows = await refreshConversations();
-      if (!alive) return;
+      if (!alive || hasUserInteractedRef.current) return;
       if (rows.length > 0) {
-        await loadConversation(rows[0].conversation_id);
+        await loadConversation(rows[0].conversation_id, { preserveLocal: true, skipIfUserInteracted: true });
       }
     })();
     return () => {
       alive = false;
+      if (historyAbortRef.current) {
+        historyAbortRef.current.abort();
+        historyAbortRef.current = null;
+      }
+      if (listAbortRef.current) {
+        listAbortRef.current.abort();
+        listAbortRef.current = null;
+      }
+      if (syncTimerRef.current) {
+        window.clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = null;
+      }
     };
-  }, []);
+  }, [refreshConversations]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, convLoading, loading]);
 
   const submitPayload = async (payload) => {
-    if (loading) return;
+    if (loading || sendInFlightRef.current) return;
     const messageText = String(payload?.message || '').trim();
     if (!messageText) return;
+    sendInFlightRef.current = true;
+
+    hasUserInteractedRef.current = true;
+    if (historyAbortRef.current) {
+      historyAbortRef.current.abort();
+      historyAbortRef.current = null;
+    }
+    if (listAbortRef.current) {
+      listAbortRef.current.abort();
+      listAbortRef.current = null;
+    }
 
     setLoading(true);
     setError('');
@@ -142,28 +240,35 @@ export default function AiHub() {
       if (cid) setConversationId(cid);
 
       // Keep local response immediate.
+      const assistantMessage = {
+        id: `local-ai-${Date.now()}`,
+        role: 'assistant',
+        content: String(res?.reply || ''),
+        created_at: Number(res?.created_at || Date.now() / 1000),
+        metadata: {
+          tools_executed: Array.isArray(res?.tools_executed) ? res.tools_executed : [],
+        },
+      };
       setMessages((prev) => [
         ...prev,
-        {
-          id: `local-ai-${Date.now()}`,
-          role: 'assistant',
-          content: String(res?.reply || ''),
-          created_at: Number(res?.created_at || Date.now() / 1000),
-          metadata: {
-            tools_executed: Array.isArray(res?.tools_executed) ? res.tools_executed : [],
-          },
-        },
+        assistantMessage,
       ]);
 
-      // Sync with persisted history and refresh list.
+      // Sync persisted history in background; keep local chat responsive.
       if (cid) {
-        await loadConversation(cid);
+        if (syncTimerRef.current) {
+          window.clearTimeout(syncTimerRef.current);
+        }
+        syncTimerRef.current = window.setTimeout(() => {
+          loadConversation(cid, { preserveLocal: true });
+          refreshConversations().catch(() => {});
+        }, 900);
       }
-      await refreshConversations();
     } catch (e) {
       setError(e?.message || 'Assistant request failed');
     } finally {
       setLoading(false);
+      sendInFlightRef.current = false;
     }
   };
 

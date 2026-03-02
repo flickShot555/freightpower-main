@@ -3,7 +3,7 @@ import { getJson, postJson } from './http';
 export function chatWithRoleAssistant(payload = {}, options = {}) {
   return postJson('/chat/assistant', payload, {
     requestLabel: 'POST /chat/assistant',
-    timeoutMs: 45000,
+    timeoutMs: 120000,
     ...(options || {}),
   });
 }

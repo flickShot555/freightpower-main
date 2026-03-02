@@ -24,6 +24,79 @@ function safeList(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function normalizeMessageText(text) {
+  return String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function isSameMessageApprox(a, b) {
+  const roleA = String(a?.role || '').trim().toLowerCase();
+  const roleB = String(b?.role || '').trim().toLowerCase();
+  if (!roleA || roleA !== roleB) return false;
+
+  const textA = normalizeMessageText(a?.content);
+  const textB = normalizeMessageText(b?.content);
+  if (!textA || textA !== textB) return false;
+
+  const tsA = Number(a?.created_at || 0);
+  const tsB = Number(b?.created_at || 0);
+  if (!Number.isFinite(tsA) || !Number.isFinite(tsB) || tsA <= 0 || tsB <= 0) return true;
+  return Math.abs(tsA - tsB) <= 15;
+}
+
+function renderInlineMarkdown(text) {
+  const raw = String(text || '');
+  const lines = raw.split('\n');
+  return lines.map((line, lineIndex) => {
+    const parts = [];
+    const pattern = /\*\*(.+?)\*\*/g;
+    let lastIndex = 0;
+    let match;
+    let partIndex = 0;
+
+    while ((match = pattern.exec(line)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(<React.Fragment key={`txt-${lineIndex}-${partIndex++}`}>{line.slice(lastIndex, match.index)}</React.Fragment>);
+      }
+      parts.push(<strong key={`b-${lineIndex}-${partIndex++}`}>{match[1]}</strong>);
+      lastIndex = pattern.lastIndex;
+    }
+    if (lastIndex < line.length) {
+      parts.push(<React.Fragment key={`txt-${lineIndex}-${partIndex++}`}>{line.slice(lastIndex)}</React.Fragment>);
+    }
+
+    return (
+      <React.Fragment key={`line-${lineIndex}`}>
+        {parts}
+        {lineIndex < lines.length - 1 ? <br /> : null}
+      </React.Fragment>
+    );
+  });
+}
+
+function mergeRemoteWithLocalPending(remoteMessages, currentMessages) {
+  const remote = Array.isArray(remoteMessages) ? remoteMessages : [];
+  const current = Array.isArray(currentMessages) ? currentMessages : [];
+  const pendingLocal = current.filter((m) => String(m?.id || '').startsWith('local-'));
+  if (pendingLocal.length === 0) return remote;
+
+  const merged = [...remote];
+  pendingLocal.forEach((m) => {
+    const duplicateExists = remote.some((r) => isSameMessageApprox(r, m));
+    if (!duplicateExists) {
+      merged.push(m);
+    }
+  });
+
+  merged.sort((a, b) => Number(a?.created_at || 0) - Number(b?.created_at || 0));
+  const deduped = [];
+  merged.forEach((m) => {
+    const last = deduped[deduped.length - 1];
+    if (last && isSameMessageApprox(last, m)) return;
+    deduped.push(m);
+  });
+  return deduped;
+}
+
 export default function AiHub() {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
@@ -41,6 +114,12 @@ export default function AiHub() {
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState('');
   const endRef = useRef(null);
+  const messagesContainerRef = useRef(null);
+  const historyAbortRef = useRef(null);
+  const listAbortRef = useRef(null);
+  const syncTimerRef = useRef(null);
+  const hasUserInteractedRef = useRef(false);
+  const sendInFlightRef = useRef(false);
 
   const quickCommands = useMemo(
     () => [
@@ -130,31 +209,71 @@ export default function AiHub() {
     }
   }, [currentUser, fetchInsights, insights, navigate, openDriverSection]);
 
-  const loadConversation = async (cid) => {
+  const refreshConversations = useCallback(async (limit = 20) => {
+    if (listAbortRef.current) {
+      listAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    listAbortRef.current = controller;
+    try {
+      const data = await listRoleAssistantConversations(limit, { signal: controller.signal });
+      return Array.isArray(data?.conversations) ? data.conversations : [];
+    } catch (e) {
+      if (e?.name === 'AbortError' || String(e?.message || '').toLowerCase().includes('request cancelled')) {
+        return [];
+      }
+      throw e;
+    } finally {
+      if (listAbortRef.current === controller) {
+        listAbortRef.current = null;
+      }
+    }
+  }, []);
+
+  const loadConversation = async (cid, options = {}) => {
     const id = String(cid || '').trim();
     if (!id) return;
+    const preserveLocal = Boolean(options?.preserveLocal);
+    const skipIfUserInteracted = Boolean(options?.skipIfUserInteracted);
+    if (historyAbortRef.current) {
+      historyAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    historyAbortRef.current = controller;
     setLoadingHistory(true);
     try {
-      const data = await getRoleAssistantConversation(id, 200);
-      setMessages(Array.isArray(data?.messages) ? data.messages : []);
+      const data = await getRoleAssistantConversation(id, 200, { signal: controller.signal });
+      if (skipIfUserInteracted && hasUserInteractedRef.current) {
+        return;
+      }
+      const remoteMessages = Array.isArray(data?.messages) ? data.messages : [];
+      setMessages((prev) => (preserveLocal ? mergeRemoteWithLocalPending(remoteMessages, prev) : remoteMessages));
       setConversationId(id);
     } catch (e) {
+      if (e?.name === 'AbortError' || String(e?.message || '').toLowerCase().includes('request cancelled')) {
+        return;
+      }
       setError(e?.message || 'Failed to load assistant history');
     } finally {
+      if (historyAbortRef.current === controller) {
+        historyAbortRef.current = null;
+      }
       setLoadingHistory(false);
     }
   };
 
   useEffect(() => {
     let alive = true;
+    hasUserInteractedRef.current = false;
     (async () => {
       try {
-        const list = await listRoleAssistantConversations(20);
-        if (!alive) return;
-        const first = Array.isArray(list?.conversations) ? list.conversations[0] : null;
+        const list = await refreshConversations(20);
+        if (!alive || hasUserInteractedRef.current) return;
+        const first = Array.isArray(list) ? list[0] : null;
         if (first?.conversation_id) {
-          await loadConversation(first.conversation_id);
+          await loadConversation(first.conversation_id, { preserveLocal: true, skipIfUserInteracted: true });
         } else {
+          if (hasUserInteractedRef.current) return;
           setMessages([
             {
               id: 'seed-assistant',
@@ -169,6 +288,7 @@ export default function AiHub() {
           ]);
         }
       } catch {
+        if (hasUserInteractedRef.current) return;
         setMessages([
           {
             id: 'seed-assistant',
@@ -185,8 +305,20 @@ export default function AiHub() {
     })();
     return () => {
       alive = false;
+      if (historyAbortRef.current) {
+        historyAbortRef.current.abort();
+        historyAbortRef.current = null;
+      }
+      if (listAbortRef.current) {
+        listAbortRef.current.abort();
+        listAbortRef.current = null;
+      }
+      if (syncTimerRef.current) {
+        window.clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = null;
+      }
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [refreshConversations]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!currentUser) return;
@@ -218,12 +350,25 @@ export default function AiHub() {
   }, [currentUser, fetchInsights]);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading, loadingHistory]);
+    const node = messagesContainerRef.current;
+    if (!node) return;
+    node.scrollTo({ top: node.scrollHeight, behavior: 'auto' });
+  }, [messages.length, loading, loadingHistory]);
 
   const sendMessage = async (text) => {
     const messageText = String(text || '').trim();
-    if (!messageText || loading) return;
+    if (!messageText || loading || sendInFlightRef.current) return;
+    sendInFlightRef.current = true;
+
+    hasUserInteractedRef.current = true;
+    if (historyAbortRef.current) {
+      historyAbortRef.current.abort();
+      historyAbortRef.current = null;
+    }
+    if (listAbortRef.current) {
+      listAbortRef.current.abort();
+      listAbortRef.current = null;
+    }
 
     setLoading(true);
     setError('');
@@ -249,25 +394,30 @@ export default function AiHub() {
         auto_tool_inference: true,
       });
       const cid = String(response?.conversation_id || '').trim();
+      const assistantMessage = {
+        id: `local-assistant-${Date.now()}`,
+        role: 'assistant',
+        content: String(response?.reply || ''),
+        created_at: Number(response?.created_at || Date.now() / 1000),
+        metadata: {},
+      };
       if (cid) {
         setConversationId(cid);
-        await loadConversation(cid);
+        setMessages((prev) => [...prev, assistantMessage]);
+        if (syncTimerRef.current) {
+          window.clearTimeout(syncTimerRef.current);
+        }
+        syncTimerRef.current = window.setTimeout(() => {
+          loadConversation(cid, { preserveLocal: true });
+        }, 900);
       } else {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `local-assistant-${Date.now()}`,
-            role: 'assistant',
-            content: String(response?.reply || ''),
-            created_at: Number(response?.created_at || Date.now() / 1000),
-            metadata: {},
-          },
-        ]);
+        setMessages((prev) => [...prev, assistantMessage]);
       }
     } catch (e) {
       setError(e?.message || 'Failed to send message');
     } finally {
       setLoading(false);
+      sendInFlightRef.current = false;
     }
   };
 
@@ -384,11 +534,11 @@ export default function AiHub() {
             <div className="aihub-sub">{tr('aiHub.subtitle', 'Your intelligent driving assistant')}</div>
           </div>
 
-          <div className="aihub-messages">
+          <div className="aihub-messages" ref={messagesContainerRef}>
             {messages.map((m) => (
               <div key={m.id} className={`aihub-message ${m.role === 'user' ? 'user' : 'bot'}`}>
                 <div className={`aihub-bubble ${m.role === 'user' ? 'user-bubble' : ''}`}>
-                  {m.content}
+                  {renderInlineMarkdown(m.content)}
                   <div style={{ fontSize: 11, opacity: 0.7, marginTop: 6 }}>{fmtTime(m.created_at)}</div>
                 </div>
               </div>

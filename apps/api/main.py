@@ -1225,6 +1225,7 @@ async def admin_tracking_locations(
 async def tracking_load_locations(
     active_only: bool = True,
     limit: int = 200,
+    load_id: Optional[str] = None,
     user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Shipper/Broker tracking: GPS locations for the signed-in user's loads.
@@ -1246,6 +1247,7 @@ async def tracking_load_locations(
         raise HTTPException(status_code=403, detail="Forbidden")
 
     max_limit = max(1, min(int(limit or 200), 1000))
+    requested_load_id = str(load_id or "").strip()
     # Shipper tracking map is intentionally limited to IN_TRANSIT loads.
     active_statuses = {LoadStatus.IN_TRANSIT.value}
 
@@ -1299,32 +1301,30 @@ async def tracking_load_locations(
     skipped_no_driver = 0
     try:
         loads_ref = db.collection("loads")
-        query = loads_ref
-        # Shippers/brokers: strict ownership, consistent with GET /loads
-        if role in {"shipper", "broker"}:
-            query = query.where("created_by", "==", uid)
-        # Keep scans bounded; we may skip many because not active / no driver / no GPS.
-        query = query.limit(max_limit * 10)
 
-        for snap in query.stream():
-            scanned += 1
-            if len(load_candidates) >= (max_limit * 10):
-                break
+        def _consider_load_snap(snap: Any) -> None:
+            nonlocal skipped_no_driver
             d = snap.to_dict() or {}
-            load_id = snap.id
+            lid = str(snap.id or "").strip()
+            if not lid:
+                return
+
+            # Shippers/brokers are scoped to their own loads.
+            if role in {"shipper", "broker"} and str(d.get("created_by") or "").strip() != uid:
+                return
+
             status = str(d.get("status") or "").strip().lower()
             if active_only and status not in active_statuses:
-                continue
+                return
 
             driver_uid = d.get("assigned_driver") or d.get("assigned_driver_id")
             if not driver_uid:
                 skipped_no_driver += 1
-                continue
-
+                return
             driver_uid = str(driver_uid).strip()
             if not driver_uid:
                 skipped_no_driver += 1
-                continue
+                return
 
             driver_uids.add(driver_uid)
 
@@ -1335,7 +1335,7 @@ async def tracking_load_locations(
 
             load_candidates.append(
                 {
-                    "load_id": load_id,
+                    "load_id": lid,
                     "status": status,
                     "driver_uid": driver_uid,
                     "driver_name": d.get("assigned_driver_name") or d.get("driver_name"),
@@ -1344,6 +1344,28 @@ async def tracking_load_locations(
                     "updated_at": d.get("updated_at"),
                 }
             )
+
+        # Fast path: when the UI is focused on a single load, avoid scanning the whole collection.
+        if requested_load_id:
+            snap = loads_ref.document(requested_load_id).get()
+            scanned += 1
+            if snap and getattr(snap, "exists", False):
+                _consider_load_snap(snap)
+        else:
+            query = loads_ref
+            # Shippers/brokers: strict ownership, consistent with GET /loads
+            if role in {"shipper", "broker"}:
+                query = query.where("created_by", "==", uid)
+
+            # Keep scans bounded and predictable to prevent expensive fan-out in polling loops.
+            scan_limit = min(max_limit * 3, 900)
+            query = query.limit(scan_limit)
+
+            for snap in query.stream():
+                scanned += 1
+                if len(load_candidates) >= scan_limit:
+                    break
+                _consider_load_snap(snap)
     except Exception as e:
         print(f"[TrackingLoadLocations] Failed to fetch loads: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch load locations")
@@ -1433,6 +1455,7 @@ async def tracking_load_locations(
         "skipped_no_driver": skipped_no_driver,
         "skipped_no_gps": skipped_no_gps,
         "active_only": bool(active_only),
+        "load_id": requested_load_id or None,
     }
 
 
