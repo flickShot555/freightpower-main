@@ -1,0 +1,30 @@
+[
+  {
+    "question": "What paperwork do I need to onboard?",
+    "expect_keywords": ["Certificate of Insurance", "W-9", "CDL"]
+  },
+  {
+    "question": "Who do I contact for onboarding help?",
+    "expect_keywords": ["assistant", "ai-onboarding"]
+  },
+  {
+    "question": "How do I know if my MC authority is active?",
+    "expect_keywords": ["FMCSA", "authority", "verify"]
+  },
+  {
+    "question": "Where is my onboarding status and missing items?",
+    "expect_keywords": ["score", "missing", "next best action"]
+  },
+  {
+    "question": "How do I assign a carrier to a load?",
+    "expect_keywords": ["match", "carrier", "assign"]
+  },
+  {
+    "question": "Can you summarize my alerts?",
+    "expect_keywords": ["alerts", "priority", "summary"]
+  },
+  {
+    "question": "Can you auto-fill my driver registration?",
+    "expect_keywords": ["driver", "registration", "auto", "fill"]
+  }
+]

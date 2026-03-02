@@ -1,0 +1,86 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function myUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function myRole() {
+      return signedIn() && myUserDoc().data.role;
+    }
+
+    function isSuperAdmin() {
+      return myRole() == 'super_admin';
+    }
+
+    function isAdmin() {
+      return myRole() == 'admin' && myUserDoc().data.admin_approved == true;
+    }
+    
+    // Users can read/write their own user document.
+    // Super admin can read/write all user documents (needed for admin approvals).
+    match /users/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isSuperAdmin() || isAdmin());
+      allow write: if signedIn() && (request.auth.uid == userId || isSuperAdmin());
+    }
+
+    // Admin signup approval queue
+    match /admin_requests/{requestId} {
+      // Applicant can create their own pending request
+      allow create: if signedIn()
+        && requestId == request.auth.uid
+        && request.resource.data.uid == requestId
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'pending';
+
+      // Applicant can read their own request; super admin can read all
+      allow read: if signedIn() && (request.auth.uid == requestId || isSuperAdmin());
+
+      // Only super admin can approve/reject
+      allow update: if signedIn() && isSuperAdmin();
+
+      // No deletes from client
+      allow delete: if false;
+    }
+
+    // Super admin profiles (separate collection)
+    match /super_admins/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isSuperAdmin());
+      allow write: if signedIn() && (request.auth.uid == userId || isSuperAdmin());
+    }
+    
+    // Allow users to read and write their own favorites
+    match /driver_favorites/{userId}/services/{serviceId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Allow carriers to read driver documents (for marketplace)
+    match /drivers/{driverId} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == driverId;
+    }
+    
+    // Allow carriers to read onboarding data (for marketplace)
+    match /onboarding/{userId} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == userId;
+    }
+    
+    // Allow marketplace view logs (carriers write, drivers/admin read)
+    match /marketplace_view_logs/{logId} {
+      allow write: if signedIn();
+      allow read: if signedIn();
+    }
+    
+    // Default deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

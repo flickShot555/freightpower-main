@@ -1,0 +1,159 @@
+/* Make the onboarding image area taller on driver page */
+.driver-signup-page .carrier-signup-img-block {
+  height: clamp(320px, 36vh, 520px);
+  border-top-left-radius: 1rem;
+  border-top-right-radius: 1rem;
+}
+
+/* Slightly change title sizing on driver page */
+.driver-signup-page .carrier-signup-title {
+  font-size: 2.25rem;
+}
+
+/* Ensure the blue background svg sits behind the larger image */
+.driver-signup-page .carrier-signup-bg-svg {
+  z-index: 1;
+}
+
+/* Keep onboarding info readable with a bit more padding */
+.driver-signup-page .carrier-signup-info-simple {
+  padding: 0 48px;
+}
+
+/* Driver page - form field visual parity with attachment */
+.driver-signup-page .carrier-signup-field input,
+.driver-signup-page .carrier-signup-field select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #e6edf5;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 0.975rem;
+  color: #374151;
+  box-shadow: none;
+  outline: none;
+}
+
+.driver-signup-page .carrier-signup-field input::placeholder {
+  color: #9aa4b2;
+}
+
+.driver-signup-page .carrier-signup-row {
+  display: flex;
+  gap: 10px; /* reduced gap between row items */
+}
+
+/* Checkbox chips (truck type) */
+.driver-signup-page .carrier-signup-field > div {
+  display: flex;
+  gap: 8px; /* reduced gap between chips */
+  flex-wrap: wrap;
+}
+
+.driver-signup-page .carrier-signup-field > div label {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid #e6edf5;
+  background: #fff;
+  color: #374151;
+  font-size: 0.95rem;
+  flex: 1 1 calc(33.333% - 12px);
+  min-width: 0;
+}
+
+.driver-signup-page .carrier-signup-field > div label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  border: 1px solid #dbe7f2;
+  border-radius: 6px;
+  background: #fff;
+  display: inline-block;
+  position: relative;
+}
+
+.driver-signup-page .carrier-signup-field > div label input[type="checkbox"]::after {
+  content: '';
+  display: block;
+  width: 10px;
+  height: 10px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  background: #2563eb;
+  border-radius: 2px;
+  transition: transform 0.12s ease-in-out;
+}
+
+.driver-signup-page .carrier-signup-field > div label input[type="checkbox"]:checked::after {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+@media (max-width: 767px) {
+  .driver-signup-page .carrier-signup-field > div label {
+    flex: 1 1 100%;
+  }
+}
+
+/* reduce overall vertical gaps inside the form for driver page */
+.driver-signup-page .carrier-signup-form {
+  gap: 16px; /* was 24px globally */
+}
+
+.driver-signup-page .carrier-signup-field {
+  gap: 6px; /* smaller label-field spacing */
+}
+
+/* separator above button */
+.driver-signup-page .carrier-signup-bottom-actions {
+  border-top: 1px solid #eef2f7;
+  padding-top: 18px;
+  margin-top: 12px;
+  width: 100%;
+}
+
+.driver-signup-page .carrier-signup-btn {
+  margin-top: 16px;
+  width: 100%;
+  padding: 12px 0;
+  background: linear-gradient(to bottom, #2563eb, #1d4ed8);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.1rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(37,99,235,0.08);
+  transition: background 0.2s;
+}
+
+.driver-signup-page .carrier-signup-btn:hover {
+  background: linear-gradient(to bottom, #1d4ed8, #1e40af);
+}
+
+/* compact select styling to show caret on right */
+.driver-signup-page .carrier-signup-field select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, #6b7280 50%), linear-gradient(135deg, #6b7280 50%, transparent 50%);
+  background-position: calc(100% - 18px) calc(1em + 2px), calc(100% - 13px) calc(1em + 2px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 36px;
+}
+
+/* smaller label spacing */
+.driver-signup-page .carrier-signup-field label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+}

@@ -1,0 +1,226 @@
+/* How It Works Component Styles */
+
+.how-it-works-section {
+  padding: 5rem 0;
+  background-color: #f8f8f8;
+}
+
+.how-it-works-container {
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+@media (min-width: 640px) {
+  .how-it-works-container {
+    padding: 0 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .how-it-works-container {
+    padding: 0 2rem;
+  }
+}
+
+.how-it-works-header {
+  text-align: center;
+  margin-bottom: 4rem;
+}
+
+.how-it-works-title {
+  font-size: 3.5rem;
+  font-weight: 700;
+  color: #000000;
+  margin-bottom: 1rem;
+  line-height: 1.1;
+}
+
+@media (max-width: 768px) {
+  .how-it-works-title {
+    font-size: 2.75rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .how-it-works-title {
+    font-size: 2.5rem !important;
+    line-height: 1.1 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .how-it-works-title {
+    font-size: 2.25rem !important;
+  }
+}
+
+@media (max-width: 375px) {
+  .how-it-works-title {
+    font-size: 2rem !important;
+  }
+}
+
+.how-it-works-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4rem 8rem;
+  max-width: 800px;
+  margin: 0 auto;
+  position: relative;
+}
+
+@media (max-width: 768px) {
+  .how-it-works-grid {
+    grid-template-columns: 1fr;
+    gap: 3rem;
+    max-width: 400px;
+  }
+}
+
+.how-it-works-step {
+  text-align: center;
+  position: relative;
+}
+
+.how-it-works-step-number {
+  width: 4rem;
+  height: 4rem;
+  background-color: white;
+  color: #111827;
+  border-radius: 1rem;
+  border: 2px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: bold;
+  margin: 0 auto 1.5rem;
+  position: relative;
+  z-index: 2;
+}
+
+.how-it-works-step-title {
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: #111827;
+  margin-bottom: 0.75rem;
+  line-height: 1.3;
+}
+
+.how-it-works-step-description {
+  color: #6b7280;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  max-width: 200px;
+  margin: 0 auto;
+}
+
+/* Connecting Lines - Plus Pattern with Gaps */
+.how-it-works-grid::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(to right, #c7d2fe 0%, #c7d2fe 35%, transparent 35%, transparent 65%, #c7d2fe 65%, #c7d2fe 100%);
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
+.how-it-works-grid::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom, #c7d2fe 0%, #c7d2fe 35%, transparent 35%, transparent 65%, #c7d2fe 65%, #c7d2fe 100%);
+  transform: translateX(-50%);
+  z-index: 1;
+}
+
+/* End dots on connecting lines */
+.how-it-works-dot-top {
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 8px;
+  height: 8px;
+  background-color: #2563eb;
+  border-radius: 50%;
+  z-index: 2;
+}
+
+.how-it-works-dot-bottom {
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 8px;
+  height: 8px;
+  background-color: #2563eb;
+  border-radius: 50%;
+  z-index: 2;
+}
+
+.how-it-works-dot-left {
+  position: absolute;
+  left: -4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  background-color: #2563eb;
+  border-radius: 50%;
+  z-index: 2;
+}
+
+.how-it-works-dot-right {
+  position: absolute;
+  right: -4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  background-color: #2563eb;
+  border-radius: 50%;
+  z-index: 2;
+}
+
+/* Central chain icon - no circle background */
+.how-it-works-central-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+}
+
+.how-it-works-central-icon {
+  width: 6rem;
+  height: 6rem;
+}
+
+@media (max-width: 768px) {
+  .how-it-works-grid {
+    grid-template-columns: 1fr;
+    gap: 3rem;
+    max-width: 400px;
+  }
+  
+  .how-it-works-grid::before,
+  .how-it-works-grid::after {
+    display: none;
+  }
+  
+  .how-it-works-central-dot,
+  .how-it-works-dot-top,
+  .how-it-works-dot-bottom,
+  .how-it-works-dot-left,
+  .how-it-works-dot-right {
+    display: none;
+  }
+}

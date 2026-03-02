@@ -1,0 +1,44 @@
+
+.tracking-controls{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+.filter-row{display:flex;gap:8px;align-items:center}
+.select{padding:clamp(6px,1vw,10px) clamp(8px,1.2vw,12px);border-radius:100px;box-shadow:0 0 0 1px #E5E5E5,0 4px 8px -5px rgba(0,0,0,0.15);background:var(--fp-topbar-bg, #fff);width:auto;min-width:120px;color:var(--fsp-select-color, #0b1720);font-size:clamp(0.81rem,1.2vw,0.88rem)}
+.select:focus{box-shadow:0 0 0 0.5px #3B57A7,0 4px 8px -5px rgba(0,0,0,0.15)!important}
+.date{padding:8px 12px;border-radius:999px;border:1px solid #2b3b45;background:rgba(255,255,255,0.02);color:inherit;min-width:120px}
+.refresh-btn{background:#10b981;color:#fff;border-radius:10px;padding:8px 10px;border:0;box-shadow:0 4px 10px rgba(16,185,129,0.12);font-weight:700}
+.refresh-btn:hover{transform:translateY(-1px)}
+
+.stats-row{display:flex;gap:12px;margin-bottom:12px}
+.stats-row .stat{flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:12px}
+.stat .stat-num{font-weight:800;font-size:20px;color:#0b3240}
+.dark-root .stat .stat-num{color:#f1f5f9}
+.stat .stat-num.nil{color:#dc2626}
+.dark-root .stat .stat-num.nil{color:#f87171}
+.stat .stat-label{color:#64748b}
+.dark-root .stat .stat-label{color:#94a3a8}
+
+
+.tracking-grid{display:grid;grid-template-columns:1fr 420px;gap:16px}
+.map-card .map-placeholder{height:420px;background:linear-gradient(180deg,#0f1724,#0b2630);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#9ca3af}
+.feed-card .feed-list{list-style:none;padding:0;margin:0}
+.feed-card .feed-item{padding:12px;display:flex;align-items:center;justify-content:space-between; border: none; border-bottom: 1px solid #f1f6f8; background: transparent;}
+.dark-root .feed-card .feed-item{border-color:#353535}
+.feed-card .feed-item strong{display:block}
+.feed-tags{display:flex;gap:8px;align-items:center}
+
+.bottom-summary{display:flex;align-items:center;justify-content:space-between;padding:12px;margin-top:12px}
+.bottom-summary .summary-text{color:#94a3a8; font-size: 0.875rem;}
+
+@media (max-width:900px){
+  .tracking-grid{grid-template-columns:1fr}
+  .map-card .map-placeholder{height:260px}
+  .stats-row{flex-direction:column}
+}
+
+@media (max-width:480px){
+  .bottom-summary{flex-direction:column;align-items:flex-start;gap:8px}
+}
+
+/* dark mode for the selects to match carrier theme */
+.dark-root .filter-row .select{background:rgba(255,255,255,0.02);box-shadow:0 0 0 1px #353535,0 4px 8px -5px rgba(255,255,255,0.12);color:#d1d7db}
+.filter-row .select option{background:var(--fp-topbar-bg, #fff);color:var(--fsp-select-color, #0b1720)}
+.dark-root .filter-row .select option{background:var(--fp-topbar-bg, rgba(255,255,255,0.02));color:var(--fsp-select-color, #d1d7db)}

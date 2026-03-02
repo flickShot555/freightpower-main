@@ -1,0 +1,151 @@
+/* Features Grid Component Styles */
+
+.features-grid-section {
+  padding: 5rem 0;
+  background-color: white;
+}
+
+.features-grid-container {
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+@media (min-width: 640px) {
+  .features-grid-container {
+    padding: 0 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .features-grid-container {
+    padding: 0 2rem;
+  }
+}
+
+.features-grid-header {
+  text-align: center;
+  margin-bottom: 4rem;
+}
+
+.features-grid-title {
+  font-size: 3.5rem;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 1rem;
+  line-height: 1.1;
+}
+
+@media (max-width: 768px) {
+  .features-grid-title {
+    font-size: 2.75rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .features-grid-title {
+    font-size: 2.5rem !important;
+    line-height: 1.1 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .features-grid-title {
+    font-size: 2.25rem !important;
+  }
+}
+
+@media (max-width: 375px) {
+  .features-grid-title {
+    font-size: 2rem !important;
+  }
+}
+
+.features-grid-main {
+  display: grid;
+  gap: 3rem;
+  margin-bottom: 3rem;
+}
+
+@media (min-width: 640px) {
+  .features-grid-main {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .features-grid-main {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.features-grid-card {
+  text-align: center;
+  padding: 2rem 1.5rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background-color: white;
+}
+
+.features-grid-image {
+  width: 3rem;
+  height: 3rem;
+  margin: 0 auto 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.features-grid-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.features-grid-card-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 1rem;
+}
+
+.features-grid-card-description {
+  color: #6b7280;
+  line-height: 1.6;
+  font-size: 0.875rem;
+  max-width: 250px;
+  margin: 0 auto;
+}
+
+/* CTA Section */
+.features-grid-cta {
+  text-align: center;
+  margin-top: 3rem;
+}
+
+.features-grid-cta-button {
+  background: linear-gradient(to bottom, #2563eb, #1d4ed8);
+  color: white;
+  padding: 0.75rem 2rem;
+  border-radius: 2rem;
+  font-size: 1rem;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.features-grid-cta-button:hover {
+  background: linear-gradient(to bottom, #1d4ed8, #1e40af);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.35);
+}
+
+.features-grid-cta-button:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #3b82f6;
+}
+
+.features-grid-cta-button:focus, .features-grid-cta-button:focus-visible {
+  box-shadow: none;
+}

@@ -1,0 +1,85 @@
+Project Milestone Status Report
+Generated from repo code + docs
+
+Week 1: Security & Auth
+- JWT short-lived tokens + refresh flow: PARTIAL
+  - Firebase ID tokens + custom token login exist; explicit refresh endpoint not found.
+- Email/SMS OTP verification: PARTIAL
+  - Admin email MFA exists; /auth/verify-otp marks SMS verified if frontend verifies.
+- RBAC enforcement: DONE
+  - require_role/require_admin checks and role-based endpoint logic exist.
+
+Week 2: Onboarding & Consent
+- Chatbot data capture API: DONE
+  - Chatbot onboarding flow + /onboarding/create-from-chatbot.
+- OCR + validation service: DONE
+  - Groq vision OCR + classification + validation pipeline.
+
+Week 3: Document Vault & Compliance
+- Doc uploads <=25 MB, version control: PARTIAL
+  - Load document uploads exist; no 25MB cap or versioning found.
+- Expiry tracker jobs (30/14/7/1 days): NOT FOUND
+  - Expiry validation exists; no scheduled tracker jobs found.
+- FMCSA nightly sync: DONE
+  - Daily FMCSA refresh job exists.
+- Compliance score engine: PARTIAL
+  - Onboarding score exists; broader compliance engine not found.
+- Audit log schema: DONE
+  - audit_logs + status change logs in Firestore and JSON.
+- Encryption (TLS 1.3, AES-256 at rest): NOT EVIDENCED
+  - No explicit configuration in code.
+- Digital consent forms storage: PARTIAL
+  - Consent drafts exist; storage/tracking not implemented.
+- Admin override logging: NOT FOUND
+
+Week 4: Marketplace APIs
+- Shipper load posting and invites: PARTIAL
+  - Load posting exists; invite flow not found.
+- Carrier apply/respond APIs: PARTIAL
+  - Shipper accept/reject exists; carrier tender/offer pending.
+- Driver assignment and lifecycle transitions: PARTIAL
+  - Driver status updates exist; assign-driver endpoint missing.
+- Onboarding score calculation: DONE
+  - Scoring used in onboarding.
+- Load award compliance checks: NOT FOUND
+
+Week 5: Messaging & Notifications
+- Chat per load with attachments: NOT FOUND
+  - Messaging exists but not load-bound; attachments not found.
+- Notification center, persistent alerts: PARTIAL
+  - Admin channels + alerts storage exist.
+- AI suppression of duplicate alerts: PARTIAL
+  - Duplicate suppression exists; not AI-driven.
+- Daily digest job (9AM local): PARTIAL
+  - Daily admin digest job exists; no 9AM local scheduling found.
+
+Week 6: Calendar, Dashboards, Settings
+- Auto-load calendar events sync: NOT FOUND
+- Google/Outlook calendar integration: NOT FOUND
+- Role-based dashboard APIs: PARTIAL
+  - Role-aware endpoints exist; no dedicated dashboard API suite.
+- Settings persistence and admin cascade: PARTIAL
+  - User settings endpoints exist; admin cascade not found.
+
+Week 7: Reports, Training, AI
+- Analytics APIs (role-based, CSV/PDF export): PARTIAL
+  - Finance summaries/forecast exist; CSV/PDF export APIs not found.
+- Training module backend (docs, videos, quizzes): NOT FOUND
+- News posts API: NOT FOUND
+- AI Assistant integrations:
+  - Doc classification: DONE
+  - Pre-award compliance check: PARTIAL
+    - Compliance/FMCSSA signals used in matching; explicit pre-award API not found.
+  - Load/driver suggestions: DONE
+    - Matching engine exists.
+  - Message draft support: NOT FOUND
+
+Extra Work Found Beyond Milestones
+- Admin/super-admin bootstrap, MFA, trusted devices, admin session controls
+- WebAuthn/biometric auth support
+- Finance & invoicing module (invoice creation, disputes, factoring, payer portal)
+- Load document vault for loads (upload, rate confirmation PDF generation)
+- Messaging system with admin channels + delayed email notifications
+- AI utilities for distance and route estimation
+- FMCSA verification on profile update with stored verification summary
+- Alert system with digest + duplicate suppression

@@ -1,0 +1,7 @@
+﻿# Local dev overrides (Vite)
+# Disable all SMS/phone OTP behavior (Firebase Phone Auth + reCAPTCHA)
+VITE_DISABLE_SMS_OTP=1
+# Optional: when SMS is disabled, this code will be accepted by the mock verifier
+VITE_MOCK_SMS_CODE=123456
+# Optional: simulate network delay (ms) for the mock OTP send
+VITE_MOCK_SMS_DELAY_MS=700

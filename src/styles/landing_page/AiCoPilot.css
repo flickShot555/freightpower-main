@@ -1,0 +1,175 @@
+/* AiCoPilot Component Styles */
+
+.ai-copilot-section {
+  padding: 5rem 0;
+  background-color: white;
+}
+
+.ai-copilot-container {
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+@media (min-width: 640px) {
+  .ai-copilot-container {
+    padding: 0 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .ai-copilot-container {
+    padding: 0 1rem;
+  }
+}
+
+.ai-copilot-grid {
+  display: grid;
+  gap: 3rem;
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .ai-copilot-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Mobile Image Styles */
+.ai-copilot-mockup {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  order: 2;
+}
+
+@media (min-width: 1024px) {
+  .ai-copilot-mockup {
+    order: 1;
+  }
+}
+
+/* Content Styles */
+.ai-copilot-content {
+  order: 1;
+}
+
+@media (min-width: 1024px) {
+  .ai-copilot-content {
+    order: 2;
+  }
+}
+
+.ai-copilot-mobile-image {
+  width: 100%;
+  max-width: 500px;
+  height: auto;
+  object-fit: contain;
+}
+
+@media (min-width: 768px) {
+  .ai-copilot-mobile-image {
+    max-width: 600px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .ai-copilot-mobile-image {
+    max-width: 700px;
+  }
+}
+
+/* Content Styles */
+.ai-copilot-content {
+  order: 1;
+  text-align: center;
+}
+
+@media (min-width: 1024px) {
+  .ai-copilot-content {
+    order: 2;
+    text-align: left;
+  }
+}
+
+.ai-copilot-title {
+  font-size: 3.5rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .ai-copilot-title {
+    font-size: 2.75rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .ai-copilot-title {
+    font-size: 2.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .ai-copilot-title {
+    font-size: 2.25rem;
+  }
+}
+
+@media (max-width: 375px) {
+  .ai-copilot-title {
+    font-size: 2rem;
+  }
+}
+
+.ai-copilot-description {
+  font-size: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.ai-copilot-features {
+    padding-left: 1rem;
+    ;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  align-items: flex-start;
+}
+
+@media (min-width: 1024px) {
+  .ai-copilot-features {
+    align-items: flex-start;
+  }
+}
+
+.ai-copilot-feature {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.ai-copilot-feature-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  background-color: #2563eb;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ai-copilot-feature-icon svg {
+  width: 1rem;
+  height: 1rem;
+  color: white;
+}
+
+.ai-copilot-feature-content h3 {
+  font-size: 1.125rem;
+  font-weight: 400;
+  margin: 0;
+  color: #374151;
+}

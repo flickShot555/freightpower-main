@@ -1,0 +1,286 @@
+.myloads-root {
+  /* use parent's .fp-main padding so layout lines up with Dashboard */
+  padding: 0;
+}
+
+.ml-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+/* Mobile: title/subtitle with Add Load button aligned to the right on the same row; search input below full-width */
+@media (max-width: 640px) {
+  .ml-header {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    position: relative; /* allow absolutely-positioned button */
+  }
+
+  /* position the primary add button in the top-right so it visually sits on the same row as the title */
+  .ml-header .ml-actions { order: 2; }
+  .ml-header .ml-actions .ml-toolbar { display:flex; justify-content:flex-end; align-items:center; }
+
+  /* place the search input under the heading and make it full width */
+  .ml-header .ml-actions .ml-search {
+    width: 100%;
+    margin-top: 4px;
+    box-sizing: border-box;
+    /* make room for the absolute button on the right so placeholder/text isn't covered */
+    padding-right: 110px;
+  }
+
+  /* allow toolbar content to wrap if needed */
+  .ml-header .ml-actions .ml-toolbar { gap:8px; }
+}
+
+/* header uses shared .fp-header-titles / .fp-subtitle styles from CarrierDashboard.css */
+
+.ml-actions .ml-toolbar { display: flex; gap: 8px; align-items: center; }
+.ml-search { padding: 10px 14px; border-radius: 100px;  width:220px; background:#fff; color:#111827; box-shadow:0 0 0 1px #E5E5E5,0 4px 8px -5px rgba(0,0,0,0.15) }
+.ml-search:focus {  box-shadow:0 0 0 0.5px #3B57A7,0 4px 8px -5px rgba(0,0,0,0.15)!important; }
+
+/* Dark mode: make the search use the sidebar background and light-grey text */
+.dark-root .ml-search { background:#2c2c2c; color:#d1d5db; box-shadow: 0 0 0 1px #353535, 0 4px 8px -5px rgba(255,255,255,0.12);}
+
+.ml-board {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  align-items: start;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.ml-column { background: transparent; display:flex; flex-direction:column; min-height:0 }
+.ml-column .ml-column-inner {
+  background: #fff;
+  box-shadow:0 0 0 1px #E5E5E5,0 4px 8px -5px rgba(0,0,0,0.15);
+  border-radius: 12px;
+  padding: 16px;
+  /* let the inner pane fill the grid cell so all outer cards match height */
+  height: 100%;
+  min-height: 0;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+}
+
+/* Dark mode: make the column pane and cards match the sidebar dark color */
+.dark-root .ml-column .ml-column-inner {
+  background: #2c2c2c;
+  box-shadow: 0 0 0 1px #353535, 0 4px 8px -5px rgba(255,255,255,0.12);
+  color: #d1d5db;
+}
+.dark-root .ml-card {
+  background: #2c2c2c;
+  box-shadow: 0 0 0 1px #353535, 0 4px 8px -5px rgba(255,255,255,0.12);
+  color: #d1d5db;
+}
+.dark-root .ml-column-header h4,
+.dark-root .ml-id,
+.dark-root .ml-broker,
+.dark-root .ml-route {
+  color: #d1d5db;
+}
+.dark-root .ml-id { color: #ffffff }
+.dark-root .ml-column-header h4 { color: #ffffff !important }
+.dark-root .ml-count { background: #3a3a3a; color: #d1d5db;  }
+.dark-root .ml-tag { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.03); color: #d1d5db }
+.dark-root .muted { color: #9ca3af }
+
+
+/* make grid rows share available height so each row's columns match */
+.ml-board { grid-auto-rows: 1fr; align-items: stretch; }
+.ml-column-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px }
+.ml-column-header h4 { margin:0; font-size:16px; font-weight:700; color:#23363c }
+.ml-column-header .ml-count { margin-left:8px }
+.ml-count {
+  background:#f7f9fb; /* match page background */
+  color:#0b6b9a; /* default badge color (brand) */
+  width:30px;
+  height:30px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  font-size:13px;
+  font-weight:700;
+  box-shadow:0 1px 0 rgba(11,27,34,0.04);
+}
+
+.ml-column-list { display:flex; flex-direction:column; gap:12px; flex:1 }
+.ml-card {
+  background:transparent;
+  border-radius:10px;
+  padding:16px;
+  box-shadow:0 0 0 1px #E5E5E5,0 4px 8px -5px rgba(0,0,0,0.15);
+  box-sizing:border-box;
+  /* use min-height so cards stay consistent but can grow if needed */
+  min-height:120px;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  overflow:hidden;
+}
+.ml-card-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.ml-id { font-weight:800; font-size:16px; }
+.ml-tag { font-size:12px; color:#6b7280; background:#f3f4f6; padding:6px 10px; border-radius:999px; box-shadow:0 1px 0 rgba(11,27,34,0.02); }
+.ml-card-body { font-size:13px; display:flex; flex-direction:column; gap:8px; min-height:72px }
+.ml-route { margin:0; display:flex; align-items:center; gap:10px; color:#23363c }
+.ml-route .ml-dot { flex:0 0 auto }
+.ml-route span { display:inline-block }
+.ml-broker { font-size:14px; color:#23363c; font-weight:600 }
+.ml-broker-row, .ml-driver-row, .ml-pickup-row { display:flex; align-items:center; }
+.ml-broker-row .ml-broker, .ml-driver-row .muted, .ml-pickup-row .muted { font-size:14px }
+.ml-driver-row .ml-price, .ml-pickup-row .ml-price, .ml-broker-row .ml-price { margin-left:auto }
+.ml-card-footer { display:flex; align-items:center; margin-top:12px; justify-content:flex-start; }
+.ml-price { color:#10b981; font-weight:700; font-size:15px; }
+.ml-pickup { color:#6b7280; font-size:12px }
+.ml-dot { width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:8px;vertical-align:middle }
+.ml-dot.green{background:#10b981}
+.ml-dot.red{background:#ef4444}
+
+/* Tablet: two columns */
+@media (max-width: 1024px) {
+  .ml-board { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Mobile: single column */
+@media (max-width: 640px) {
+  .ml-board { grid-template-columns: 1fr; gap: 12px; }
+}
+
+/* Modal Styles */
+.loads-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+}
+
+.loads-modal-content {
+  background: #fff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 1200px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.dark-root .loads-modal-content {
+  background: #2c2c2c;
+  color: #d1d5db;
+}
+
+.loads-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.dark-root .loads-modal-header {
+  border-bottom-color: #3a3a3a;
+}
+
+.loads-modal-header h3 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.dark-root .loads-modal-header h3 {
+  color: #fff;
+}
+
+.loads-modal-close {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.loads-modal-close:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.dark-root .loads-modal-close:hover {
+  background: #3a3a3a;
+  color: #fff;
+}
+
+.loads-modal-grid {
+  padding: 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  overflow-y: auto;
+  max-height: calc(90vh - 100px);
+}
+
+.loads-modal-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 0 0 1px #e5e5e5, 0 4px 8px -5px rgba(0, 0, 0, 0.15);
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.dark-root .loads-modal-card {
+  background: #353535;
+  box-shadow: 0 0 0 1px #454545, 0 4px 8px -5px rgba(255, 255, 255, 0.12);
+}
+
+/* View more indicator */
+.ml-view-more {
+  text-align: center;
+  padding: 12px;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 500;
+  background: #f9fafb;
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+.dark-root .ml-view-more {
+  background: #353535;
+  color: #9ca3af;
+}
+
+/* Responsive modal */
+@media (max-width: 768px) {
+  .loads-modal-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .loads-modal-content {
+    max-width: 100%;
+    max-height: 95vh;
+  }
+}

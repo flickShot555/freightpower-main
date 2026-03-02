@@ -1,0 +1,1398 @@
+/* Document Vault Styles */
+.dd-document-vault {
+  background-color: #f8fafc;
+  min-height: 100vh;
+}
+
+.dark-root .dd-document-vault {
+  background-color: transparent;
+}
+
+/* Header */
+.dd-vault-header {
+  margin-bottom: 32px;
+}
+
+.dd-vault-header h1 {
+  margin: 0;
+  font-size: clamp(1.6rem, 2vw, 1.9rem);
+  color: #0b1720;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+}
+
+.dark-root .dd-vault-header h1 {
+  color: #f9fafb;
+}
+
+.dd-vault-subtitle {
+   margin: 0;
+  color: #94a3a8;
+  font-size: clamp(0.85rem, 1.2vw, 0.95rem);
+  font-weight: 600;
+}
+
+/* Compliance Progress Card */
+.dd-compliance-progress-card {
+  margin-bottom: 32px;
+}
+
+.dd-progress-summary {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.dd-progress-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.dd-progress-bar {
+  flex: 1;
+  height: 8px;
+  background-color: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.dd-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+  transition: width 0.3s ease;
+}
+
+.dd-progress-percent {
+  font-size: 14px;
+  font-weight: 600;
+  color: #3b82f6;
+}
+
+/* Responsive small typography for badges, counts, labels, and selects */
+.dd-progress-percent,
+.dd-progress-percent-new,
+.dd-status-count,
+.dd-status-badge,
+.dd-status-badges,
+.dd-section-count,
+.dd-doc-expires,
+.dd-doc-updated,
+.dd-doc-expires-new,
+.dd-doc-updated-new,
+.dd-doc-description,
+.dd-filter-select,
+.dd-section-header h3,
+.dd-section-title-post h3 {
+  font-size: clamp(0.75rem, 1.2vw, 0.95rem);
+}
+
+/* Make the small badge numbers in the compliance card slightly larger on bigger screens */
+.dd-status-count {
+  font-size: clamp(0.75rem, 1.1vw, 0.95rem);
+  padding: clamp(3px, 0.6vw, 6px) clamp(8px, 1.2vw, 12px);
+}
+
+/* Make the dropdown (All Documents) text responsive and not overflow */
+.dd-filter-select {
+  font-size: clamp(0.8rem, 1.2vw, 1rem);
+  padding: clamp(8px, 1vw, 12px) clamp(10px, 1.6vw, 16px);
+  min-width: 120px;
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Make compact header elements responsive (left column cards) */
+.dd-vault-subtitle,
+.dd-doc-title-new,
+.dd-card-title,
+.dd-section-header-new h3 {
+  font-size: clamp(0.8rem, 1.6vw, 1.1rem);
+}
+
+/* Make typography responsive across the document vault */
+.dd-vault-header h1 { font-size: clamp(1.4rem, 3.2vw, 1.9rem); }
+.dd-vault-subtitle { font-size: clamp(0.85rem, 1.2vw, 0.95rem); }
+.dd-doc-title-new { font-size: clamp(13px, 1.4vw, 14px); }
+.dd-doc-expires-new, .dd-doc-updated-new, .dd-doc-description { font-size: clamp(11px, 1vw, 13px); }
+
+
+/* New Progress Bar Styling */
+.dd-progress-container {
+  margin-bottom: 24px;
+}
+
+.dd-progress-bar-new {
+  position: relative;
+  height: 12px;
+  background-color: #e5e7eb;
+  border-radius: 6px;
+  overflow: visible;
+  margin-bottom: 12px;
+}
+
+.dd-progress-fill-new {
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(to right,#7FA4F6 0%, #3B57A7 100%);
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+.dd-progress-marker {
+  position: absolute;
+  top: -4px;
+  left: calc(60% - 10px);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #374151;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.dd-progress-icon {
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dd-progress-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dd-progress-percent-new {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.dark-root .dd-progress-percent-new {
+  color: #f9fafb;
+}
+
+.dd-progress-missing {
+  font-size: 14px;
+  color: #ef4444;
+  font-weight: 500;
+}
+
+/* Maintenance Check */
+.dd-maintenance-check {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 24px;
+}
+
+.dd-check-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.dd-maintenance-icon {
+  font-size: 20px;
+  color: #3b82f6;
+}
+
+.dd-check-header h4 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.dd-maintenance-description {
+  font-size: 14px;
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+
+.dd-maintenance-alerts {
+  margin-bottom: 20px;
+}
+
+.dd-alert-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #374151;
+}
+
+.dd-alert-icon {
+  font-size: 16px;
+}
+
+.dd-alert-icon.orange {
+  color: #f59e0b;
+}
+/* AI Readiness Check - New Styling */
+.dd-ai-readiness-check {
+  border: 1px solid #e9eaef;
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 24px;
+}
+
+.dark-root .dd-ai-readiness-check {
+  border-color: #353535;
+}
+
+.dd-ai-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.dd-ai-icon {
+  font-size: 20px;
+  color: #3b82f6;
+  background: #3b82f6;
+  color: white;
+  padding: 6px;
+  border-radius: 6px;
+}
+
+.dd-ai-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color:#3B57A7;
+}
+
+.dark-root .dd-ai-header h4 {
+  color: #7FA4F6;
+}
+
+.dd-ai-description {
+  font-size: 14px;
+  color: #374151;
+  margin-bottom: 16px;
+  margin-left: 44px;
+}
+
+.dark-root .dd-ai-description {
+  color: #d1d5db;
+}
+
+.dd-ai-alerts {
+  margin-bottom: 20px;
+  margin-left: 44px;
+}
+
+.dd-alert-item-new {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #374151;
+}
+
+.dark-root .dd-alert-item-new {
+  color: #d1d5db;
+}
+
+.dd-alert-icon-new {
+  font-size: 14px;
+  color: #ef4444;
+}
+
+/* Documents Grid */
+.dd-documents-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  margin-bottom: 32px;
+}
+
+/* New Document Section Styling */
+.dd-document-section-new {
+  background: white;
+  border-radius: 12px;
+  padding: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.dark-root .dd-document-section-new {
+  background: #2c2c2c;
+}
+
+.dd-section-header-new {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.dark-root .dd-section-header-new {
+  background: #2c2c2c;
+  border-color: #353535;
+}
+
+.dd-section-icon-new {
+  font-size: 18px;
+  color: #3b82f6;
+}
+
+.dd-section-header-new h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.dark-root .dd-section-header-new h3 {
+  color: #f9fafb;
+}
+
+/* Document Cards Grid */
+.dd-document-cards-grid {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dd-document-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  background: white;
+  transition: all 0.2s;
+}
+
+.dark-root .dd-document-card {
+  background: #2c2c2c;
+  border-color: #353535;
+}
+
+.dd-doc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.dd-doc-icon {
+  font-size: 20px;
+  color: #6b7280;
+}
+
+.dd-status-badge-new {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.dd-doc-title-new {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.dark-root .dd-doc-title-new {
+  color: #f9fafb;
+}
+
+.dd-doc-expires-new,
+.dd-doc-updated-new {
+  margin: 4px 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.dd-doc-description {
+  margin: 8px 0 12px 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.dd-doc-shared {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.dark-root .dd-doc-shared {
+  border-color: #353535;
+}
+
+.dd-shared-status {
+  font-size: 11px;
+  color: #9ca3af;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.dd-doc-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.dd-doc-btn {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.dd-view-btn-new {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.dark-root  .dd-view-btn-new {
+  background: #1e40af;
+  color: #dbeafe;
+}
+
+.dd-view-btn-new:hover {
+  background: #dbeafe;
+}
+
+.dark-root .dd-view-btn-new:hover {
+  background: #3b82f6;
+  color: white;
+}
+
+.dd-replace-btn {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.dark-root .dd-replace-btn {
+  background: #4b5563;
+  color: #d1d5db;
+}
+
+.dd-replace-btn:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.dark-root .dd-replace-btn:hover {
+  background: #6b7280;
+  color: #f9fafb;
+}
+
+.dd-upload-doc-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  width: 100%;
+}
+
+.dd-upload-doc-btn:hover {
+  background: #2563eb;
+}
+
+.dd-consent-btn {
+  background: #f59e0b;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  width: 100%;
+}
+
+.dd-consent-btn:hover {
+  background: #d97706;
+}
+
+/* Responsive button typography and spacing */
+.dd-upload-doc-btn,
+.dd-consent-btn,
+.dd-view-btn,
+.dd-replace-btn,
+.dd-upload-btn-small,
+.dd-post-hire-btn,
+.dd-back-btn,
+.dd-upload-btn,
+.dd-scan-btn,
+.dd-export-btn,
+.dd-action-btn,
+.dd-view-btn-new,
+.dd-replace-btn {
+  font-size: clamp(0.8rem, 1.2vw, 1rem);
+  padding: clamp(6px, 0.8vw, 12px) clamp(10px, 1.8vw, 20px);
+  line-height: 1.1;
+  min-width: 64px;
+  white-space: normal;
+  text-align: center;
+  overflow-wrap: break-word;
+  box-sizing: border-box;
+}
+
+/* Make primary actions full width on small screens and allow stacking */
+@media (max-width: 768px) {
+  .dd-doc-buttons,
+  .dd-doc-actions,
+  .dd-action-buttons {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .dd-upload-doc-btn,
+  .dd-consent-btn,
+  .dd-post-hire-btn,
+  .dd-upload-btn-small,
+  .dd-back-btn {
+    width: 100%;
+  }
+
+  /* Ensure view/replace pair share available space when side-by-side */
+  .dd-view-btn,
+  .dd-replace-btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .dd-upload-doc-btn,
+  .dd-consent-btn,
+  .dd-view-btn,
+  .dd-replace-btn,
+  .dd-upload-btn-small,
+  .dd-post-hire-btn,
+  .dd-back-btn {
+    font-size: clamp(0.75rem, 2.5vw, 0.95rem);
+    padding: 10px;
+  }
+}
+
+.dd-document-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.dd-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.dd-section-icon {
+  font-size: 20px;
+  color: #3b82f6;
+}
+
+.dd-section-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.dd-document-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dd-document-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.dd-doc-info h4 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.dd-doc-expires,
+.dd-doc-updated {
+  margin: 2px 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.dd-doc-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.dd-doc-status {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.dd-doc-status.green {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.dd-doc-status.orange {
+  background: #fed7aa;
+  color: #c2410c;
+}
+
+.dd-doc-status.red {
+  background: #fecaca;
+  color: #dc2626;
+}
+
+.dd-view-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.dd-view-btn:hover {
+  background: #2563eb;
+}
+
+/* Upload Options Card */
+.dd-upload-options-card {
+  margin-bottom: 32px;
+}
+
+.dd-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+.dd-upload-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 24px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dark-root .dd-upload-option {
+  background: #2c2c2c;
+  border-color: #353535;
+}
+
+.dd-upload-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+.dd-upload-text h4 {
+  margin: 0 0 4px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.dark-root .dd-upload-text h4 {
+  color: #f9fafb;
+}
+
+.dd-upload-text p {
+  margin: 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* Consent Card */
+.dd-consent-card {
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+}
+
+.dd-consent-content {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.dd-consent-icon {
+  font-size: 24px;
+  color: #f59e0b;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.dd-consent-text h4 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.dark-root .dd-consent-text h4 {
+  color: #fbbf24;
+}
+
+.dd-consent-text p {
+  margin: 0;
+  font-size: 14px;
+  color: #92400e;
+  line-height: 1.5;
+}
+
+.dark-root .dd-consent-text p {
+  color: #fbbf24;
+}
+
+.dd-give-consent-btn {
+  background: #f59e0b;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.dd-give-consent-btn:hover {
+  background: #d97706;
+}
+
+/* Dark Mode */
+.dd-document-vault.dark {
+  background-color: #111827;
+}
+
+.dd-document-vault.dark .dd-vault-header h1 {
+  color: #f9fafb;
+}
+
+.dd-document-vault.dark .dd-vault-subtitle {
+  color: #9ca3af;
+}
+
+.dd-document-vault.dark .dd-document-section {
+  background: #1f2937;
+  border-color: #374151;
+}
+
+.dd-document-vault.dark .dd-section-header h3,
+.dd-document-vault.dark .dd-doc-info h4,
+.dd-document-vault.dark .dd-check-header h4 {
+  color: #f9fafb;
+}
+
+
+.dd-document-vault.dark .dd-upload-text h4 {
+  color: #f9fafb;
+}
+.dd-document-vault.dark .dd-ai-description,
+.dd-document-vault.dark .dd-alert-item-new {
+  color: #d1d5db;
+}
+
+.dd-document-vault.dark .dd-progress-percent-new {
+  color: #f9fafb;
+}
+
+/* Dark mode for new document cards */
+.dd-document-vault.dark .dd-document-section-new {
+  background: #1f2937;
+}
+
+.dd-document-vault.dark .dd-section-header-new {
+  background: #111827;
+  border-color: #374151;
+}
+
+.dd-document-vault.dark .dd-section-header-new h3 {
+  color: #f9fafb;
+}
+
+.dd-document-vault.dark .dd-doc-title-new {
+  color: #f9fafb;
+}
+
+.dd-document-vault.dark .dd-doc-shared {
+  border-color: #4b5563;
+}
+
+.dd-document-vault.dark .dd-replace-btn {
+  background: #4b5563;
+  color: #d1d5db;
+}
+
+.dd-document-vault.dark .dd-replace-btn:hover {
+  background: #6b7280;
+}
+
+/* Post Hire Button */
+.dd-post-hire-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-top: 16px;
+}
+
+.dd-post-hire-btn:hover {
+  background: #2563eb;
+}
+
+.dd-back-btn {
+  background: #6b7280;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-top: 16px;
+}
+
+.dd-back-btn:hover {
+  background: #4b5563;
+}
+
+/* Compliance Status Card - New Design */
+.dd-compliance-status-card {
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.dark-root .dd-compliance-status-card {
+  background: #2c2c2c;
+  border-color: #374151;
+}
+
+.dd-compliance-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f3f4f6;
+  background: #fff;
+}
+
+.dark-root .dd-compliance-card-header {
+  background: #2c2c2c;
+  border-color: #374151;
+}
+
+.dd-compliance-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.dark-root .dd-compliance-title {
+  color: #f9fafb;
+}
+
+.dd-last-updated {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.dd-status-summary-section {
+  padding: 16px 20px;
+}
+
+.dark-root .dd-status-summary-section {
+  background: #2c2c2c;
+}
+
+.dd-status-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.dd-status-main {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.dark-root .dd-status-main {
+  color: #f9fafb;
+}
+
+.dd-status-badges {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.dd-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.dd-progress-bar-container-new {
+  padding: 0 20px 16px 20px;
+}
+
+.dd-progress-bar-full {
+  width: 100%;
+  height: 8px;
+  background: #f3f4f6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.dd-progress-fill-full {
+  width: 80%;
+  height: 100%;
+  background: linear-gradient(to right, #7FA4F6 0%, #3B57A7 100%);
+  border-radius: 4px;
+}
+
+/* Post Hire View Styles - Legacy */
+.dd-status-progress {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding: 16px 24px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.dd-status-bar {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+}
+
+.dd-status-segment {
+  height: 8px;
+  border-radius: 4px;
+  flex: 1;
+  position: relative;
+}
+
+.dd-status-segment.active {
+  background: #22c55e;
+}
+
+.dd-status-segment.pending {
+  background: #f59e0b;
+}
+
+.dd-status-label {
+  position: absolute;
+  top: -24px;
+  left: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.dd-status-actions {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.dd-status-count {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #dcfce7;
+  color: #166534;
+}
+
+.dd-status-count.pending {
+  background: #fed7aa;
+  color: #c2410c;
+}
+
+/* Action Buttons */
+.dd-action-buttons {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+
+.dd-upload-btn, .dd-scan-btn, .dd-export-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #374151;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dark-root .dd-upload-btn, .dark-root .dd-scan-btn, .dark-root .dd-export-btn {
+  background: #2c2c2c;
+  border-color: #4b5563;
+  color: #f9fafb;
+}
+
+.dd-upload-btn:hover, .dd-scan-btn:hover, .dd-export-btn:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.dd-filter-select {
+  padding: 10px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 100px;
+  background: white;
+  color: #374151;
+  font-weight: 400;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.dd-filter-select:focus{
+  box-shadow:0 0 0 0.5px #3B57A7,0 4px 8px -5px rgba(0,0,0,0.15)!important;
+}
+
+/* Post Hire Sections */
+.dd-post-hire-section {
+  margin-bottom: 32px;
+}
+
+.dd-section-header-post {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.dd-section-title-post {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dd-section-title-post h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.dark-root .dd-section-title-post h3 {
+  color: #f9fafb;
+}
+
+.dd-section-count {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* Post Hire Grid */
+.dd-post-hire-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.dd-post-hire-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.dark-root .dd-post-hire-card {
+  background: #2c2c2c;
+  border-color: #353535;
+}
+
+.dd-add-card {
+  border: 2px dashed #d1d5db;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 200px;
+}
+
+.dd-card-icon {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  font-size: 20px;
+  color: #6b7280;
+}
+
+.dd-add-icon {
+  font-size: 32px;
+  color: #9ca3af;
+  margin-bottom: 16px;
+}
+
+.dd-card-status {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+.dd-status-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.dd-card-title {
+  margin: 40px 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.dark-root .dd-card-title {
+  color: #f9fafb;
+}
+
+.dd-add-card .dd-card-title {
+  margin: 0 0 8px 0;
+}
+
+.dd-card-date, .dd-card-expires, .dd-card-carrier {
+  margin: 4px 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.dd-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.dd-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background: #f9fafb;
+  color: #374151;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dark-root .dd-action-btn {
+  background: #353535;
+  border-color: #4b5563;
+  color: #f9fafb;
+}
+
+.dd-action-btn:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.dd-upload-btn-small {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.dd-upload-btn-small:hover {
+  background: #2563eb;
+}
+
+/* Dark Mode for Post Hire */
+.dd-document-vault.dark .dd-compliance-status-card {
+  background: #1f2937;
+}
+
+.dd-document-vault.dark .dd-compliance-card-header {
+  background: #111827;
+  border-color: #374151;
+}
+
+.dd-document-vault.dark .dd-compliance-title {
+  color: #f9fafb;
+}
+
+.dd-document-vault.dark .dd-last-updated {
+  color: #9ca3af;
+}
+
+.dd-document-vault.dark .dd-status-main {
+  color: #f9fafb;
+}
+
+.dd-document-vault.dark .dd-status-progress {
+  background: #1f2937;
+}
+
+.dd-document-vault.dark .dd-card-title,
+.dd-document-vault.dark .dd-section-title-post h3 {
+  color: #f9fafb;
+}
+
+.dd-document-vault.dark .dd-upload-btn,
+.dd-document-vault.dark .dd-scan-btn,
+.dd-document-vault.dark .dd-export-btn,
+.dd-document-vault.dark .dd-filter-select {
+  background: #374151;
+  border-color: #4b5563;
+  color: #f9fafb;
+}
+
+.dd-document-vault.dark .dd-action-btn {
+  background: #374151;
+  border-color: #4b5563;
+  color: #f9fafb;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .dd-documents-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .dd-upload-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .dd-post-hire-grid {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  
+  .dd-upload-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .dd-document-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .dd-doc-actions {
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .dd-consent-content {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+/* Document vault: post-hire and cards responsive tweaks */
+@media (max-width: 768px) {
+  .dd-documents-grid { grid-template-columns: 1fr; gap: 16px }
+  .dd-document-card, .dd-document-section-new, .dd-document-section, .dd-post-hire-card { width: 100%; box-sizing: border-box }
+  .dd-document-item { flex-direction: column; align-items: flex-start; gap: 12px }
+  .dd-doc-actions { width: 100%; flex-direction: row; justify-content: space-between }
+  .dd-doc-buttons { width: 100%; display: flex; gap: 8px; }
+  .dd-view-btn, .dd-replace-btn { width: 48%; }
+  .dd-upload-doc-btn, .dd-consent-btn { width: 100%; }
+  .dd-upload-grid { grid-template-columns: repeat(2, 1fr); gap: 12px }
+  .dd-post-hire-grid { grid-template-columns: 1fr; }
+  .dd-post-hire-card { padding: 16px }
+  .dd-card-actions { flex-direction: column; gap: 8px }
+}
+
+@media (max-width: 420px) {
+  .dd-doc-buttons { flex-direction: column }
+  .dd-view-btn, .dd-replace-btn { width: 100%; }
+  .dd-section-header-new { padding: 12px }
+  .dd-document-cards-grid { padding: 8px }
+  .dd-map-placeholder { padding: 20px }
+  .dd-status-badges { flex-wrap: wrap; gap: 4px 8px; justify-content: flex-end;}
+  .dd-status-badge { font-size: 10px; padding: 3px 6px; align-items: flex-end;}
+}

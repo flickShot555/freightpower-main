@@ -1,0 +1,56 @@
+{
+  "name": "FreightPower",
+  "short_name": "FreightPower",
+  "description": "FreightPower web app",
+  "start_url": "/admin",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#111827",
+  "shortcuts": [
+    {
+      "name": "Admin",
+      "short_name": "Admin",
+      "url": "/admin",
+      "icons": [
+        {
+          "src": "/icons/FP-logo-removebg-preview.png",
+          "sizes": "any",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Super Admin",
+      "short_name": "Super",
+      "url": "/super-admin/login",
+      "icons": [
+        {
+          "src": "/icons/FP-logo-removebg-preview.png",
+          "sizes": "any",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "icons": [
+    {
+      "src": "/icons/FP-logo-removebg-preview.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/FP-logo-removebg-preview.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/FP-logo-removebg-preview.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

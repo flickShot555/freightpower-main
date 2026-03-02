@@ -1,0 +1,235 @@
+/* Admin Dashboard overrides: keep visuals same as carrier but allow admin-specific selectors */
+.adm-main { padding: 24px; /* match .fp-main default */ }
+.adm-header { margin-bottom: 16px; }
+.adm-grid { gap: 16px; }
+
+/* Scoped card styling for admin dashboard to match design */
+.adm-main .card{
+  background: #fff;
+  border: 1px solid #eef2f6;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 4px 10px rgba(11,50,64,0.04);
+  position:relative;
+}
+.adm-main .card .card-headers{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.adm-main .card .card-headers h3{margin:0;font-size:16px;color:#0b3240}
+.adm-main .card .card-icon{background:transparent;color:#0b3240;padding:6px;border-radius:6px;font-size:16px}
+.dark-root .adm-main .card .card-icon{color:#f1f5f9}
+.adm-main .card .stats{margin-top:12px;font-size:20px;font-weight:800;color:#0b1720}
+.adm-main .card .muted{color:#64748b;font-size:13px}
+
+/* small top-right helper icon inside card (neutral color) */
+.adm-main .card .card-top-right { position:absolute; right:16px; top:16px; color:#0b9aa8; font-size:14px }
+
+/* Prevent cards and their children from overflowing on small screens */
+.adm-main .card{box-sizing:border-box;overflow:hidden;word-break:break-word;hyphens:auto}
+.adm-main .card *{box-sizing:border-box}
+.adm-main {overflow-x:hidden}
+
+/* Ensure images and avatars inside cards scale down */
+.adm-main img, .adm-main .msg-avatar, .adm-main .avatar-img{max-width:100%;height:auto;display:block}
+
+/* Grid/flex children should be allowed to shrink to avoid overflow */
+.adm-main .fp-grid > *, .adm-lower-grid > div, .adm-lower-grid aside, .notifications-list .notification-item, .recent-list .msg-item{min-width:0}
+
+
+/* spacing for grid */
+.adm-main .fp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.adm-card { background: transparent; box-shadow: 0 0 0 1px #E5E5E5, 0 4px 8px -5px rgba(0,0,0,0.15); padding: 20px; border-radius: 8px; }
+.adm-card .adm-card-headers { margin-bottom: 10px; display:flex;align-items:center;justify-content:space-between }
+.adm-recent-list { list-style: none; padding: 0; margin: 0; }
+.adm-activity-item { padding: 12px 0; border-bottom: 1px solid #f1f6f8; }
+
+/* Ensure admin main uses the same responsive paddings as carrier */
+@media (max-width: 1024px){
+  .adm-main { padding: 20px; }
+}
+@media (max-width: 900px){
+  .adm-main { padding: 14px; }
+}
+
+/* Small helper to align admin card titles with carrier */
+.adm-card h3{margin:0 0 12px 0;color:#0f3b4a}
+
+/* Make the admin topbar search match the carrier marketplace search */
+.search-input-container { display:flex; align-items:center; gap:12px; position:relative; width:100%; }
+.search-input { flex:1; padding:10px 40px 10px 14px; border-radius:100px; border:1px solid #E5E5E5; background:#fff; font-size:14px; }
+.dark-root .search-input{ background:#2c2c2c; border-color:#353535; color:#f1f5f9 }
+.search-input:focus{ box-shadow:0 0 0 0.5px #3B57A7,0 4px 8px -5px rgba(0,0,0,0.15)!important; }
+.search-input::placeholder{ color:#9ca3af }
+.search-icon{ position:absolute; right:14px; color:#94a3b8 }
+.dark-root .adm-main .card{ background: #2c2c2c; color: #f1f5f9; border-color: #353535; box-shadow:none }
+
+/* Admin topbar search dropdown (user search) */
+.adm-search-dropdown{
+  position:absolute;
+  top: calc(100% + 8px);
+  left:0;
+  right:0;
+  z-index: 50;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+  overflow:hidden;
+}
+.dark-root .adm-search-dropdown{ background:#1f2937; border-color:#374151; }
+
+.adm-search-row{
+  width:100%;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  border:0;
+  background:transparent;
+  text-align:left;
+}
+.adm-search-row:hover{ background:#f8fafc; cursor:pointer; }
+.dark-root .adm-search-row:hover{ background:#111827; }
+.adm-search-row + .adm-search-row{ border-top:1px solid #eef2f6; }
+.dark-root .adm-search-row + .adm-search-row{ border-top:1px solid #374151; }
+
+.adm-search-main{ display:flex; flex-direction:column; min-width:0; }
+.adm-search-name{ font-weight:700; color:#0b3240; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dark-root .adm-search-name{ color:#f1f5f9; }
+.adm-search-sub{ font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.adm-search-row.error{ color:#b91c1c; }
+
+/* User details modal */
+.adm-ud-overlay{
+  position:fixed;
+  inset:0;
+  background: rgba(15, 23, 42, 0.55);
+  z-index: 80;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 18px;
+}
+.adm-ud-modal{
+  width: 920px;
+  max-width: 100%;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+  overflow:hidden;
+}
+.dark-root .adm-ud-modal{ background:#111827; border-color:#374151; }
+
+.adm-ud-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid #eef2f6;
+}
+.dark-root .adm-ud-header{ border-bottom-color:#374151; }
+.adm-ud-title{ font-weight: 900; font-size: 16px; color:#0b3240; }
+.dark-root .adm-ud-title{ color:#f1f5f9; }
+.adm-ud-close{ background:transparent; border:0; cursor:pointer; font-size:18px; }
+.dark-root .adm-ud-close{ color:#f1f5f9; }
+
+.adm-ud-body{ padding: 14px 16px; max-height: 70vh; overflow:auto; }
+.adm-ud-error{ color:#b91c1c; background:#fee2e2; padding:10px 12px; border-radius:12px; margin-bottom:10px; }
+.dark-root .adm-ud-error{ background:#3f1d1d; }
+.adm-ud-loading{ opacity:0.85; padding: 8px 0; }
+
+.adm-ud-grid{ display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+@media (max-width: 720px){ .adm-ud-grid{ grid-template-columns: 1fr; } }
+.adm-ud-field{ display:flex; align-items:flex-start; justify-content:space-between; gap: 12px; padding: 10px 12px; border: 1px solid #eef2f6; border-radius: 12px; }
+.dark-root .adm-ud-field{ border-color:#374151; }
+.adm-ud-label{ font-weight: 800; color:#0b3240; }
+.dark-root .adm-ud-label{ color:#f1f5f9; }
+.adm-ud-value{ color:#334155; text-align:right; word-break:break-word; }
+.dark-root .adm-ud-value{ color:#cbd5e1; }
+
+.adm-ud-footer{ display:flex; gap:10px; justify-content:flex-end; padding: 14px 16px; border-top:1px solid #eef2f6; }
+.dark-root .adm-ud-footer{ border-top-color:#374151; }
+@media (max-width: 720px){ .adm-ud-footer{ flex-wrap: wrap; justify-content:flex-start; } }
+
+.adm-ud-panel{ margin-top: 14px; padding: 12px; border: 1px solid #eef2f6; border-radius: 12px; background: #f8fafc; }
+.dark-root .adm-ud-panel{ border-color:#374151; background:#0b1220; }
+.adm-ud-panel-title{ font-weight: 900; margin-bottom: 10px; }
+.adm-ud-input-label{ display:block; font-size: 12px; font-weight: 800; margin: 10px 0 6px; }
+.adm-ud-input, .adm-ud-textarea{ width: 100%; border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px 12px; background:#fff; }
+.dark-root .adm-ud-input, .dark-root .adm-ud-textarea{ border-color:#374151; background:#111827; color:#f1f5f9; }
+.adm-ud-panel-actions{ display:flex; gap:10px; justify-content:flex-end; margin-top: 12px; }
+
+/* default: hide compact search toggle on large screens */
+.search-toggle{ display:none; border:0; background:transparent; padding:6px; font-size:18px }
+
+/* Header action buttons spacing (matches carrier) */
+.buttons-aa{ display:flex; align-items:center; gap:12px; width: 100%; margin-bottom: 20px;}
+
+@media (max-width: 900px){
+  .search-toggle{ display:inline-flex !important }
+}
+
+/* Keep the notification and chat icons visible on tablet/mobile */
+@media (max-width: 1024px){
+  .icons{ display:flex !important; align-items:center; gap:10px }
+  .icons .notif{ position:relative }
+  .notif-badge{ display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; font-size:12px; padding:0 4px; border-radius:999px; background:#ef4444; color:#fff; position:absolute; right:-6px; top:-6px }
+  /* ensure the chat icon is visible and has proper spacing */
+  .icons i{ font-size:18px; color:inherit }
+  .profile-labels{ display:none !important }
+  .search-input-container{ display:none !important; }
+  .search-toggle{ display:inline-flex !important; align-items:center; justify-content:center; border:0; background:transparent; font-size:18px; padding:8px; }
+  /* ensure topbar left stays left and icons stay right */
+  .fp-topbar .topbar-row-1{display:flex;align-items:center}
+  .fp-topbar .topbar-left{flex:0 0 auto}
+  .fp-topbar .topbar-right{flex:0 0 auto}
+}
+@media (max-width: 480px){
+  .adm-main .fp-grid{grid-template-columns:1fr}
+  .buttons-aa{ flex-wrap: wrap; }  
+  .tasks-card .card-row{display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start;}
+}
+
+/* Lower dashboard responsive grid */
+.adm-lower-grid{display:grid;grid-template-columns:1fr 320px;gap:18px;margin-top:20px}
+.adm-lower-grid aside{position:relative}
+@media (max-width:900px){
+  .adm-lower-grid{grid-template-columns:1fr;}
+  .adm-lower-grid aside{position:relative}
+}
+@media (min-width:1280px){
+  /* sticky right column on wide screens */
+  .adm-lower-grid aside{position:sticky;top:96px}
+}
+
+/* Tasks: left column (title + assigned) stacked vertically, right column (due + status) stacked vertically */
+.adm-main .tasks-card .recent-list{list-style:none;padding:0;margin:0}
+.adm-main .tasks-card .task-item{
+  display:grid;
+  grid-template-columns: 1fr 160px;
+  grid-template-rows: auto auto;
+  gap:6px 12px;
+  align-items:center;
+  padding:14px 20px;
+  border-bottom:1px solid #f1f6f8;
+}
+.adm-main .tasks-card .task-item > strong{grid-column:1;grid-row:1;margin:0;font-size:15px;color:#0b3240}
+.dark-root .adm-main .tasks-card .task-item > strong{color:#f1f5f9}
+.adm-main .tasks-card .task-item > .muted{grid-column:1;grid-row:2;color:#94a3a8;font-size:13px;margin:0}
+.adm-main .tasks-card .task-item > .task-due{grid-column:2;grid-row:1/3;justify-self:end;text-align:right;color:#64748b;font-size:13px;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.adm-main .tasks-card .task-item .chip-cd{vertical-align:middle;margin-left:0}
+.adm-main .tasks-card .task-item:last-child{border-bottom:0}
+
+/* Collapse tasks into single column on smaller screens */
+@media (max-width:1024px){
+  .adm-main .tasks-card .task-item{grid-template-columns:1fr;grid-template-rows:auto auto auto}
+  .adm-main .tasks-card .task-item > .task-due{grid-column:1;grid-row:3;justify-self:start;text-align:left;margin-top:8px;display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+}
+
+/* Support Hub compact layout - ensure text is flush left and chip stays right */
+.notifications-list{list-style:none;padding:0;margin:0}
+.notifications-list .notification-item{display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid #f1f6f8}
+.notifications-list .notification-item .note-left{display:none}
+.notifications-list .notification-item .note-body{flex:1;padding-left:0;text-align:left}
+.notifications-list .notification-item .note-time{margin-left:auto;flex:0 0 auto}
+.notifications-list .notification-item:last-child{border-bottom:0}
+

@@ -1,0 +1,121 @@
+/* Panel containing the dark cards */
+.pulse-panel{ background:#f7f9fb; border-radius:12px;position:relative }
+.dark-root .pulse-panel{ background:#1e1e1e; }
+.pulse-cards{ display:grid; grid-template-columns:repeat(4,1fr); gap:16px }
+
+/* Dark card surface */
+.dark-card{ background:#fff; border:1px solid rgba(255,255,255,0.03); padding:18px; border-radius:12px; }
+.dark-root .dark-card{ background-color: #2c2c2c; border-color: #353535; color: #f1f5f9; }
+.pulse-card{ display:flex; flex-direction:column; justify-content:flex-start; min-height:108px }
+.card-top{ display:flex; justify-content:space-between; align-items:flex-start }
+.pulse-icon{ width:44px;height:44px;border-radius:10px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; background-color: #f3f3f3; }
+.dark-root .pulse-icon{ background-color: #3f3f3f; }
+.pulse-icon i{ font-size:18px }
+.card-action{ color:#3B57A7; font-weight:700; font-size:13px; text-decoration:none }
+.dark-root .card-action {color: #7FA4F6;}
+.card-action:hover{ opacity:0.9 }
+.card-body{ margin-top:12px }
+.pulse-title{  font-size:13px; margin-bottom:8px }
+.pulse-value{ font-size:32px; font-weight:800; }
+
+/* Floating add button */
+.fab-add{ position:absolute; right:14px; bottom:-22px; background:#34d399; color:#04211f; border:none; width:44px; height:44px; border-radius:999px; font-size:24px; display:flex; align-items:center; justify-content:center; box-shadow:0 6px 18px rgba(16,185,129,0.18); cursor:pointer }
+
+/* User overview table panel */
+.uo-panel{ background:#ffffff; border-radius:12px; padding:14px; box-shadow:0 6px 18px rgba(16,24,40,0.06); margin-top:24px }
+.dark-root .uo-panel{ background:#2c2c2c; color:#f1f5f9; border-color:#353535; box-shadow:none }
+.adm-user-overview{ margin-top:0 }
+.uo-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px }
+.uo-actions{ color:#475569; font-size:13px }
+
+.uo-panel .uo-table{ width:100%; border-collapse:collapse; background:transparent }
+.uo-panel .uo-table thead th{ text-align:left; padding:12px; color:#64748b; font-size:13px; border-bottom:1px solid rgba(15,23,42,0.06) }
+.dark-root .uo-panel .uo-table thead th{ color:#94a3b8; border-color:rgba(255,255,255,0.06) }
+.uo-panel .uo-table tbody td{ padding:14px 12px; border-top:1px solid rgba(15,23,42,0.04); color:#0f1724 }
+.dark-root .uo-panel .uo-table tbody td{ color:#e6eef7; border-color:rgba(255,255,255,0.06) }
+.uo-table-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.uo-table{ min-width:900px; white-space:nowrap }
+.user-cell img{ width:32px;height:32px;border-radius:50%;margin-right:8px;vertical-align:middle }
+.user-cell{ display:flex; align-items:center; font-size: 14px; font-weight: 600;}
+.action-col{ text-align:center }
+.uo-table td:nth-child(2), .uo-table td:nth-child(3), .uo-table td:nth-child(5) {font-size: 14px;}
+/* Remove table cell borders around action columns so buttons aren't visually cut by dividers */
+.uo-panel .uo-table tbody td.action-col,
+.uo-panel .uo-table tbody td.carrier-actions,
+.uo-panel .uo-table tbody td:last-child{
+	border-top: none !important;
+	border-bottom: none !important;
+	border-color: transparent !important;
+}
+.dark-root .uo-panel .uo-table tbody td.action-col,
+.dark-root .uo-panel .uo-table tbody td.carrier-actions,
+.dark-root .uo-panel .uo-table tbody td:last-child{
+	border-top: none !important;
+	border-bottom: none !important;
+	border-color: transparent !important;
+}
+
+.uo-footer{ margin-top:12px }
+
+/* Make carriers table headers match the users table header styles
+	 This keeps header padding, font-size, color and divider consistent across admin tables */
+.uo-panel .uo-table.carriers-table thead th,
+.uo-panel .carriers-table thead th {
+	text-align: left;
+	padding: 12px;
+	color: #64748b;
+	font-size: 13px;
+	border-bottom: 1px solid rgba(15,23,42,0.06);
+	text-transform: none; /* match users table (no forced uppercase) */
+}
+.dark-root .uo-panel .uo-table.carriers-table thead th,
+.dark-root .uo-panel .carriers-table thead th {
+	color: #94a3b8;
+	border-color: rgba(255,255,255,0.06);
+}
+
+/* ------------------------------------------------------------------
+	 Carrier & Shipper table visual fix (scope only to carriers tables)
+	 - remove per-cell borders for these tables
+	 - draw a row divider via tr::after that stops before the action column
+	 - keep Users table untouched
+	 ------------------------------------------------------------------ */
+/* remove per-cell borders specifically for carriers/shippers tables */
+.carriers-table tbody td{ /* nth-last-child ensures nearby cols are safe */
+    border-top: none !important;
+    border-bottom: none !important;
+    border-color: #e6eef3 !important;
+}
+
+.dark-root .carriers-table tbody td{ /* nth-last-child ensures nearby cols are safe */
+    border-top: none !important;
+    border-bottom: none !important;
+		border-color: #3c3c3c !important;
+}
+
+/* Override any bright/light row borders coming from other files for dark mode */
+.dark-root .carriers-table tbody tr,
+.dark-root .uo-panel .uo-table.carriers-table tbody tr{
+	border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+}
+
+
+/* Responsive */
+@media (max-width:1100px){
+	.pulse-cards{ grid-template-columns:repeat(2,1fr) }
+}
+@media (max-width:640px){
+	.pulse-cards{ grid-template-columns:1fr }
+    .ai-summary{ flex-direction:column; align-items:flex-start; gap: 12px; }
+    .aai-actions{ flex-direction:column; }
+}
+
+/* AI summary banner */
+.ai-summary{ margin-top:14px; display:flex; justify-content:space-between; align-items:center; background:#fff; padding:10px 12px; border-radius:8px; box-shadow:0 6px 18px rgba(16,24,40,0.04) }
+.dark-root .ai-summary{ background:#2c2c2c }
+.ai-summary-left{ display:flex; align-items:center; gap:10px }
+.aai-icon{ background:#f3f3f3; padding:8px; border-radius:6px; display:flex; align-items:center; justify-content:center }
+.dark-root .aai-icon{ background:#353535; color:#f1f5f9 }
+.aai-text{ font-size:13px;}
+.aai-actions{ display:flex; gap:8px }
+

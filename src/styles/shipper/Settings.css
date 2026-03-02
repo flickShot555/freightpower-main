@@ -1,0 +1,93 @@
+
+.ss-header h2{ margin:0 0 14px 0; font-size:20px }
+.ss-card{ padding:18px; background:#ffffff; border:1px solid #eef2f7; border-radius:10px }
+.dark-root .ss-card{ background: #2c2c2c; color: #f1f5f9; border-color: #353535; box-shadow:none }
+.ss-main-card{ margin-bottom:18px }
+.heading-setting-sh {font-weight: 700; font-size: 1.1rem; margin-bottom: 8px; color: #0f1724;}
+.dark-root .heading-setting-sh { color: #f9fafb }
+.ss-grid{ display:grid; grid-template-columns: 1fr 420px; gap:28px; align-items:stretch }
+.ss-grid > .ss-card{ background:#ffffff; border:1px solid #eef2f7; border-radius:10px; padding:18px; box-shadow:0 8px 24px rgba(2,6,23,0.04) }
+.dark-root .ss-grid > .ss-card{ background: #2c2c2c; color: #f1f5f9; border-color: #353535; box-shadow:none }
+.ss-left, .ss-right{ display:flex; flex-direction:column; gap:12px }
+.ss-card label,
+.ss-notifications .ss-not-title {font-weight: 700; font-size: 16px}
+.inline-check{ font-size:13px; font-weight:700; color:#0f1724 }
+.dark-root .ss-card label,
+.dark-root .ss-notifications .ss-not-title,
+.dark-root .inline-check{ color: #f9fafb }
+.ss-card label{ display:block;}
+.ss-input, .ss-select, .ss-textarea{ width:100%; padding:10px 12px; border:1px solid #e6eef2; border-radius:8px; background:#fff; font-size:14px }
+.dark-root .ss-input, .dark-root .ss-select, .dark-root .ss-textarea{ background:#2c2c2c; border-color:#4b5563; color:#f1f5f9 }
+.ss-textarea{ min-height:84px; resize:vertical }
+.ss-brand-row{ display:flex; gap:12px; align-items:center }
+.ss-logo{ width:48px; height:48px; background:linear-gradient(#7FA4F6 0%, #3B57A7 100%); color:#fff; display:flex; align-items:center; justify-content:center; border-radius:8px; font-weight:700 }
+.ss-right h4{ margin-top:0 }
+.ss-photo-row{ display:flex; gap:12px; align-items:center }
+.ss-avatar{ width:56px; height:56px; border-radius:999px; object-fit:cover }
+.ss-mfa{ display:flex; gap:12px; align-items:center; margin-top:8px }
+
+/* Integrations */
+.ss-section{ margin-top:18px }
+.ss-integrations-grid{ display:grid; grid-template-columns: repeat(3,1fr); gap:12px }
+.ss-integration-card{ background:#fff; border:1px solid #eef2f7; padding:12px; border-radius:8px; display:flex; justify-content:space-between; align-items:center }
+.dark-root .ss-integration-card{ background:#2c2c2c; border-color:#353535; color:#f1f5f9 }
+.ss-integration-card.connected{ box-shadow: 0 6px 18px rgba(0,163,163,0.06) }
+.ss-int-left{ display:flex; gap:12px; align-items:center }
+.ss-int-icon{ width:40px; height:40px; border-radius:8px; background:#f1f5f9; display:flex; align-items:center; justify-content:center; font-weight:700 }
+.dark-root .ss-int-icon{ background:#353535; color:#f1f5f9 }
+.ss-int-title{ font-weight:700 }
+
+/* Notifications */
+.ss-notifications{ background:#fff; border:1px solid #eef2f7; padding:12px; border-radius:8px }
+.dark-root .ss-notifications{ background:#2c2c2c; border-color:#353535; color:#f1f5f9 }
+.ss-not-row{ display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #f1f5f9 }
+.dark-root .ss-not-row{ border-color:#353535 }
+.ss-not-row:last-child{ border-bottom:none }
+.ss-not-controls{ display:flex; gap:12px; align-items:center }
+.inline-check{ display:inline-flex; gap:6px; align-items:center }
+.ss-not-actions{ margin-top:12px; display:flex; gap:8px }
+
+/* Scoped: restore visible checkbox controls inside Notifications (ss-notifications) */
+.ss-notifications input[type="checkbox"], .ss-notifications .inline-check input[type="checkbox"]{
+	-webkit-appearance: checkbox !important;
+	-moz-appearance: checkbox !important;
+	appearance: checkbox !important;
+	width:18px !important;
+	height:18px !important;
+	margin:0 8px 0 0 !important;
+	display:inline-block !important;
+	position:relative !important;
+	opacity:1 !important;
+	background:#fff !important;
+	border:2px solid #e6eef2 !important;
+	vertical-align:middle !important;
+}
+.ss-notifications input[type="checkbox"]:checked{ accent-color:#3B57A7 !important; background:linear-gradient(#7FA4F6 0%, #3B57A7 100%) !important; border-color:#3B57A7 !important }
+.dark-root .ss-notifications input[type="checkbox"]{ background:#7FA4F6 !important; border-color:#7FA4F6!important; accent-color: #7FA4F6!important; }
+.ss-notifications input[type="checkbox"]::before, .ss-notifications input[type="checkbox"]::after{ content:none !important }
+
+/* Visibility */
+.ss-visibility{ background:#fff; border:1px solid #eef2f7; padding:12px; border-radius:8px }
+.dark-root .ss-visibility{ background:#2c2c2c; border-color:#353535; color:#f1f5f9 }
+.ss-vis-row{ display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #f1f5f9 }
+.dark-root .ss-vis-row{ border-color:#353535 }
+.ss-vis-row:last-child{ border-bottom:none }
+
+/* toggle switch */
+.toggle-switch{ display:inline-block; position:relative; width:44px; height:26px }
+.toggle-switch input{ display:none }
+.toggle-switch .slider{ position:absolute; inset:0; background:#e6eef2; border-radius:999px }
+.toggle-switch .slider:after{ content:''; position:absolute; width:18px; height:18px; background:#fff; border-radius:999px; left:4px; top:4px; transition:all .18s }
+.toggle-switch input:checked + .slider{ background:#00a3a3 }
+.toggle-switch input:checked + .slider:after{ left:22px }
+
+/* Automation */
+.ss-automation{ background:#fff; border:1px solid #eef2f7; padding:12px; border-radius:8px }
+.dark-root .ss-automation{ background:#2c2c2c; border-color:#353535; color:#f1f5f9 }
+
+.dark-root .toggle-switch .slider{ background:#4b5563 }
+.dark-root .toggle-switch input:checked + .slider{ background:#06b6d4 }
+@media (max-width:1100px){ .ss-integrations-grid{ grid-template-columns: repeat(2,1fr) } }
+@media (max-width:700px){ .ss-grid{ grid-template-columns:1fr } .ss-integrations-grid{ grid-template-columns:1fr } }
+@media (max-width:480px){  .ss-not-row{ flex-direction:column; align-items:flex-start; gap: 20px; } .ss-vis-row{ flex-direction:column; align-items:flex-start; gap: 20px; }
+}

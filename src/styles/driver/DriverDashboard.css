@@ -1,0 +1,2400 @@
+/* Import carrier dashboard CSS for layout structure */
+@import '../carrier/CarrierDashboard.css';
+
+.dd-service-item i {
+  font-size: 2.2rem;
+  margin-bottom: 0.5rem;
+  transition: font-size 0.2s;
+}
+@media (max-width: 600px) {
+  .dd-service-item i {
+    font-size: 1.4rem;
+  }
+}
+@media (min-width: 1200px) {
+  .dd-service-item i {
+    font-size: 2.6rem;
+  }
+}
+
+.ghost-cd.dd-btn {
+  background: #e0d6d632!important;
+  color: #fff !important;
+  border: none!important;
+  box-shadow: none!important;
+}
+
+/* Post-hire active load card styles */
+.dd-active-load-card {
+  background: linear-gradient(#7FA4F6 0%, #3B57A7 100%)!important;
+  color: white;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.dark-root .dd-active-load-card {
+  background: linear-gradient(#7FA4F6 0%, #3B57A7 100%)!important;
+  color: white;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.dd-active-load-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.dd-active-load-header h3 {
+  color: white!important;
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.dd-load-status {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dd-load-info-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 32px;
+  margin-bottom: 24px;
+}
+
+.dd-load-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dd-info-label {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.dd-info-value {
+  color: white;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.dd-info-status {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.dd-load-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dd-navigate-btn,
+.dd-upload-btn,
+.dd-message-btn {
+  background: white!important;
+  color: #0ea4e7!important;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.dark-root .dd-navigate-btn, .dark-root .dd-upload-btn, .dark-root .dd-message-btn {
+  background: #353535 !important;
+  color: #0ea4e7 !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.dark-root .dd-navigate-btn i, .dark-root .dd-upload-btn i, .dark-root .dd-message-btn i{
+  color: #0ea4e7 !important;
+}
+
+/* .dd-navigate-btn:hover,
+.dd-upload-btn:hover,
+.dd-message-btn:hover {
+  background: #f8fafc;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+} */
+
+@media (max-width: 900px) {
+  .dd-load-info-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+}
+
+@media (max-width: 600px) {
+  .dd-load-info-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .dd-load-actions {
+    flex-direction: column;
+  }
+}
+
+.dd-loads-card .dd-loads-count {
+  background: #3b82f6;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dd-loads-list {
+  margin: 1rem 0;
+}
+
+.dd-load-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.dd-load-item:last-child {
+  border-bottom: none;
+}
+
+/* Dark mode readability for load list */
+.dark-root .dd-load-item {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.dark-root .dd-load-route,
+.dark-root .dd-hours-value {
+  color: #ffffff;
+}
+
+.dark-root .dd-hours-label {
+  color: #b9c0c4;
+}
+
+.dd-load-route {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.dd-load-pay {
+  color: #10b981;
+  font-weight: 700;
+}
+
+.dd-hours-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.dd-hours-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dd-hours-label {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.dd-hours-value {
+  color: #1f2937;
+  font-weight: 600;
+}
+
+/* High Contrast overrides for driver-specific elements */
+html.fp-high-contrast .dd-load-item{
+  border-bottom: 2px solid #ffffff !important;
+}
+html.fp-high-contrast .dd-load-route,
+html.fp-high-contrast .dd-hours-label,
+html.fp-high-contrast .dd-hours-value,
+html.fp-high-contrast .dd-info-label,
+html.fp-high-contrast .dd-info-status,
+html.fp-high-contrast .dd-loads-card .dd-loads-count{
+  color: #ffffff !important;
+}
+html.fp-high-contrast .dd-loads-card .dd-loads-count{
+  background: #000000 !important;
+  border: 2px solid #ffff00 !important;
+}
+html.fp-high-contrast .dd-load-pay{ color: #00ff00 !important; }
+
+/* Sidebar chips for post-hire status */
+.chip.green {
+  background-color: #10b981;
+  color: white;
+}
+
+.chip.blue {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.chip.gray {
+  background-color: #6c757d;
+  color: white;
+}
+
+.chip.orange {
+  background-color: #f59e0b;
+  color: white;
+}
+
+.sidebar-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-chips .chip {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  text-align: center;
+}
+.dd-service-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px 24px;
+}
+.dd-service-item {
+  width: 220px;
+  height: 140px;
+  background: #f7f9fa;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none;
+  transition: background 0.15s;
+}
+@media (max-width: 500px) {
+  .dd-service-item {
+    width: 100%;
+    min-width: 0;
+  }
+  .dd-service-grid {
+    grid-template-columns: 1fr;
+  }
+}
+/* Service Providers card grid: equal size and dark mode support */
+.dd-service-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px 24px;
+}
+.dd-service-item {
+  background: #f7f9fa;
+  border-radius: 16px;
+  padding: 32px 0 20px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  min-width: 180px;
+  box-shadow: none;
+  transition: background 0.15s;
+}
+.dd-service-item i {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+.dd-service-item div {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #64748b;
+}
+
+/* Dark mode for service cards */
+.dark-root .dd-service-item {
+  background: #353535;
+}
+.dark-root .dd-service-item i,
+.dark-root .dd-service-item div {
+  color: #e5eaf1;
+}
+.dd-onboarding-card .dd-progress-title {
+  font-weight: 600;
+  font-size: 1.25rem;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+}
+.dd-dark-root .dd-onboarding-card .dd-progress-title {
+  color: #fff !important;
+}
+/* Onboarding card dark mode text color fixes */
+.dark-root .dd-onboarding-card .dd-progress-title,
+.dark-root .dd-onboarding-card .dd-step-title {
+  color: #fff !important;
+}
+.dark-root .dd-onboarding-card .dd-step-status {
+  color: #cbd5e1 !important;
+}
+.dd-step-complete-icon-fa {
+  background: linear-gradient(#7FA4F6 0%, #3B57A7 100%);
+  border-radius: 50%;
+  font-size: 2.2rem;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 10px auto;
+  background-clip: text;
+  -webkit-background-clip: text; 
+  color: transparent; /* Make the text itself transparent */
+}
+.dd-step-inprogress-icon-fa {
+  background: linear-gradient(#7FA4F6 0%, #3B57A7 100%);
+  border-radius: 50%;
+  font-size: 2.2rem;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 10px auto;
+  background-clip: text;
+  -webkit-background-clip: text; 
+  color: transparent;
+}
+.dd-step-pending-icon-fa {
+  color: #cbd5e1;
+  border-radius: 50%;
+  font-size: 2.2rem;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 10px auto;
+}
+.dd-step-complete-icon {
+  color: #10b981;
+  background: #10b98122;
+  border-radius: 50%;
+  font-size: 2.2rem;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 10px auto;
+}
+.dd-step-inprogress-icon {
+  color: #f59e0b;
+  background: #f59e0b22;
+  border-radius: 50%;
+  font-size: 2.2rem;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 10px auto;
+}
+.dd-step-pending-icon {
+  color: #cbd5e1;
+  background: #e5eaf1;
+  border-radius: 50%;
+  font-size: 2.2rem;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 10px auto;
+}
+/* Post-hire topbar styles */
+.dd-posthire-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 16px;
+  font-size: 14px;
+}
+
+.dd-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dd-all-docs-active {
+  background-color: #10b981;
+}
+
+.dd-toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+}
+
+.dd-toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.dd-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #10b981;
+  transition: .4s;
+  border-radius: 24px;
+}
+
+.dd-toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  right: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:not(:checked) + .dd-toggle-slider {
+  background-color: #ccc;
+}
+
+input:not(:checked) + .dd-toggle-slider:before {
+  transform: translateX(-20px);
+}
+
+.dd-timer-icon {
+  color: #3b82f6;
+}
+
+@media (max-width: 768px) {
+  .dd-avatar-img {
+    display: none !important;
+  }
+  
+  .dd-posthire-status {
+    margin-right: 8px;
+    font-size: 12px;
+  }
+  
+  .dd-posthire-status .dd-status-text {
+    display: none;
+  }
+}
+.dd-service-legal {
+  color: #1e40af;
+}
+.dd-service-roadside {
+  color: #f59e0b;
+}
+.dd-service-parking {
+  color: #10b981;
+}
+.dd-service-fuel {
+  color: #ef4444;
+}
+/* Service Providers card grid background */
+.dd-service-item {
+  background: #f7f9fa;
+  border-radius: 16px;
+  padding: 32px 0 20px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none;
+  transition: box-shadow 0.15s;
+}
+.dd-service-item:not(:last-child) {
+  margin-bottom: 18px;
+}
+.dd-service-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px 24px;
+}
+.dd-ai-suggestions-card .card-header h3 {
+  color: #fff!important;
+  font-size: 18px;
+  font-weight: 650;
+}
+.dd-ai-suggestion .dd-suggestion-title {
+  color: #fff;
+  font-weight: 600;
+  font-size: 16px;
+}
+.dd-ai-suggestion .dd-suggestion-text {
+  color: #e0f2fe;
+  font-size: 14px;
+  font-weight: 400;
+}
+/* Blue gradient card for AI suggestions (matches carrier dashboard) */
+.dd-ai-suggestions-card {
+  background: linear-gradient(#7FA4F6 0%, #3B57A7 100%) !important;
+  color: #fff;
+  box-shadow: none;
+  border-radius: 10px;
+}
+.dd-ai-suggestions-card .card-header h3 {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 650;
+}
+.dd-ai-suggestion {
+  background: rgba(255,255,255,0.12);
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  color: #fff;
+}
+.dd-ai-suggestion:last-child {
+  margin-bottom: 0;
+}
+/* Green button style for Marketplace and other actions */
+.green-btn {
+  background-color: #10b981!important;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1.25rem;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.green-btn:hover,
+.green-btn:focus {
+  background-color: #059669;
+  color: #fff;
+}
+/* Driver Dashboard content styles with dd- prefix - uses carrier dashboard layout structure */
+
+.dd-dark-root .dd-muted,
+.dd-dark-root .dd-nav-item,
+.dd-dark-root .dd-nav-item .dd-label {
+  color: #d1d7db !important;
+}
+
+/* Dashboard Root Container */
+.dd-dashboard-root {
+  min-height: 100vh;
+  background: #f8fafc;
+}
+
+.dd-dashboard-root.dd-dark-root {
+  background: #1e1e1e;
+}
+
+/* Topbar */
+.dd-topbar {
+  background: var(--dd-topbar-bg);
+  border-bottom: 1px solid #e2e8f0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.user-name {font-weight: 600; color: #1e293b; font-size: 1.05rem;}
+
+/* Ensure user name stays readable in dark mode */
+.dark-root .user-name { color: #ffffff; }
+
+.dd-topbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+}
+
+.dd-topbar-row-1 {
+  height: 64px;
+}
+
+.dd-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.dd-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.dd-hamburger {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  color: #64748b;
+}
+
+.dark-root .dd-hamburger { color: #d1d7db; }
+
+.dd-hamburger:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.dd-brand-block .dd-logo {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.dd-ids {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.dd-id-pair {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.dd-id-label {
+  font-weight: 500;
+}
+
+.dd-id-value {
+  color: #334155;
+}
+
+.dd-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.dd-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+}
+
+.dd-btn.dd-small {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.dd-btn.dd-ghost {
+  background: transparent;
+  color: #64748b;
+}
+
+.dd-btn.dd-ghost:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.dd-btn.dd-warn {
+  background: #dc2626;
+  color: white;
+}
+
+.dd-btn.dd-warn:hover {
+  background: #b91c1c;
+}
+
+.dd-icons {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.dd-notif {
+  position: relative;
+}
+
+.dd-notif-icon {
+  font-size: 1.25rem;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.dd-notif-badge {
+  position: absolute;
+  top: -0.25rem;
+  right: -0.25rem;
+  background: #dc2626;
+  color: white;
+  border-radius: 50%;
+  width: 1rem;
+  height: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 2px solid #fff;
+}
+
+/* Header notifications tray */
+.dd-notif-dropdown{
+  position:absolute;
+  top:44px;
+  right:0;
+  width:360px;
+  max-width:calc(100vw - 24px);
+  background:#fff;
+  border:1px solid #e2e8f0;
+  border-radius:12px;
+  box-shadow:0 12px 30px rgba(15,23,42,0.12);
+  z-index:200;
+  overflow:hidden;
+}
+.dark-root .dd-notif-dropdown{
+  background:#0b1220;
+  border:1px solid rgba(148,163,184,0.18);
+  box-shadow:0 12px 30px rgba(0,0,0,0.45);
+}
+
+.dd-notif-dropdown-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px 12px;
+  border-bottom:1px solid #e2e8f0;
+}
+.dark-root .dd-notif-dropdown-header{border-bottom:1px solid rgba(148,163,184,0.18)}
+
+.dd-notif-dropdown-title{font-weight:900; color:#0f172a; font-size:13px;}
+.dark-root .dd-notif-dropdown-title{color:#e2e8f0}
+
+.dd-notif-dropdown-actions{display:flex; gap:8px;}
+
+.dd-notif-dropdown-body{padding:10px 12px;}
+
+.dd-notif-section-title{
+  font-size:12px;
+  font-weight:900;
+  color:#334155;
+  margin-bottom:6px;
+}
+.dark-root .dd-notif-section-title{color:#cbd5e1}
+
+.dd-notif-empty{font-size:12px; color:#64748b; padding:6px 0;}
+.dark-root .dd-notif-empty{color:#94a3b8}
+
+.dd-notif-item{
+  width:100%;
+  text-align:left;
+  border:1px solid #e2e8f0;
+  background:#fff;
+  border-radius:10px;
+  padding:10px;
+  margin-bottom:8px;
+  cursor:pointer;
+}
+.dd-notif-item:hover{background:#f8fafc}
+.dark-root .dd-notif-item{
+  border:1px solid rgba(148,163,184,0.18);
+  background:rgba(148,163,184,0.06);
+}
+.dark-root .dd-notif-item:hover{background:rgba(148,163,184,0.10)}
+
+.dd-notif-item--unread{
+  border-color:#93c5fd;
+  background:#eff6ff;
+}
+.dark-root .dd-notif-item--unread{
+  border-color:rgba(59,130,246,0.55);
+  background:rgba(59,130,246,0.10);
+}
+
+.dd-notif-item-title{font-weight:900; font-size:12px; color:#0f172a;}
+.dark-root .dd-notif-item-title{color:#e2e8f0}
+
+.dd-notif-item-body{font-size:12px; color:#475569; margin-top:4px; line-height:1.35;}
+.dark-root .dd-notif-item-body{color:#cbd5e1}
+
+.dd-notif-item-when{font-size:11px; color:#64748b; margin-top:6px;}
+.dark-root .dd-notif-item-when{color:#94a3b8}
+
+.dark-root .dd-notif-badge {
+  border: 2px solid #2c2c2c !important;
+}
+
+.dd-avatar-img {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Unread badge for sidebar nav items (e.g., Messaging) */
+.nav-unread-badge{
+  margin-left:auto;
+  background:#dc2626;
+  color:#fff;
+  border-radius:999px;
+  padding:2px 8px;
+  font-size:12px;
+  font-weight:800;
+  line-height:16px;
+  min-width:22px;
+  text-align:center;
+}
+.dark-root .nav-unread-badge{background:#ef4444}
+
+/* Content Row */
+.dd-content-row {
+  display: flex;
+  min-height: calc(100vh - 112px);
+}
+
+.dd-content-row.dd-sidebar-open .dd-sidebar {
+  transform: translateX(0);
+}
+
+/* Sidebar */
+.dd-sidebar {
+  width: 280px;
+  background: white;
+  border-right: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 112px;
+  left: 0;
+  height: calc(100vh - 112px);
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
+  z-index: 50;
+  overflow-y: auto;
+}
+
+.dd-sidebar.dd-open {
+  transform: translateX(0);
+}
+
+.dd-sidebar-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.dd-brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.dd-verified {
+  background: #10b981;
+  color: white;
+  padding: 0.125rem 0.5rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.dd-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.dd-chip {
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.dd-chip.dd-success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.dd-chip.dd-info {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.dd-chip.dd-yellow {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* Navigation */
+.dd-nav {
+  flex: 1;
+  padding: 1rem 0;
+}
+
+.dd-nav-group {
+  margin-bottom: 1.5rem;
+}
+
+.dd-nav-group-title {
+  padding: 0 1.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dd-nav-group ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.dd-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dd-nav-item:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.dd-nav-item.dd-active {
+  background: #eff6ff;
+  color: #2563eb;
+  border-right: 3px solid #2563eb;
+}
+
+.dd-nav-item .dd-icon {
+  font-size: 1rem;
+}
+
+.dd-nav-item .dd-label {
+  font-weight: 500;
+}
+
+/* Sidebar Footer Controls */
+.dd-sidebar-dark-control {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dd-dark-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #334155;
+}
+
+.dd-dark-toggle {
+  width: 44px;
+  height: 24px;
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dd-dark-toggle[aria-pressed="true"] {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.dd-dark-toggle-knob {
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  transition: transform 0.2s;
+}
+
+.dd-dark-toggle[aria-pressed="true"] .dd-dark-toggle-knob {
+  transform: translateX(20px);
+}
+
+.dd-sidebar-actions {
+  padding: 1rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dd-sidebar-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  color: #64748b;
+  padding: 0.25rem;
+}
+
+.dd-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 40;
+}
+
+/* Main Content */
+.dd-main {
+  flex: 1;
+  margin-left: 0;
+  transition: margin-left 0.3s ease;
+}
+
+.dd-main-content {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Dashboard Content */
+.dd-header {
+  margin-bottom: 2rem;
+}
+
+.dd-header h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dd-welcome {
+  color: #64748b;
+  font-size: 1rem;
+}
+
+.dark-root .dd-welcome {
+  color: #94a3b8;
+}
+
+/* Onboarding Card */
+.dd-onboarding-card {
+  background: white;
+  border-radius: 1rem;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+}
+
+.dark-root .dd-onboarding-card {
+  background: #2c2c2c;
+  border-color: #353535;
+  box-shadow: none;
+}
+
+.dd-onboarding-progress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.dd-progress-title {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.dd-progress-percent {
+  font-weight: 600;
+  color: black;
+}
+
+.dark-root .dd-progress-percent {
+  color: #fff;
+}
+
+.dd-progress-bar {
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+
+.dd-progress-bar-inner {
+  height: 100%;
+  background: linear-gradient(to right, #7FA4F6 0%, #3B57A7 100%);
+  width: 70%;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+
+.dd-onboarding-steps {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 1.5rem;
+}
+
+.dd-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.5rem;
+}
+
+.dd-step-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.dd-step-complete .dd-step-icon {
+  background: #10b981;
+  color: white;
+}
+
+.dd-step-inprogress .dd-step-icon {
+  background: #f59e0b;
+  color: white;
+}
+
+.dd-step-pending .dd-step-icon {
+  background: #e2e8f0;
+  color: #94a3b8;
+}
+
+.dd-step-title {
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.dd-step-status {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dd-step-pending .dd-step-status {
+  color: #94a3b8;
+}
+
+.dd-continue-btn {
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.75rem 2rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  align-self: flex-start;
+}
+
+.dd-continue-btn:hover {
+  background: #1d4ed8;
+}
+
+/* Main Grid */
+.dd-main-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+/* Cards */
+.dd-card {
+  background: white;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+}
+
+.dd-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.dd-card-title {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.dd-card-subtitle {
+  color: #2563eb;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.dd-card-subtitle:hover {
+  text-decoration: underline;
+}
+
+/* Marketplace Activity */
+.dd-marketplace-content {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.dd-marketplace-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.dd-marketplace-title {
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+}
+
+.dd-marketplace-description {
+  color: #64748b;
+  margin-bottom: 1.5rem;
+}
+
+.dd-view-marketplace-btn {
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1.5rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dd-view-marketplace-btn:hover {
+  background: #059669;
+}
+
+/* Service Providers */
+.dd-service-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.dd-service-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.dd-service-item:hover {
+  background: #f8fafc;
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.dd-service-item:active {
+  transform: translateY(-2px);
+}
+
+.dark-root .dd-service-item:hover {
+  background: #35353547;
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.05);
+}
+
+.dd-service-icon {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.dd-service-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+/* Quick Actions */
+.dd-quick-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.dd-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dd-action-upload {
+  background: #2563eb;
+  color: white;
+}
+
+.dd-action-upload:hover {
+  background: #1d4ed8;
+}
+
+.dd-action-browse {
+  background: #10b981;
+  color: white;
+}
+
+.dd-action-browse:hover {
+  background: #059669;
+}
+
+.dd-action-consent {
+  background: #f59e0b;
+  color: white;
+}
+
+.dd-action-consent:hover {
+  background: #d97706;
+}
+
+.dd-action-support {
+  background: white;
+  color: #2563eb;
+  border: 1px solid #2563eb;
+}
+
+.dd-action-support:hover {
+  background: #eff6ff;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .dd-main-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .dd-onboarding-steps {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .dd-step {
+    flex-direction: row;
+    text-align: left;
+  }
+  
+  .dd-service-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .dd-quick-actions {
+    flex-direction: column;
+  }
+  
+  .dd-action-btn {
+    justify-content: center;
+  }
+  .dd-ghost {
+    justify-content: center;
+  }
+}
+
+@media (min-width: 769px) {
+  .dd-sidebar {
+    position: static;
+    transform: translateX(0);
+    height: auto;
+  }
+  
+  .dd-main {
+    margin-left: 280px;
+  }
+  
+  .dd-hamburger {
+    display: none;
+  }
+  
+  .dd-sidebar-close {
+    display: none;
+  }
+}
+
+/* Marketplace Activity Card */
+.dd-marketplace-new {
+  font-weight: 500;
+  font-size: 0.95em;
+}
+.dd-marketplace-content.dd-center {
+  text-align: center;
+}
+.dd-marketplace-padding {
+  padding: 2rem 0;
+}
+.dd-marketplace-eye {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+.dd-marketplace-viewed {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+.dd-marketplace-desc {
+  color: #888;
+  font-size: 0.95em;
+  margin-bottom: 1.5rem;
+}
+
+/* Service Providers */
+.dd-service-viewall {
+  color: #2563eb;
+  font-weight: 500;
+  font-size: 0.95em;
+  cursor: pointer;
+}
+.dd-service-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.dd-service-item.dd-center {
+  text-align: center;
+}
+.dd-service-icon {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Quick Actions */
+.dd-quick-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+.dd-orange-btn {
+  background: #f59e0b !important;
+  color: white !important;
+}
+
+/* User Profile */
+.dd-user-profile {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: 2rem;
+}
+.dd-avatar-img {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+.dd-user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.dd-user-role {
+  font-size: 0.93rem;
+  color: #64748b;
+  margin-top: -0.9rem;
+}
+
+/* Topbar Right Actions */
+.dd-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+.dd-missing-doc-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+.dd-missing-doc-dot {
+  width: 10px;
+  height: 10px;
+  background: #f59e0b;
+  border-radius: 50%;
+  display: inline-block;
+}
+.dd-missing-doc-text {
+  color: #92400e;
+}
+
+/* Notification Bell */
+.dd-notif-bell {
+  position: relative;
+  margin-left: 0.5rem;
+  margin-right: 0.5rem;
+}
+.dd-notif-icon {
+  font-size: 1.25rem;
+  color: #334155;
+}
+.dd-notif-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #ef4444;
+  color: white;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  border: 2px solid #fff;
+}
+
+/* Responsive user info (was in <style> tag) */
+@media (max-width: 900px) {
+  .user-info-desktop { display: none !important; }
+  .missing-doc-text { display: none !important; }
+}
+@media (min-width: 901px) {
+  .user-info-desktop { display: flex !important; }
+}
+
+/* Messages & Alerts - Separate Cards */
+.dd-messages-alerts-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background-color: #ffffff;
+    padding: 16px;
+    border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.dark-root .dd-messages-alerts-section {
+  background-color: #2c2c2c;
+  border-color: #353535;
+}
+
+.dd-message-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 16px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.dd-route-update-card {
+  background: #f0f9ff;
+  border: 1px solid #e0f2fe;
+}
+
+.dd-medical-warning-card {
+  background: #fffbeb;
+  border: 1px solid #fed7aa;
+}
+
+.dd-carrier-message-card {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.dd-message-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dd-icon-blue {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.dd-icon-orange {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.dd-icon-green {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.dd-message-icon i {
+  font-size: 12px;
+}
+
+.dd-message-content {
+  flex: 1;
+}
+
+.dd-ai-suggestions-separate-card .dd-section-title {
+  color: #fff!important;
+  margin-bottom: 10px;
+}
+
+.dd-message-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #1f2937;
+  font-size: 14px;
+}
+
+.dark-root .dd-message-title { color: #ffffff; }
+
+.dd-message-text {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.dark-root .dd-message-text { color: #b9c0c4; }
+
+/* Messages & Alerts cards: ensure dark mode uses dark surfaces */
+.dark-root .dd-message-card {
+  background: #2c2c2c;
+  border-color: #353535;
+}
+
+.dark-root .dd-route-update-card,
+.dark-root .dd-medical-warning-card,
+.dark-root .dd-carrier-message-card {
+  background: #2c2c2c;
+  border-color: #353535;
+}
+
+/* AI Suggestions - Separate Card */
+.dark-root .dd-ai-suggestions-separate-card, .dd-ai-suggestions-separate-card {
+  padding: 20px;
+  background: linear-gradient(#7FA4F6 0%, #3B57A7 100%)!important;
+  border-radius: 12px;
+}
+
+
+
+.dd-suggestion-item {
+  margin-bottom: 24px;
+  padding: 12px;
+  background-color: #ffffff20;
+  border-radius: 12px;
+}
+
+.dd-suggestion-title {
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 6px;
+  color: #fff;
+}
+
+.dd-suggestion-text {
+  font-size: 14px;
+  color: #f3f3f3!important;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.dd-suggestion-link {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  padding: 0;
+}
+
+.dd-suggestion-link:hover {
+  text-decoration: underline;
+}
+
+/* Post-hire two column layout */
+.dd-span-full {
+  width: 100%;
+  margin: 0 24px 24px 24px;
+}
+
+.dd-two-column-layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+  padding-top: 20px
+}
+
+.dd-left-column {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.dd-right-column {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Section styling */
+.dd-load-summary-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dd-section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+  padding: 0;
+}
+
+.dark-root .dd-section-title {
+  color: #ffffff;
+}
+
+/* Load Summary - Horizontal Layout */
+.dd-load-summary-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.dd-load-summary-card.dd-no-header {
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.dark-root .dd-load-summary-card.dd-no-header {
+  border-color: #353535;
+}
+
+.dd-summary-stats-horizontal {
+  display: flex;
+  height: 100%;
+}
+
+.dd-stat-item-horizontal {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 24px 16px;
+  border-right: 1px solid #e5e7eb;
+}
+
+.dark-root .dd-stat-item-horizontal {
+  border-color: #353535;
+}
+
+.dd-stat-item-horizontal:last-child {
+  border-right: none;
+}
+
+.dd-stat-number-large {
+  font-size: 36px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  line-height: 1;
+}
+
+.dd-stat-blue {
+  color: #3b82f6;
+}
+
+.dd-stat-orange {
+  color: #f97316;
+}
+
+.dd-stat-green {
+  color: #10b981;
+}
+
+.dd-stat-label-horizontal {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.dark-root .dd-stat-label-horizontal { color: #b9c0c4; }
+
+/* Route Cards */
+.dd-route-card {
+  border: 1px solid #e5e7eb;
+  background: white;
+  border-radius: 8px;
+  padding: 0;
+}
+
+.dark-root .dd-route-card {
+  background: #2c2c2c;
+  border-color: #353535;
+}
+
+.dd-route-header {
+  padding: 16px 20px 0 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.dd-route-header h4 {
+  margin: 0;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.dark-root .dd-route-header h4 {
+  color: #ffffff;
+}
+
+.dd-route-info h4 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.dark-root .dd-route-info h4 { color: #ffffff; }
+
+.dd-route-status {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+  letter-spacing: 0.025em;
+}
+
+.dd-assigned {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.dd-pending {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.dd-route-info {
+  padding: 0 20px 16px 20px;
+}
+
+.dd-route-details {
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.6;
+  margin: 16px 0 20px 0;
+  display: flex;
+  gap: 40px;
+}
+
+.dark-root .dd-route-details { color: #b9c0c4; }
+
+.dd-route-details div {
+  margin-bottom: 0;
+}
+
+.dd-route-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.dd-start-trip-btn {
+  background: #4f46e5;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.dd-view-details-btn {
+  background: #f9fafb;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.dark-root .dd-view-details-btn {
+  background: #3c3c3c;
+  color: #d1d7db;
+  border-color: #353535;
+}
+
+/* Compliance Status Card */
+.dd-compliance-items {
+  padding: 16px 0;
+}
+
+.dd-compliance-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.dark-root .dd-compliance-item { border-bottom-color: rgba(255, 255, 255, 0.12); }
+
+.dd-compliance-item:last-child {
+  border-bottom: none;
+}
+
+.dd-compliance-item i:first-child {
+  color: #6b7280;
+  width: 20px;
+}
+
+.dark-root .dd-compliance-item i:first-child { color: #b9c0c4; }
+
+.dd-compliance-item span {
+  flex: 1;
+  font-weight: 500;
+}
+
+.dd-status-good i:last-child {
+  color: #10b981;
+}
+
+.dd-status-good i.fa-exclamation-triangle {
+  color: #f59e0b;
+}
+
+.dd-view-docs-btn {
+  background: #0ea4e7;
+  color: white;
+  width: 100%;
+  margin-top: 16px;
+}
+
+/* Messages & Alerts Card */
+.dd-messages-list {
+  padding: 16px 0;
+}
+
+.dd-message-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.dd-message-item:last-child {
+  border-bottom: none;
+  margin-bottom: 20px;
+}
+
+.dd-message-item i {
+  width: 20px;
+  margin-top: 2px;
+}
+
+.dd-route-update i {
+  color: #0ea4e7;
+}
+
+.dd-medical-warning i {
+  color: #f59e0b;
+}
+
+.dd-carrier-message i {
+  color: #10b981;
+}
+
+.dd-message-content {
+  flex: 1;
+}
+
+.dd-message-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.dd-message-text {
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.dd-ai-suggestions {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 16px;
+}
+
+.dd-ai-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.dd-ai-header i {
+  color: #8b5cf6;
+}
+
+.dd-suggestion-item {
+  margin-bottom: 12px;
+}
+
+.dd-suggestion-title {
+  font-weight: 500;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.dd-suggestion-text {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+/* Responsive design */
+@media (max-width: 1200px) {
+  .dd-two-column-layout {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  
+  .dd-span-full {
+    margin: 0 16px 24px 16px;
+  }
+  
+  .dd-two-column-layout {
+    padding: 0 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .dd-summary-stats-horizontal {
+    flex-direction: column;
+  }
+  
+  .dd-stat-item-horizontal {
+    border-right: none;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 20px 16px;
+  }
+  
+  .dd-stat-item-horizontal:last-child {
+    border-bottom: none;
+  }
+  
+  .dd-route-actions {
+    flex-direction: column;
+  }
+}
+
+/* Live Route Tracking Styles */
+.dd-live-route-card {
+  margin-top: 24px;
+}
+
+.dd-live-route-content {
+  padding: 0;
+}
+
+.dd-map-placeholder {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 60px 40px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.dark-root .dd-map-placeholder {
+  background-color: #2c2c2c;
+  border-color: #374151;
+}
+
+.dd-map-icon {
+  font-size: 48px;
+  color: #94a3b8;
+  margin-bottom: 16px;
+}
+
+.dd-map-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.dd-map-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.dark-root .dd-map-title { color: #ffffff; }
+
+.dd-map-location {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.dark-root .dd-map-location { color: #b9c0c4; }
+
+/* Driver Alerts & Notifications view fixes */
+.dd-driver-dashboard .fp-header .fp-header-controls {
+  width: auto !important;
+  justify-content: flex-end;
+}
+
+.dd-driver-dashboard .fp-header .fp-header-controls .btn {
+  flex: 0 0 auto !important;
+  min-width: 140px;
+}
+
+@media (max-width: 520px) {
+  .dd-driver-dashboard .fp-header .fp-header-controls .btn {
+    min-width: 0;
+  }
+}
+
+.dd-driver-dashboard .dd-alerts-grid {
+  grid-template-columns: 1fr;
+}
+
+.dd-driver-dashboard .dd-notifications-card {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  min-height: 560px;
+}
+
+.dd-driver-dashboard .dd-notifications-card .card-header {
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.dd-driver-dashboard.dark-root .dd-notifications-card .card-header {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.dd-driver-dashboard .dd-notifications-card .card-header h3 {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.dd-driver-dashboard .dd-notifications-body {
+  flex: 1;
+  overflow-y: auto;
+  max-height: none;
+}
+
+/* Dark mode for Live Route Tracking */
+.dd-dashboard.dark .dd-map-placeholder {
+  background-color: #1f2937;
+  border-color: #374151;
+}
+
+.dd-dashboard.dark .dd-map-icon {
+  color: #6b7280;
+}
+
+.dd-dashboard.dark .dd-map-title {
+  color: #d1d5db;
+}
+
+.dd-dashboard.dark .dd-map-location {
+  color: #9ca3af;
+}
+
+/* Mobile responsiveness for Live Route Tracking */
+@media (max-width: 768px) {
+  .dd-map-placeholder {
+    padding: 40px 20px;
+    min-height: 160px;
+  }
+  
+  .dd-map-icon {
+    font-size: 36px;
+  }
+  
+  .dd-map-title {
+    font-size: 14px;
+  }
+  
+  .dd-map-location {
+    font-size: 13px;
+  }
+}
+
+/* Mobile-first responsiveness fixes for driver dashboard to prevent cut-off */
+@media (max-width: 900px) {
+  /* Make the content flow vertically and allow full-width cards */
+  .dd-content-row {
+    flex-direction: column;
+    min-height: auto;
+  }
+
+  /* Sidebar becomes off-canvas and hidden by default; if opened it will overlay */
+  .dd-sidebar {
+    position: fixed;
+    left: 0;
+    top: 72px;
+    height: calc(100vh - 72px);
+    transform: translateX(-110%);
+    width: 260px;
+    z-index: 60;
+  }
+
+  .dd-sidebar.dd-open {
+    transform: translateX(0);
+    box-shadow: 0 8px 32px rgba(16,24,40,0.12);
+  }
+
+  /* Main area should not be behind the sidebar */
+  .dd-main-area {
+    width: 100%;
+    padding: 16px;
+    box-sizing: border-box;
+  }
+
+  /* Grid of cards becomes single column */
+  .fp-grid, .dd-grid, .dd-service-grid, .dd-service-providers-grid, .dd-load-info-grid {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  /* Ensure cards are full width and don't overflow */
+  .card, .dd-onboarding-card, .dd-marketplace-card, .dd-ai-suggestions-card, .dd-service-item {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+  }
+
+  /* Make map placeholder responsive */
+  .dd-map-placeholder, .dd-live-route-content {
+    width: 100% !important;
+    min-height: 180px;
+  }
+
+  /* Quick actions stack vertically */
+  .dd-quick-actions .btn, .dd-quick-actions .dd-btn { width: 100%; display: block; }
+
+  /* Right column content becomes stacked under left column */
+  .dd-left-column, .dd-right-column { width: 100%; }
+
+  /* Ensure topbar elements wrap rather than overflow */
+  .dd-topbar-row { padding: 0 12px; }
+  .dd-topbar-right { gap: 8px; }
+
+  /* Small adjustments for icons and text sizes */
+  .dd-section-title h3, .card-header h3 { font-size: 1.05rem; }
+}
+
+/* Extra-tight small screens */
+@media (max-width: 420px) {
+  .dd-map-placeholder, .dd-live-route-content { min-height: 140px; }
+  .dd-load-info-grid { grid-template-columns: 1fr !important; }
+  .dd-load-actions { gap: 8px; }
+}
+
+/* Post-Hire specific responsive tweaks */
+@media (max-width: 900px) {
+  /* Make active load card content stack vertically */
+  .dd-active-load-card {
+    padding: 16px;
+  }
+
+  .dd-active-load-header { flex-direction: column; align-items: flex-start; gap: 8px }
+
+  .dd-load-info-grid { grid-template-columns: 1fr !important; gap: 12px }
+
+  .dd-load-info-item { align-items: flex-start }
+
+  .dd-load-actions { display: flex; flex-direction: column; gap: 10px }
+
+  .dd-load-actions .btn, .dd-load-actions .dd-navigate-btn, .dd-load-actions .dd-upload-btn, .dd-load-actions .dd-message-btn { width: 100%; }
+
+  .dd-two-column-layout { grid-template-columns: 1fr !important; padding: 0; gap: 16px }
+
+  .dd-route-details { display: flex; flex-direction: column; gap: 8px }
+
+  .dd-route-actions { display: flex; flex-direction: column; gap: 8px }
+
+  .dd-map-placeholder { padding: 24px 12px; }
+}
+
+@media (max-width: 420px) {
+  .dd-active-load-card { padding: 12px }
+  .dd-load-info-grid { gap: 10px }
+  .dd-load-actions { gap: 8px }
+}

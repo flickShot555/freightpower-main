@@ -1,0 +1,116 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+.verification-page {
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: url('/src/assets/verification_bg.svg') center center / cover no-repeat;
+}
+
+.verification-container {
+  width: 100%;
+  max-width: 760px;
+  padding: 3rem 1rem;
+}
+
+.verification-card {
+  background: rgba(255,255,255,0.98);
+  border-radius: 8px;
+  padding: 2.5rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+  text-align: center;
+}
+
+.verification-close {
+  position: absolute;
+  right: 1.5rem;
+  top: 1.5rem;
+  background: transparent;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+
+.verification-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.06);
+  font-size: 1.5rem;
+}
+
+.verification-card h2 {
+  margin: 0.5rem 0;
+  font-size: 1.35rem;
+}
+
+.verification-sub {
+  color: #6b7280;
+  margin-bottom: 1rem;
+}
+
+.verification-otp {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.verification-otp input {
+  width: 46px;
+  height: 46px;
+  text-align: center;
+  font-size: 1.25rem;
+  border-radius: 8px;
+  border: 1px solid #E5E7EB;
+}
+
+.verification-btn {
+  background: linear-gradient(to bottom, #2563eb, #1d4ed8);
+  color: white;
+  border: none;
+  padding: 0.85rem 1.25rem;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 0.5rem;
+}
+
+.verification-btn:hover {
+  background: linear-gradient(to bottom, #1d4ed8, #1e40af);
+}
+
+.verification-resend {
+  margin-top: 1rem;
+  color: #9CA3AF;
+}
+
+@media (max-width: 640px) {
+  .verification-container { padding: 2rem; }
+  .verification-otp input { width: 40px; height: 40px; }
+}
+
+/* Footer matching the provided attachment */
+.verification-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 auto;
+  color: #9CA3AF;
+  font-size: 0.9rem;
+  padding: 0 2rem;
+}
+
+.verification-footer-left { text-align: left; }
+.verification-footer-right { text-align: right; }

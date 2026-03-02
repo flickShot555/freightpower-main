@@ -1,0 +1,179 @@
+key	fallback
+accountSettings.accessibility.assistiveFeatures	Assistive Features
+accountSettings.accessibility.cardTitle	Accessibility
+accountSettings.accessibility.fontLarge	Large
+accountSettings.accessibility.fontMedium	Medium
+accountSettings.accessibility.fontSize	Font Size
+accountSettings.accessibility.fontSmall	Small
+accountSettings.accessibility.highContrast	High Contrast Mode
+accountSettings.accessibility.screenReader	Screen Reader Compatible
+accountSettings.accessibility.voiceCommands	Voice Commands
+accountSettings.calendar.connectFailed	Failed to connect calendar
+accountSettings.calendar.connectGoogle	Connect Google
+accountSettings.calendar.connectOutlook	Connect Outlook
+accountSettings.calendar.connectSection	Connect Calendar
+accountSettings.calendar.connected	Connected
+accountSettings.calendar.deliveryLoadPrefix	Delivery: Load 
+accountSettings.calendar.descDocumentPrefix	Document: 
+accountSettings.calendar.descLoadPrefix	Load: 
+accountSettings.calendar.descStatusPrefix	Status: 
+accountSettings.calendar.disconnect	Disconnect
+accountSettings.calendar.disconnectFailed	Failed to disconnect calendar
+accountSettings.calendar.documentKindDefault	Document
+accountSettings.calendar.expiresSuffix	 expires
+accountSettings.calendar.noUpcomingToSync	No upcoming events to sync.
+accountSettings.calendar.notConnected	Not connected
+accountSettings.calendar.pickupLoadPrefix	Pickup: Load 
+accountSettings.calendar.providerGoogle	Google Calendar
+accountSettings.calendar.providerOutlook	Outlook
+accountSettings.calendar.reminders	Reminders
+accountSettings.calendar.startFailed	Failed to start calendar connection
+accountSettings.calendar.statusPrefix	Status: 
+accountSettings.calendar.syncFailed	Calendar sync failed
+accountSettings.calendar.syncUpcomingEvents	Sync Upcoming Events
+accountSettings.calendar.syncedPrefix	Synced 
+accountSettings.calendar.syncedSuffix	 events to your calendar.
+accountSettings.common.close	Close
+accountSettings.common.comingSoon	Coming Soon
+accountSettings.common.csv	CSV
+accountSettings.common.disable	Disable
+accountSettings.common.disabled	Disabled
+accountSettings.common.driverFallback	Driver
+accountSettings.common.enable	Enable
+accountSettings.common.enabled	Enabled
+accountSettings.common.json	JSON
+accountSettings.common.na	N/A
+accountSettings.common.status	Status
+accountSettings.common.unknown	Unknown
+accountSettings.common.working	Working...
+accountSettings.download.activityLogFileBase	activity_log
+accountSettings.download.complianceReportFileBase	compliance_report
+accountSettings.download.loadReportFileBase	load_report
+accountSettings.header.subtitle	Manage your profile, preferences, security, and integrations
+accountSettings.header.title	Account & Settings
+accountSettings.integrations.cardTitle	Integrations
+accountSettings.integrations.eldDesc	Garmin eLog 2.0 - Device ID: #GL2024567
+accountSettings.integrations.eldDevice	ELD Device
+accountSettings.integrations.fuelDesc	TVC Pro Driver - Fleet Card Integration
+accountSettings.integrations.fuelServices	Fuel Services
+accountSettings.integrations.managePermissions	Manage Permissions
+accountSettings.integrations.trainingDesc	Connect training services for compliance tracking
+accountSettings.integrations.trainingProvider	Training Provider
+accountSettings.marketplacePreview.aiSafetyScore	AI SAFETY SCORE
+accountSettings.marketplacePreview.available	Available
+accountSettings.marketplacePreview.cdlInfo	CDL INFO
+accountSettings.marketplacePreview.classPrefix	Class 
+accountSettings.marketplacePreview.endorsementDoubleTriple	Double/Triple
+accountSettings.marketplacePreview.endorsementHazmat	Hazmat
+accountSettings.marketplacePreview.endorsementNone	None
+accountSettings.marketplacePreview.endorsementPassenger	Passenger
+accountSettings.marketplacePreview.endorsementTanker	Tanker
+accountSettings.marketplacePreview.endorsementsLabel	Endorsements:
+accountSettings.marketplacePreview.equipmentCdlValid	CDL Valid
+accountSettings.marketplacePreview.equipmentMedCardActive	Med Card Active
+accountSettings.marketplacePreview.equipmentMvrClean	MVR Clean
+accountSettings.marketplacePreview.equipmentPendingVerification	Pending Verification
+accountSettings.marketplacePreview.expPrefix	Exp: 
+accountSettings.marketplacePreview.failedToLoad	Failed to load marketplace profile preview.
+accountSettings.marketplacePreview.favorite	Favorite
+accountSettings.marketplacePreview.hireDriver	Hire Driver
+accountSettings.marketplacePreview.loading	Loading preview...
+accountSettings.marketplacePreview.location	LOCATION
+accountSettings.marketplacePreview.message	Message
+accountSettings.marketplacePreview.notAvailable	Not Available
+accountSettings.marketplacePreview.openButton	Preview Marketplace Profile
+accountSettings.marketplacePreview.recentlyActive	Recently active
+accountSettings.marketplacePreview.status	STATUS
+accountSettings.marketplacePreview.title	Marketplace Profile Preview
+accountSettings.marketplacePreview.trips	trips
+accountSettings.marketplacePreview.unknownDriver	Unknown Driver
+accountSettings.marketplacePreview.viewDetails	View Details
+accountSettings.preferences.aiTips	AI Tips
+accountSettings.preferences.cardTitle	Preferences
+accountSettings.preferences.complianceAlerts	Compliance Alerts
+accountSettings.preferences.messages	Messages
+accountSettings.preferences.notificationsSection	Notifications
+accountSettings.preferences.saveFailed	Failed to save preferences
+accountSettings.preferences.saved	Preferences saved
+accountSettings.preferences.unableToOpenNotifications	Unable to open notifications from this screen.
+accountSettings.profile.addressLabel	Address
+accountSettings.profile.addressPlaceholder	123 Main St, Dallas, TX 75201
+accountSettings.profile.cardTitle	Profile
+accountSettings.profile.changePhoto	Change Photo
+accountSettings.profile.emailLabel	Email
+accountSettings.profile.emergencyContactLabel	Emergency Contact
+accountSettings.profile.emergencyContactNamePlaceholder	Contact Name
+accountSettings.profile.emergencyContactPhonePlaceholder	Phone Number
+accountSettings.profile.emergencyContactRelationshipPlaceholder	Relationship
+accountSettings.profile.failedToLoad	Failed to load profile data
+accountSettings.profile.fileTooLarge	File size must be less than 5MB
+accountSettings.profile.fullNameLabel	Full Name
+accountSettings.profile.fullNamePlaceholder	Full Name
+accountSettings.profile.invalidFileType	Invalid file type. Please upload JPG, PNG, GIF, or WebP
+accountSettings.profile.loading	Loading profile...
+accountSettings.profile.phoneLabel	Phone
+accountSettings.profile.phonePlaceholder	+1 (555) 123-4567
+accountSettings.profile.photoAlt	Profile
+accountSettings.profile.photoUploadFailed	Failed to upload profile picture
+accountSettings.profile.photoUploadSuccess	Profile picture uploaded successfully!
+accountSettings.profile.saveChanges	Save Changes
+accountSettings.profile.saveFailedTryAgain	Failed to update profile. Please try again.
+accountSettings.profile.saved	Profile updated and saved!
+accountSettings.profile.saving	Saving...
+accountSettings.profile.uploading	Uploading...
+accountSettings.reports.activityExportFailed	Failed to export activity log
+accountSettings.reports.activityLog	Activity Log
+accountSettings.reports.cardTitle	Reports
+accountSettings.reports.complianceExportFailed	Failed to export compliance report
+accountSettings.reports.complianceReport	Compliance Report
+accountSettings.reports.downloadAllFailed	Failed to download all reports
+accountSettings.reports.exportOptions	Export Options
+accountSettings.reports.loadExportFailed	Failed to export load report
+accountSettings.reports.loadReport	Load Report
+accountSettings.reports.requestFullDownload	Request Full Data Download
+accountSettings.security.activityLogLoadFailed	Failed to load activity log
+accountSettings.security.biometricDescriptionLine1	This uses WebAuthn passkeys. Your device decides Face/Touch/Hello automatically.
+accountSettings.security.biometricDescriptionLine2	No biometric data is stored.
+accountSettings.security.biometricEnableFailed	Failed to enable biometric login
+accountSettings.security.biometricEnabled	Biometric login enabled for this account
+accountSettings.security.biometricLogin	Biometric Login
+accountSettings.security.biometricPasskeys	Biometric Login (Passkeys)
+accountSettings.security.cardTitle	Security
+accountSettings.security.changePassword	Change Password
+accountSettings.security.currentPassword	Current Password
+accountSettings.security.currentPasswordPlaceholder	Enter current password
+accountSettings.security.enableOnThisDevice	Enable on this device
+accountSettings.security.enabling	Enabling...
+accountSettings.security.invalidBiometricOptions	Invalid biometric registration options
+accountSettings.security.mfaDescription	Two-factor authentication for drivers uses SMS OTP during login.
+accountSettings.security.mfaDisabled	Two-factor authentication disabled
+accountSettings.security.mfaEnabled	Two-factor authentication enabled
+accountSettings.security.mfaUpdateFailed	Failed to update MFA
+accountSettings.security.newPassword	New Password
+accountSettings.security.newPasswordPlaceholder	At least 8 characters
+accountSettings.security.noRecentActivity	No recent activity found.
+accountSettings.security.notEnabled	Not enabled
+accountSettings.security.passwordChangeFailed	Failed to change password
+accountSettings.security.passwordUpdated	Password updated successfully
+accountSettings.security.profileUpdateSourceFallback	profile.update
+accountSettings.security.recentChanges	Recent profile/security changes (from backend audit trail).
+accountSettings.security.sessionDevice	Session & Device Management
+accountSettings.security.twoFactor	Two-Factor Authentication
+accountSettings.security.updatePassword	Update Password
+accountSettings.security.updating	Updating...
+accountSettings.support.cardTitle	Support & Help
+accountSettings.support.contactSupport	Contact Support
+accountSettings.support.email	Email
+accountSettings.support.helpCenter	Help Center & FAQ
+accountSettings.support.message	Message
+accountSettings.support.messagePlaceholder	Describe the issue...
+accountSettings.support.name	Name
+accountSettings.support.subject	Subject
+accountSettings.support.subjectPlaceholder	What do you need help with?
+accountSettings.support.submit	Submit Request
+accountSettings.support.submitFailed	Failed to submit support request
+accountSettings.support.submitted	Support request submitted
+accountSettings.support.submitting	Submitting...
+settings.calendarSync	Calendar Sync
+settings.language	Language
+settings.notificationHistory	View Notification History

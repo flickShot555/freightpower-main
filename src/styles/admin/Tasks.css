@@ -1,0 +1,58 @@
+
+.tasks-main { display:flex; gap:16px }
+.tasks-actions { display:flex; gap: 8px; }
+.tasks-table-wrap { flex:1; background:#fff; border-radius:8px; box-shadow:0 6px 18px rgba(2,6,23,0.04); border:1px solid #eef2f7; overflow-x:auto}
+.dark-root .tasks-table-wrap { background:#2c2c2c; border-color:#353535; color:#f1f5f9 }
+.tasks-table { min-width:850px;}
+.tasks-filters { display:flex; gap:8px; margin-bottom:12px }
+.tasks-table { width:100%; border-collapse:collapse;}
+.tasks-table thead th{ padding:12px; text-align:left; color:#64748b; font-size: 13px; background-color: #fff;}
+.dark-root .tasks-table thead th{ background-color: #2c2c2c; color:#94a3b8; border-color: #353535; }
+.tasks-table tbody td{ padding:12px; border-bottom:1px solid rgba(255,255,255,0.03); font-size: 14px; }
+.dark-root .tasks-table tbody td{ border-color: #353535; background-color: #2c2c2c;}
+
+.tasks-right { width:270px }
+.task-detail { background:#fff; padding:12px; border-radius:8px; box-shadow:0 6px 18px rgba(2,6,23,0.04);}
+.dark-root .task-detail { background:#2c2c2c; color:#f1f5f9 }
+.task-detail .header-title { margin-bottom:8px }
+.detail-row{ display:flex; justify-content:space-between; align-items:center; padding:6px 0 }
+.detail-label{ color:#64748b; font-weight:600 }
+.detail-value{ font-weight:700 }
+.status-row{ gap:10px }
+.progress-row{ padding-top:8px }
+.progress { height:8px; background:rgba(255,255,255,0.05); border-radius:6px; overflow:hidden; margin-top:8px }
+.progress-fill { height:100%; background:#10b981 }
+
+.chat-tag{ font-size:11px; padding:3px 6px; border-radius:6px; background:rgba(255,255,255,0.04); margin-left:8px }
+
+@media (max-width: 1000px) {
+	.tasks-main { flex-direction:column }
+	.tasks-right { width:100%; order:2 }
+	.tasks-table-wrap { order:1 }
+	.task-stats { display:grid; grid-template-columns: repeat(2,1fr); gap:12px }
+}
+
+@media (max-width: 640px) {
+	.tasks-actions { display:flex; flex-direction:column; gap:8px }
+	.tasks-search { width:100% }
+	.task-stats { grid-template-columns: 1fr }
+	.tasks-table { min-width:700px }
+	.tasks-right { display:block; margin-top:12px }
+}
+
+/* Team Performance Card */
+.team-performance { background:#fff; padding:12px; border-radius:8px; box-shadow:0 6px 18px rgba(2,6,23,0.04); margin-bottom:12px }
+.dark-root .team-performance { background:#2c2c2c; color:#f1f5f9 }
+.team-performance h4{ margin:0 0 8px 0 }
+.tp-row{ display:flex; justify-content:space-between; align-items:center; margin:6px 0 }
+.tp-label{ color:#64748b; font-size: 14px; }
+.tp-value{ font-weight:600; font-size: 14px; }
+.detail-row{font-size: 14px;}
+.tp-progress{ height:8px; background:rgba(0,0,0,0.05); border-radius:6px; overflow:hidden; margin-bottom:8px }
+.tp-progress.small{ height:6px; margin-bottom:6px; }
+.tp-fill{ height:100%; background:linear-gradient(to right, #7FA4F6 0%, #3B57A7 100%);border-radius:6px;}
+.tp-fill.amber{ background:linear-gradient(to right, #7FA4F6 0%, #3B57A7 100%); border-radius:6px;}
+.tp-arrow{ margin-left:6px; font-size:12px }
+.tp-row.small .tp-label{ font-size:13px }
+.detail-row.child {display: flex; flex-direction: row; justify-content: space-between; align-items: center; margin-top: 6px;}
+
