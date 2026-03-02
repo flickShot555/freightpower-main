@@ -53,6 +53,8 @@ async def _to_thread(fn, timeout_s: float = 25.0):
 # These are best-effort and process-local (fine for single-instance dev).
 _TOKEN_CACHE: dict[str, tuple[float, dict]] = {}
 _USER_CACHE: dict[str, tuple[float, dict]] = {}
+_TOKEN_CACHE_TTL_S = 10 * 60.0
+_USER_CACHE_TTL_S = 15 * 60.0
 
 
 def _cache_get(cache: dict, key: str):
@@ -68,6 +70,18 @@ def _cache_get(cache: dict, key: str):
 
 def _cache_set(cache: dict, key: str, value: dict, ttl_s: float):
     cache[key] = (time.time() + float(ttl_s), value)
+
+
+def _cache_get_stale(cache: dict, key: str):
+    """Return cached value even if expired (best-effort resilience path)."""
+    item = cache.get(key)
+    if not item:
+        return None
+    try:
+        _, value = item
+        return value
+    except Exception:
+        return None
 
 
 def _normalize_identifier(value: Any) -> str | None:
@@ -989,12 +1003,31 @@ async def get_current_user(
     token = authorization.split(" ")[1]
     
     try:
-        # Verify Firebase token (cached)
+        # Verify Firebase token (cached).
+        # In some local environments (VPN/proxy/slow DNS), the first cert fetch can be slow,
+        # so we use a slightly longer timeout than typical Firestore reads.
         decoded_token = _cache_get(_TOKEN_CACHE, token)
         if not decoded_token:
-            decoded_token = await _to_thread(lambda: firebase_auth.verify_id_token(token), timeout_s=25.0)
+            try:
+                decoded_token = await _to_thread(
+                    lambda: firebase_auth.verify_id_token(token),
+                    timeout_s=60.0,
+                )
+            except asyncio.TimeoutError:
+                stale_decoded = _cache_get_stale(_TOKEN_CACHE, token)
+                if stale_decoded:
+                    print("[Auth] Using stale token cache due to Firebase verify timeout")
+                    decoded_token = stale_decoded
+                else:
+                    raise HTTPException(
+                        status_code=503,
+                        detail=(
+                            "Auth verification timeout while validating Firebase ID token. "
+                            "Check internet/VPN/proxy and Google/Firebase reachability."
+                        ),
+                    )
             # Cache briefly; tokens are stable but we keep TTL short for safety.
-            _cache_set(_TOKEN_CACHE, token, decoded_token, ttl_s=60.0)
+            _cache_set(_TOKEN_CACHE, token, decoded_token, ttl_s=_TOKEN_CACHE_TTL_S)
         uid = decoded_token.get('uid')
         
         if not uid:
@@ -1005,14 +1038,30 @@ async def get_current_user(
         user_data = _cache_get(_USER_CACHE, uid)
         user_doc = None
         if not user_data:
-            user_doc = await _to_thread(user_ref.get, timeout_s=25.0)
+            try:
+                user_doc = await _to_thread(user_ref.get, timeout_s=60.0)
+            except asyncio.TimeoutError:
+                stale_user = _cache_get_stale(_USER_CACHE, uid)
+                if stale_user:
+                    print(f"[Auth] Using stale user cache for uid={uid} due to Firestore timeout")
+                    user_data = stale_user
+                    user_doc = None
+                else:
+                    raise HTTPException(
+                        status_code=503,
+                        detail=(
+                            "Auth profile timeout while reading user profile from Firestore. "
+                            "Check Firestore connectivity and service account permissions."
+                        ),
+                    )
         
-            if not user_doc.exists:
+            if user_doc is not None and (not user_doc.exists):
                 # Treat as unauthorized so clients can cleanly log out.
                 raise HTTPException(status_code=401, detail="Account deleted or profile missing")
 
-            user_data = user_doc.to_dict()
-            _cache_set(_USER_CACHE, uid, user_data, ttl_s=15.0)
+            if user_doc is not None:
+                user_data = user_doc.to_dict()
+            _cache_set(_USER_CACHE, uid, user_data, ttl_s=_USER_CACHE_TTL_S)
         
         # --- AUTO-VERIFY EMAIL ---
         # If Firebase says email is verified, but DB says unverified -> Update DB
@@ -1029,7 +1078,7 @@ async def get_current_user(
             )
             user_data['is_verified'] = True
             user_data['email_verified'] = True
-            _cache_set(_USER_CACHE, uid, user_data, ttl_s=15.0)
+            _cache_set(_USER_CACHE, uid, user_data, ttl_s=_USER_CACHE_TTL_S)
             log_action(uid, "VERIFICATION", "User verified via Email Link")
 
         # --- ENFORCE VERIFICATION ---
@@ -1043,7 +1092,7 @@ async def get_current_user(
         if "role" not in user_data:
             user_data["role"] = "carrier"
             await _to_thread(lambda: user_ref.update({"role": "carrier"}), timeout_s=25.0)
-            _cache_set(_USER_CACHE, uid, user_data, ttl_s=15.0)
+            _cache_set(_USER_CACHE, uid, user_data, ttl_s=_USER_CACHE_TTL_S)
         
         # Best-effort admin session enforcement + tracking.
         # Only enforce if the client sent X-Session-Id (keeps older clients working).
@@ -1072,8 +1121,8 @@ async def get_current_user(
         raise HTTPException(
             status_code=503,
             detail=(
-                "Auth service timeout. This usually means Firebase/Firestore is not responding in time. "
-                "Verify your service account, network connectivity, and that Firestore is reachable."
+                "Auth service timeout. Firebase/Firestore did not respond in time. "
+                "Verify credentials, network connectivity, and Firestore reachability."
             ),
         )
     except HTTPException:
@@ -1123,7 +1172,7 @@ async def register_trusted_device(
     try:
         updated_user = dict(user)
         updated_user.update({"trusted_devices_enabled": True, "updated_at": now})
-        _cache_set(_USER_CACHE, uid, updated_user, ttl_s=15.0)
+        _cache_set(_USER_CACHE, uid, updated_user, ttl_s=_USER_CACHE_TTL_S)
     except Exception:
         _USER_CACHE.pop(uid, None)
     log_action(uid, "TRUSTED_DEVICE_REGISTER", f"Trusted device registered: {x_trusted_device_id}")
@@ -1749,7 +1798,7 @@ async def toggle_mfa(payload: MFAToggleRequest, user: Dict[str, Any] = Depends(g
     try:
         updated_user = dict(user)
         updated_user.update(update_data)
-        _cache_set(_USER_CACHE, uid, updated_user, ttl_s=15.0)
+        _cache_set(_USER_CACHE, uid, updated_user, ttl_s=_USER_CACHE_TTL_S)
     except Exception:
         _USER_CACHE.pop(uid, None)
 
@@ -1874,7 +1923,7 @@ async def update_user_settings(
         try:
             updated_user = dict(user)
             updated_user.update(update_data)
-            _cache_set(_USER_CACHE, uid, updated_user, ttl_s=15.0)
+            _cache_set(_USER_CACHE, uid, updated_user, ttl_s=_USER_CACHE_TTL_S)
         except Exception:
             _USER_CACHE.pop(uid, None)
 
@@ -1992,7 +2041,7 @@ async def update_profile(
         try:
             updated_user = dict(user)
             updated_user.update(update_data)
-            _cache_set(_USER_CACHE, uid, updated_user, ttl_s=15.0)
+            _cache_set(_USER_CACHE, uid, updated_user, ttl_s=_USER_CACHE_TTL_S)
         except Exception:
             _USER_CACHE.pop(uid, None)
 
@@ -2115,7 +2164,7 @@ async def upload_profile_picture(
         try:
             updated_user = dict(user)
             updated_user.update({"profile_picture_url": download_url, "updated_at": now})
-            _cache_set(_USER_CACHE, uid, updated_user, ttl_s=15.0)
+            _cache_set(_USER_CACHE, uid, updated_user, ttl_s=_USER_CACHE_TTL_S)
         except Exception:
             _USER_CACHE.pop(uid, None)
         

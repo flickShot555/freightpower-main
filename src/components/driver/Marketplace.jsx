@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import '../../styles/driver/Marketplace.css';
 import { useAuth } from '../../contexts/AuthContext';
 import { useUserSettings } from '../../contexts/UserSettingsContext';
@@ -65,6 +65,9 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
   const [consentEligible, setConsentEligible] = useState(() => cachedAccess?.consentEligible ?? true);
   const [missingConsents, setMissingConsents] = useState(() => cachedAccess?.missingConsents ?? []);
   const [gatingReason, setGatingReason] = useState(() => cachedAccess?.gatingReason ?? '');
+  const [driverInsights, setDriverInsights] = useState(null);
+  const [driverInsightsLoading, setDriverInsightsLoading] = useState(false);
+  const [driverInsightsError, setDriverInsightsError] = useState('');
 
   // Keep local dark-mode state in sync with the dashboard root class
   useEffect(() => {
@@ -88,7 +91,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
     dangerText: isDarkMode ? '#fecaca' : '#7f1d1d'
   };
   
-  // Geolocation hook with GPS → WiFi fallback
+  // Geolocation hook with GPS â†’ WiFi fallback
   const { location, loading: locationLoading, error: locationError, accuracy, method, refreshLocation } = useGeolocation(true);
   
   // Nearby services state
@@ -112,7 +115,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
   useEffect(() => {
     if (!currentUser) return;
     
-    console.log('🔥 Setting up favorites listener for user:', currentUser.uid);
+    console.log('ðŸ”¥ Setting up favorites listener for user:', currentUser.uid);
     
     // Real-time listener for favorites
     const favoritesRef = collection(db, 'driver_favorites', currentUser.uid, 'services');
@@ -130,12 +133,12 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
           favoriteIds.push(doc.id);
         });
         
-        console.log(`💖 Loaded ${favorites.length} favorites from Firestore`);
+        console.log(`ðŸ’– Loaded ${favorites.length} favorites from Firestore`);
         setFavoriteServicesData(favorites);
         setFavoriteServices(favoriteIds);
       },
       (error) => {
-        console.error('❌ Error loading favorites:', error);
+        console.error('âŒ Error loading favorites:', error);
       }
     );
     
@@ -145,7 +148,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
   // Debug: Log location changes
   useEffect(() => {
     if (location) {
-      console.log('📍 Location detected:', {
+      console.log('ðŸ“ Location detected:', {
         latitude: location.latitude,
         longitude: location.longitude,
         method: method,
@@ -156,7 +159,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
   
   // Debug: Log services changes
   useEffect(() => {
-    console.log('🏪 Nearby services updated:', nearbyServices.length, 'services');
+    console.log('ðŸª Nearby services updated:', nearbyServices.length, 'services');
     if (nearbyServices.length > 0) {
       console.log('Service types:', nearbyServices.map(s => s.type).join(', '));
     }
@@ -268,23 +271,71 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
     checkMarketplaceAccess();
   }, [currentUser]);
 
+  useEffect(() => {
+    let isMounted = true;
+    let intervalId = null;
+
+    const fetchDriverInsights = async () => {
+      if (!currentUser) return;
+      if (isMounted) {
+        setDriverInsightsLoading(true);
+        setDriverInsightsError('');
+      }
+      try {
+        const token = await currentUser.getIdToken();
+        const response = await fetch(`${API_URL}/driver/dashboard/insights`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const payload = await response.json();
+        if (isMounted) {
+          setDriverInsights(payload);
+        }
+      } catch (error) {
+        console.error('Failed to load driver marketplace insights:', error);
+        if (isMounted) {
+          setDriverInsightsError('Live AI insights are unavailable. Showing fallback guidance.');
+        }
+      } finally {
+        if (isMounted) {
+          setDriverInsightsLoading(false);
+        }
+      }
+    };
+
+    if (currentUser) {
+      fetchDriverInsights();
+      intervalId = window.setInterval(fetchDriverInsights, 60000);
+    }
+
+    return () => {
+      isMounted = false;
+      if (intervalId) window.clearInterval(intervalId);
+    };
+  }, [currentUser]);
+
   // Fetch nearby services when location is available
   useEffect(() => {
     const fetchNearbyServices = async () => {
       if (!location) {
-        console.log('⚠️ Location not available yet, skipping service fetch');
+        console.log('âš ï¸ Location not available yet, skipping service fetch');
         return;
       }
 
-      console.log('🔍 Fetching nearby services for location:', location);
+      console.log('ðŸ” Fetching nearby services for location:', location);
 
       // First, always generate mock data as fallback
       const mockData = getMockNearbyServices(location);
-      console.log('✅ Generated', mockData.length, 'mock services');
+      console.log('âœ… Generated', mockData.length, 'mock services');
 
       // If no user, just use mock data
       if (!currentUser) {
-        console.log('👤 No user logged in, using mock data only');
+        console.log('ðŸ‘¤ No user logged in, using mock data only');
         setNearbyServices(mockData);
         return;
       }
@@ -293,7 +344,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
         const token = await currentUser.getIdToken();
         
         // Try to fetch from backend
-        console.log('🌐 Attempting to fetch from backend API...');
+        console.log('ðŸŒ Attempting to fetch from backend API...');
         const response = await fetch(
           `${API_URL}/marketplace/nearby-services?latitude=${location.latitude}&longitude=${location.longitude}&radius=10`,
           {
@@ -306,35 +357,35 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
 
         if (response.ok) {
           const data = await response.json();
-          console.log('✅ Backend API response:', data);
+          console.log('âœ… Backend API response:', data);
           
           // If backend returns services, use them
           if (data.services && data.services.length > 0) {
-            console.log('🔢 Recalculating distances for', data.services.length, 'backend services');
+            console.log('ðŸ”¢ Recalculating distances for', data.services.length, 'backend services');
             
             // Recalculate and sort by distance from current location
             const sortedServices = sortServicesByDistance(data.services, location);
             
             // Log the fuel stations specifically
             const fuelStations = sortedServices.filter(s => s.type === 'fuel');
-            console.log(`⛽ Found ${fuelStations.length} fuel stations:`, 
+            console.log(`â›½ Found ${fuelStations.length} fuel stations:`, 
               fuelStations.map(f => `${f.name} - ${f.distance?.toFixed(1)} miles`).join(', ')
             );
             
             setNearbyServices(sortedServices);
-            console.log(`✅ Using ${sortedServices.length} services from backend (nearest: ${sortedServices[0]?.name} at ${sortedServices[0]?.distance?.toFixed(1)} miles)`);
+            console.log(`âœ… Using ${sortedServices.length} services from backend (nearest: ${sortedServices[0]?.name} at ${sortedServices[0]?.distance?.toFixed(1)} miles)`);
           } else {
             // Backend returned no services, use mock data
-            console.log('⚠️ Backend returned no services, using mock data');
+            console.log('âš ï¸ Backend returned no services, using mock data');
             setNearbyServices(mockData);
           }
         } else {
-          console.log('⚠️ Backend API failed with status:', response.status);
+          console.log('âš ï¸ Backend API failed with status:', response.status);
           setNearbyServices(mockData);
         }
       } catch (error) {
-        console.error('❌ Error fetching from backend:', error);
-        console.log('✅ Using mock data as fallback');
+        console.error('âŒ Error fetching from backend:', error);
+        console.log('âœ… Using mock data as fallback');
         setNearbyServices(mockData);
       }
     };
@@ -345,11 +396,11 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
   // Mock nearby services generator (for development/fallback)
   const getMockNearbyServices = (currentLocation) => {
     if (!currentLocation) {
-      console.log('⚠️ getMockNearbyServices: No location provided');
+      console.log('âš ï¸ getMockNearbyServices: No location provided');
       return [];
     }
     
-    console.log('🏭 Generating mock services for location:', currentLocation);
+    console.log('ðŸ­ Generating mock services for location:', currentLocation);
     
     const mockServices = [
       {
@@ -360,7 +411,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
         longitude: currentLocation.longitude + 0.01,
         description: tr('marketplace.mock.shell.description', 'Premium fuel station with truck parking and amenities'),
         openStatus: tr('marketplace.mock.shell.openStatus', 'Open 24/7'),
-        offers: tr('marketplace.mock.shell.offers', '15¢ discount active'),
+        offers: tr('marketplace.mock.shell.offers', '15Â¢ discount active'),
         verified: true,
         phone: '1-800-SHELL-GO',
         website: 'https://www.shell.us',
@@ -402,7 +453,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
         longitude: currentLocation.longitude - 0.03,
         description: tr('marketplace.mock.pilot.description', 'Full-service travel center with fuel, food, and parking'),
         openStatus: tr('marketplace.mock.pilot.openStatus', 'Open 24/7'),
-        offers: tr('marketplace.mock.pilot.offers', '10¢ discount with rewards'),
+        offers: tr('marketplace.mock.pilot.offers', '10Â¢ discount with rewards'),
         verified: true,
         phone: '1-877-PILOT-77',
         website: 'https://www.pilotflyingj.com',
@@ -470,7 +521,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
     ];
 
     const sorted = sortServicesByDistance(mockServices, currentLocation);
-    console.log(`✅ Generated ${sorted.length} mock services, nearest is ${sorted[0]?.name} at ${sorted[0]?.distance?.toFixed(1)} miles`);
+    console.log(`âœ… Generated ${sorted.length} mock services, nearest is ${sorted[0]?.name} at ${sorted[0]?.distance?.toFixed(1)} miles`);
     return sorted;
   };
 
@@ -481,7 +532,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
     
     // If no phone number in service data, try to fetch from Google search
     if (!phoneNumber) {
-      console.log(`📞 No phone number available for ${service.name}, attempting to fetch...`);
+      console.log(`ðŸ“ž No phone number available for ${service.name}, attempting to fetch...`);
       
       // Use Google search to find contact info (this opens in new tab as fallback)
       const searchQuery = encodeURIComponent(`${service.name} ${service.address} phone number contact`);
@@ -497,7 +548,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
     
     // Try to open device dialer with tel: protocol
     try {
-      console.log(`📞 Opening dialer with number: ${phoneNumber}`);
+      console.log(`ðŸ“ž Opening dialer with number: ${phoneNumber}`);
       
       // Create a temporary link to trigger tel: protocol
       const telLink = document.createElement('a');
@@ -518,7 +569,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
       setTimeout(() => {
         // If user is still on page, assume dialer didn't open
         if (document.hasFocus()) {
-          console.warn('⚠️ Dialer may not have opened');
+          console.warn('âš ï¸ Dialer may not have opened');
           
           // Fallback: try alternative contact methods
           if (service.email) {
@@ -543,7 +594,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
             // Try to copy to clipboard
             if (navigator.clipboard) {
               navigator.clipboard.writeText(service.phone).then(() => {
-                console.log('📋 Phone number copied to clipboard');
+                console.log('ðŸ“‹ Phone number copied to clipboard');
               }).catch(err => {
                 console.error('Failed to copy to clipboard:', err);
               });
@@ -553,7 +604,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
       }, 1000);
       
     } catch (error) {
-      console.error('❌ Error opening dialer:', error);
+      console.error('âŒ Error opening dialer:', error);
       
       // Show error and provide alternatives
       handleUnableToOpenDialer(service, { canCopy: false });
@@ -658,7 +709,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
   // Handle favorite toggle - Save/Delete from Firestore
   const handleToggleFavorite = async (service) => {
     if (!currentUser) {
-      console.error('❌ No user logged in');
+      console.error('âŒ No user logged in');
       return;
     }
     
@@ -670,11 +721,11 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
       
       if (isFavorite) {
         // Remove from favorites
-        console.log('💔 Removing from favorites:', service.name);
+        console.log('ðŸ’” Removing from favorites:', service.name);
         await deleteDoc(favoriteDocRef);
       } else {
         // Add to favorites
-        console.log('💖 Adding to favorites:', service.name);
+        console.log('ðŸ’– Adding to favorites:', service.name);
         
         const favoriteData = {
           serviceId: serviceId,
@@ -698,7 +749,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
       }
       // State updates handled automatically by onSnapshot listener
     } catch (error) {
-      console.error('❌ Error toggling favorite:', error);
+      console.error('âŒ Error toggling favorite:', error);
       alert(tr('marketplace.alerts.favoritesUpdateFailed', 'Failed to update favorites. Please try again.'));
     }
   };
@@ -887,6 +938,65 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
     );
   }
 
+  const driverMarketplaceInsights = (Array.isArray(driverInsights?.ai_suggestions) ? driverInsights.ai_suggestions : [])
+    .map((item, idx) => ({
+      id: String(item?.id || `driver_marketplace_insight_${idx}`),
+      title: String(item?.title || ''),
+      detail: String(item?.detail || ''),
+      action_type: String(item?.action_type || 'nav'),
+      action_target: String(item?.action_target || ''),
+      action_label: String(item?.action_label || 'Open'),
+      priority: String(item?.priority || 'medium'),
+    }))
+    .filter((item) => item.title && item.detail)
+    .slice(0, 3);
+
+  const driverMarketplaceInsightFallback = [
+    {
+      id: 'driver_marketplace_fallback_demand',
+      title: tr('marketplace.aiStaffingInsights.highDemandTitle', 'High Demand Alert'),
+      detail: tr(
+        'marketplace.aiStaffingInsights.highDemandBody',
+        'There are active carrier opportunities in your region. Keep your profile and documents updated.'
+      ),
+      action_type: 'nav',
+      action_target: 'hiring',
+      action_label: tr('marketplace.aiStaffingInsights.highDemandAction', 'Open Hiring'),
+      priority: 'medium',
+    },
+    {
+      id: 'driver_marketplace_fallback_offer',
+      title: tr('marketplace.aiStaffingInsights.specialOfferTitle', 'Special Offer'),
+      detail: tr(
+        'marketplace.aiStaffingInsights.specialOfferBody',
+        'Review service provider offers that match your compliance and route needs.'
+      ),
+      action_type: 'nav',
+      action_target: 'marketplace',
+      action_label: tr('marketplace.aiStaffingInsights.specialOfferAction', 'Open Marketplace'),
+      priority: 'low',
+    },
+  ];
+
+  const displayedDriverMarketplaceInsights = driverMarketplaceInsights.length > 0
+    ? driverMarketplaceInsights
+    : driverMarketplaceInsightFallback;
+
+  const runDriverMarketplaceInsightAction = (insight) => {
+    const actionType = String(insight?.action_type || '').trim().toLowerCase();
+    const actionTarget = String(insight?.action_target || '').trim();
+    if (actionType === 'toggle_availability') {
+      if (typeof onAvailabilityToggle === 'function') onAvailabilityToggle();
+      return;
+    }
+    if (actionType !== 'nav' || !actionTarget || actionTarget === 'marketplace') return;
+    if (typeof onNavigate === 'function') {
+      onNavigate(actionTarget);
+    } else {
+      window.location.href = `/driver-dashboard?nav=${encodeURIComponent(actionTarget)}`;
+    }
+  };
+
   function PostHireMarketplaceView() {
     return (
       <div className="dd-marketplace">
@@ -960,23 +1070,46 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
               <h3>{tr('marketplace.aiStaffingInsights.title', 'AI Staffing Insights')}</h3>
             </div>
             <div className="mp-insights-grid">
-              <div className="mp-insight-item high-demand">
-                <div className="mp-insight-header">
-                  <i className="fa-solid fa-trending-up"></i>
-                  <span>{tr('marketplace.aiStaffingInsights.highDemandTitle', 'High Demand Alert')}</span>
+              {displayedDriverMarketplaceInsights.map((insight, idx) => {
+                const itemClass = idx % 2 === 0 ? 'high-demand' : 'special-offer';
+                const icon = String(insight.priority || '').toLowerCase() === 'high' ? 'fa-triangle-exclamation' : 'fa-lightbulb';
+                return (
+                  <div key={insight.id} className={`mp-insight-item ${itemClass}`}>
+                    <div className="mp-insight-header">
+                      <i className={`fa-solid ${icon}`}></i>
+                      <span>{insight.title}</span>
+                    </div>
+                    <p>{insight.detail}</p>
+                    <button
+                      className="btn small-cd"
+                      onClick={() => runDriverMarketplaceInsightAction(insight)}
+                      style={{ marginTop: '10px' }}
+                    >
+                      {insight.action_label || tr('marketplace.open', 'Open')}
+                    </button>
+                  </div>
+                );
+              })}
+              {driverInsightsLoading && (
+                <div className="mp-insight-item high-demand">
+                  <div className="mp-insight-header">
+                    <i className="fa-solid fa-spinner fa-spin"></i>
+                    <span>{tr('marketplace.aiStaffingInsights.loadingTitle', 'Refreshing Insights')}</span>
+                  </div>
+                  <p>{tr('marketplace.aiStaffingInsights.loadingBody', 'Loading live staffing suggestions for your account.')}</p>
                 </div>
-                <p>{tr('marketplace.aiStaffingInsights.highDemandBody', 'There are 12 carriers in your region actively hiring — make sure your profile is up to date.')}</p>
-              </div>
-              <div className="mp-insight-item special-offer">
-                <div className="mp-insight-header">
-                  <i className="fa-solid fa-gift"></i>
-                  <span>{tr('marketplace.aiStaffingInsights.specialOfferTitle', 'Special Offer')}</span>
+              )}
+              {driverInsightsError && !driverInsightsLoading && (
+                <div className="mp-insight-item special-offer">
+                  <div className="mp-insight-header">
+                    <i className="fa-solid fa-circle-exclamation"></i>
+                    <span>{tr('marketplace.aiStaffingInsights.fallbackTitle', 'Fallback Guidance')}</span>
+                  </div>
+                  <p>{driverInsightsError}</p>
                 </div>
-                <p>{tr('marketplace.aiStaffingInsights.specialOfferBody', '20% discount available with CDL protection service this week only.')}</p>
-              </div>
+              )}
             </div>
           </div>
-
           {/* Service Providers Hub */}
           <div className="card mp-services-card">
             <div className="card-header">
@@ -1019,7 +1152,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                 </div>
                 <h4>{tr('marketplace.categories.fuelPrograms.title', 'Fuel Programs')}</h4>
                 <p>{tr('marketplace.categories.fuelPrograms.body', 'Access exclusive fuel discounts and rewards programs nationwide.')}</p>
-                <span className="int-status-badge active">{tr('marketplace.categories.fuelPrograms.badge', 'Save up to 15¢/gal')}</span>
+                <span className="int-status-badge active">{tr('marketplace.categories.fuelPrograms.badge', 'Save up to 15Â¢/gal')}</span>
                 </div>
                 <button
                   className="btn small-cd"
@@ -1273,7 +1406,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   {accuracy && accuracy < 100
                     ? tr('marketplace.location.highAccuracy', ' (High Accuracy)')
                     : accuracy && accuracy < 500
-                    ? ` (±${Math.round(accuracy)}m)`
+                    ? ` (Â±${Math.round(accuracy)}m)`
                     : tr('marketplace.location.lowAccuracy', ' (Low Accuracy)')}
                 </span>
                 <button 
@@ -1377,7 +1510,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                   <h4>{tr('marketplace.aiHighlights.fuelDiscountTitle', 'Fuel Discount Alert')}</h4>
                   <p>
                     {(nearbyServices.find(s => s.type === 'fuel')?.name || tr('marketplace.aiHighlights.nearbyFuelStation', 'Nearby Fuel Station'))} - 
-                    {(nearbyServices.find(s => s.type === 'fuel')?.offers || tr('marketplace.aiHighlights.defaultFuelOffer', '10¢ off per gallon'))}, 
+                    {(nearbyServices.find(s => s.type === 'fuel')?.offers || tr('marketplace.aiHighlights.defaultFuelOffer', '10Â¢ off per gallon'))}, 
                     {(nearbyServices.find(s => s.type === 'fuel')?.distance?.toFixed(1) || '2.3')} {tr('marketplace.units.milesAhead', 'miles ahead')}
                   </p>
                 </div>
@@ -1539,9 +1672,9 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
               
               {/* Debug info logged to console instead of UI */}
               {(() => {
-                console.log(`📊 Services: ${nearbyServices.length} total (${nearbyServices.filter(s => s.type === 'fuel').length} fuel stations)`);
-                console.log(`📍 Location: ${location?.latitude.toFixed(4)}, ${location?.longitude.toFixed(4)} | Method: ${method}`);
-                console.log('🔝 Nearest 5:', nearbyServices.slice(0, 5).map(s => `${s.name} (${s.type}, ${s.distance?.toFixed(1)}mi)`));
+                console.log(`ðŸ“Š Services: ${nearbyServices.length} total (${nearbyServices.filter(s => s.type === 'fuel').length} fuel stations)`);
+                console.log(`ðŸ“ Location: ${location?.latitude.toFixed(4)}, ${location?.longitude.toFixed(4)} | Method: ${method}`);
+                console.log('ðŸ” Nearest 5:', nearbyServices.slice(0, 5).map(s => `${s.name} (${s.type}, ${s.distance?.toFixed(1)}mi)`));
                 return null;
               })()}
               
@@ -1566,7 +1699,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                     <div className="mp-provider-info">
                       <h4>{service.name}</h4>
                       <p>
-                        {(service.distance ? `${service.distance.toFixed(1)} ${tr('marketplace.units.miles', 'miles')}` : tr('marketplace.nearby', 'Nearby'))} • {service.openStatus}
+                        {(service.distance ? `${service.distance.toFixed(1)} ${tr('marketplace.units.miles', 'miles')}` : tr('marketplace.nearby', 'Nearby'))} â€¢ {service.openStatus}
                       </p>
                       <p className="mp-provider-description">{service.description}</p>
                       {service.offers && (
@@ -1665,7 +1798,7 @@ export default function Marketplace({ isPostHire, setIsPostHire, isAvailable, on
                 fontSize: '0.875rem',
                 fontFamily: 'monospace'
               }}>
-                <strong style={{ color: isDarkMode ? '#f59e0b' : '#92400e' }}>{tr('marketplace.debug.title', '🐛 Debug Info:')}</strong>
+                <strong style={{ color: isDarkMode ? '#f59e0b' : '#92400e' }}>{tr('marketplace.debug.title', 'ðŸ› Debug Info:')}</strong>
                 <div style={{ marginTop: '8px', color: isDarkMode ? mpTheme.text : '#78350f' }}>
                   <div>{tr('marketplace.debug.locationLoading', 'Location Loading: ')}{locationLoading ? tr('marketplace.debug.yes', 'Yes') : tr('marketplace.debug.no', 'No')}</div>
                   <div>{tr('marketplace.debug.locationError', 'Location Error: ')}{locationError || tr('marketplace.debug.none', 'None')}</div>

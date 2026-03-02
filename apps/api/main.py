@@ -12,6 +12,7 @@ import json
 import time
 import os
 import io
+import logging
 import zipfile
 import urllib.request
 from pathlib import Path
@@ -64,6 +65,7 @@ from .load_workflow_utils import is_rate_con_carrier_signed, notify_previous_car
 from .consents import router as consents_router
 from .calendar_integrations import router as calendar_router
 from .help_center import router as help_center_router
+from .role_chat import router as role_chat_router
 
 # Shared API models used by response_model=... and request bodies in this module.
 from .models import (
@@ -105,6 +107,8 @@ from .forms import autofill_driver_registration, autofill_clearinghouse_consent,
 from .here_maps import get_here_client
 from .ai_utils import calculate_load_cost
 from .notify import send_webhook
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_role_filter(role: str) -> str:
@@ -740,6 +744,276 @@ async def admin_dashboard_metrics(user: dict = Depends(require_admin)):
     return payload
 
 
+def _pct_clamped(value: float) -> int:
+    try:
+        return max(0, min(100, int(round(float(value)))))
+    except Exception:
+        return 0
+
+
+def _relative_label_from_epoch(ts_value: Any) -> str:
+    try:
+        ts = float(ts_value or 0.0)
+    except Exception:
+        ts = 0.0
+    if ts <= 0:
+        return "not yet"
+    delta = max(0.0, time.time() - ts)
+    if delta < 60:
+        return "just now"
+    mins = int(delta // 60)
+    if mins < 60:
+        return f"{mins}m ago"
+    hrs = int(mins // 60)
+    if hrs < 24:
+        return f"{hrs}h ago"
+    days = int(hrs // 24)
+    return f"{days}d ago"
+
+
+def _admin_ai_insights_payload(metrics: Dict[str, Any]) -> Dict[str, Any]:
+    pending_documents = int(metrics.get("pending_documents") or 0)
+    pending_onboardings = int(metrics.get("pending_onboardings") or 0)
+    support_tickets = int(metrics.get("support_tickets") or 0)
+    compliance_rate = float(metrics.get("compliance_rate_percent") or 0.0)
+    compliance_delta = float(metrics.get("compliance_delta_percent") or 0.0)
+    active_carriers = int(metrics.get("active_carriers") or 0)
+    active_drivers = int(metrics.get("active_drivers") or 0)
+
+    issue_penalty = min(35.0, pending_documents * 0.4 + support_tickets * 0.8 + pending_onboardings * 0.2)
+    trend_boost = max(-5.0, min(5.0, compliance_delta))
+    overall_efficiency = _pct_clamped(compliance_rate - issue_penalty + trend_boost)
+
+    summary = (
+        f"System efficiency is {overall_efficiency}%. "
+        f"Active carriers: {active_carriers}, active drivers: {active_drivers}, "
+        f"pending documents: {pending_documents}, support tickets: {support_tickets}."
+    )
+
+    insights: List[Dict[str, Any]] = []
+    if pending_documents > 0:
+        insights.append(
+            {
+                "id": "admin_docs_backlog",
+                "title": "Document Backlog",
+                "detail": f"{pending_documents} document(s) need review or renewal.",
+                "priority": "high" if pending_documents >= 10 else "medium",
+                "action_label": "Open Compliance Queue",
+                "action_target": "compliance",
+            }
+        )
+    if pending_onboardings > 0:
+        insights.append(
+            {
+                "id": "admin_onboarding_backlog",
+                "title": "Onboarding Queue",
+                "detail": f"{pending_onboardings} onboarding profile(s) remain incomplete.",
+                "priority": "medium",
+                "action_label": "Open User Management",
+                "action_target": "management",
+            }
+        )
+    if support_tickets > 0:
+        insights.append(
+            {
+                "id": "admin_support_attention",
+                "title": "Support Attention",
+                "detail": f"{support_tickets} pending support ticket(s) are waiting for resolution.",
+                "priority": "medium" if support_tickets < 8 else "high",
+                "action_label": "Open Support",
+                "action_target": "support",
+            }
+        )
+    if not insights:
+        insights.append(
+            {
+                "id": "admin_stable",
+                "title": "Stable Operations",
+                "detail": "No major AI or compliance escalations detected in the current window.",
+                "priority": "low",
+                "action_label": "Open Tracking",
+                "action_target": "tracking",
+            }
+        )
+
+    return {
+        "overall_efficiency_percent": overall_efficiency,
+        "summary": summary,
+        "ai_insights": insights[:3],
+        "compliance_rate_percent": compliance_rate,
+        "compliance_delta_percent": compliance_delta,
+    }
+
+
+@app.get("/admin/dashboard/ai-insights")
+async def admin_dashboard_ai_insights(user: Dict[str, Any] = Depends(require_admin)):
+    metrics = await admin_dashboard_metrics(user)
+    built = _admin_ai_insights_payload(metrics if isinstance(metrics, dict) else {})
+    return {
+        "generated_at": time.time(),
+        "source": "rules",
+        "summary": built.get("summary"),
+        "overall_efficiency_percent": built.get("overall_efficiency_percent"),
+        "compliance_rate_percent": built.get("compliance_rate_percent"),
+        "compliance_delta_percent": built.get("compliance_delta_percent"),
+        "ai_insights": built.get("ai_insights") or [],
+        "metrics": metrics,
+    }
+
+
+@app.get("/super-admin/ai-hub/telemetry")
+async def super_admin_ai_hub_telemetry(user: Dict[str, Any] = Depends(require_super_admin)):
+    metrics = await admin_dashboard_metrics(user)
+    metrics = metrics if isinstance(metrics, dict) else {}
+
+    ai_rules_count = int(_DRIVER_INSIGHTS_METRICS.get("rules_count") or 0)
+    ai_llm_count = int(_DRIVER_INSIGHTS_METRICS.get("llm_count") or 0)
+    ai_errors_count = int(_DRIVER_INSIGHTS_METRICS.get("errors_count") or 0)
+    ai_last_generated = _DRIVER_INSIGHTS_METRICS.get("last_generated_at")
+    ai_last_label = _relative_label_from_epoch(ai_last_generated)
+
+    llm_configured = bool(getattr(settings, "GROQ_API_KEY", ""))
+    fmcsa_configured = bool(getattr(settings, "FMCSA_WEB_KEY", "")) and bool(getattr(settings, "FMCSA_BASE_URL", ""))
+    maps_configured = bool(getattr(settings, "HERE_API_KEY_BACKEND", ""))
+    smtp_configured = bool(getattr(settings, "SMTP_USERNAME", "")) and bool(getattr(settings, "SMTP_PASSWORD", ""))
+    calendar_configured = bool(getattr(settings, "GOOGLE_CALENDAR_CLIENT_ID", "")) or bool(
+        getattr(settings, "MICROSOFT_CLIENT_ID", "")
+    )
+    alert_webhook_configured = bool(getattr(settings, "ALERT_WEBHOOK_URL", ""))
+
+    integrations: List[Dict[str, Any]] = [
+        {
+            "name": "Groq LLM",
+            "type": "AI",
+            "module": "Role Assistant",
+            "status": "Active" if llm_configured else "Warning",
+            "last": ai_last_label,
+        },
+        {
+            "name": "FMCSA API",
+            "type": "Compliance",
+            "module": "Carrier Verification",
+            "status": "Active" if fmcsa_configured else "Warning",
+            "last": "configured" if fmcsa_configured else "not configured",
+        },
+        {
+            "name": "HERE Maps",
+            "type": "Tracking",
+            "module": "Fleet Visibility",
+            "status": "Active" if maps_configured else "Warning",
+            "last": "configured" if maps_configured else "not configured",
+        },
+        {
+            "name": "SMTP Email",
+            "type": "Messaging",
+            "module": "Notifications",
+            "status": "Active" if smtp_configured else "Offline",
+            "last": "configured" if smtp_configured else "not configured",
+        },
+        {
+            "name": "Calendar OAuth",
+            "type": "Scheduling",
+            "module": "Calendar Sync",
+            "status": "Active" if calendar_configured else "Warning",
+            "last": "configured" if calendar_configured else "not configured",
+        },
+        {
+            "name": "Alert Webhook",
+            "type": "Ops",
+            "module": "System Alerts",
+            "status": "Active" if alert_webhook_configured else "Warning",
+            "last": "configured" if alert_webhook_configured else "not configured",
+        },
+    ]
+
+    active_integrations = len([x for x in integrations if str(x.get("status")) == "Active"])
+    warnings = len([x for x in integrations if str(x.get("status")) == "Warning"])
+    offline = len([x for x in integrations if str(x.get("status")) == "Offline"])
+
+    agents: List[Dict[str, Any]] = [
+        {
+            "name": "Role Assistant",
+            "module": "Seller & Shipper Chat",
+            "status": "Active" if llm_configured else "Warning",
+            "updated": ai_last_label,
+        },
+        {
+            "name": "Driver Insights Engine",
+            "module": "Driver Dashboard",
+            "status": "Active",
+            "updated": ai_last_label,
+        },
+        {
+            "name": "Shipper Insights Engine",
+            "module": "Shipper Dashboard",
+            "status": "Active",
+            "updated": ai_last_label,
+        },
+        {
+            "name": "Admin Insight Engine",
+            "module": "Analytics",
+            "status": "Active",
+            "updated": _relative_label_from_epoch(time.time()),
+        },
+    ]
+
+    ai_chats = ai_rules_count + ai_llm_count
+    automations_today = int(metrics.get("pending_documents") or 0) + int(metrics.get("pending_onboardings") or 0)
+    issues_detected = ai_errors_count + warnings + offline
+
+    error_percent = _pct_clamped((float(ai_errors_count) / float(max(1, ai_chats + ai_errors_count))) * 100.0)
+    lag_percent = _pct_clamped(min(35.0, float(metrics.get("pending_onboardings") or 0) * 1.2))
+    live_percent = _pct_clamped(100.0 - error_percent - (lag_percent * 0.6))
+
+    alerts: List[str] = []
+    if ai_errors_count > 0:
+        alerts.append(f"{ai_errors_count} AI generation error(s) observed in recent dashboard runs.")
+    if warnings > 0:
+        alerts.append(f"{warnings} integration warning(s) need verification.")
+    if offline > 0:
+        alerts.append(f"{offline} integration(s) are offline and need reconnection.")
+    support_tickets = int(metrics.get("support_tickets") or 0)
+    if support_tickets > 0:
+        alerts.append(f"{support_tickets} pending support ticket(s) are waiting for admin action.")
+    if not alerts:
+        alerts.append("No critical AI telemetry alerts right now.")
+
+    assistant_summary = (
+        f"{issues_detected} issue signal(s) detected. "
+        f"AI chats processed: {ai_chats}. "
+        f"Compliance rate: {float(metrics.get('compliance_rate_percent') or 0.0):.1f}%."
+    )
+
+    return {
+        "generated_at": time.time(),
+        "source": "rules",
+        "stats": {
+            "active_ai_agents": len([a for a in agents if str(a.get("status")) == "Active"]),
+            "automations_today": automations_today,
+            "ai_chats": ai_chats,
+            "issues_detected": issues_detected,
+            "connected_integrations": active_integrations,
+            "total_integrations": len(integrations),
+            "warnings": warnings,
+            "offline": offline,
+            "expiring_keys": 0,
+        },
+        "agents": agents,
+        "integrations": integrations,
+        "assistant": {
+            "summary": assistant_summary,
+            "action_label": "Run Health Check",
+            "action_target": "integrations",
+        },
+        "health": {
+            "live_percent": live_percent,
+            "lag_percent": lag_percent,
+            "error_percent": error_percent,
+        },
+        "alerts": alerts[:4],
+    }
+
+
 @app.get('/admin/management/users')
 async def admin_management_users(
     role: str = 'all',
@@ -951,6 +1225,7 @@ async def admin_tracking_locations(
 async def tracking_load_locations(
     active_only: bool = True,
     limit: int = 200,
+    load_id: Optional[str] = None,
     user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Shipper/Broker tracking: GPS locations for the signed-in user's loads.
@@ -972,6 +1247,7 @@ async def tracking_load_locations(
         raise HTTPException(status_code=403, detail="Forbidden")
 
     max_limit = max(1, min(int(limit or 200), 1000))
+    requested_load_id = str(load_id or "").strip()
     # Shipper tracking map is intentionally limited to IN_TRANSIT loads.
     active_statuses = {LoadStatus.IN_TRANSIT.value}
 
@@ -1025,32 +1301,30 @@ async def tracking_load_locations(
     skipped_no_driver = 0
     try:
         loads_ref = db.collection("loads")
-        query = loads_ref
-        # Shippers/brokers: strict ownership, consistent with GET /loads
-        if role in {"shipper", "broker"}:
-            query = query.where("created_by", "==", uid)
-        # Keep scans bounded; we may skip many because not active / no driver / no GPS.
-        query = query.limit(max_limit * 10)
 
-        for snap in query.stream():
-            scanned += 1
-            if len(load_candidates) >= (max_limit * 10):
-                break
+        def _consider_load_snap(snap: Any) -> None:
+            nonlocal skipped_no_driver
             d = snap.to_dict() or {}
-            load_id = snap.id
+            lid = str(snap.id or "").strip()
+            if not lid:
+                return
+
+            # Shippers/brokers are scoped to their own loads.
+            if role in {"shipper", "broker"} and str(d.get("created_by") or "").strip() != uid:
+                return
+
             status = str(d.get("status") or "").strip().lower()
             if active_only and status not in active_statuses:
-                continue
+                return
 
             driver_uid = d.get("assigned_driver") or d.get("assigned_driver_id")
             if not driver_uid:
                 skipped_no_driver += 1
-                continue
-
+                return
             driver_uid = str(driver_uid).strip()
             if not driver_uid:
                 skipped_no_driver += 1
-                continue
+                return
 
             driver_uids.add(driver_uid)
 
@@ -1061,7 +1335,7 @@ async def tracking_load_locations(
 
             load_candidates.append(
                 {
-                    "load_id": load_id,
+                    "load_id": lid,
                     "status": status,
                     "driver_uid": driver_uid,
                     "driver_name": d.get("assigned_driver_name") or d.get("driver_name"),
@@ -1070,6 +1344,28 @@ async def tracking_load_locations(
                     "updated_at": d.get("updated_at"),
                 }
             )
+
+        # Fast path: when the UI is focused on a single load, avoid scanning the whole collection.
+        if requested_load_id:
+            snap = loads_ref.document(requested_load_id).get()
+            scanned += 1
+            if snap and getattr(snap, "exists", False):
+                _consider_load_snap(snap)
+        else:
+            query = loads_ref
+            # Shippers/brokers: strict ownership, consistent with GET /loads
+            if role in {"shipper", "broker"}:
+                query = query.where("created_by", "==", uid)
+
+            # Keep scans bounded and predictable to prevent expensive fan-out in polling loops.
+            scan_limit = min(max_limit * 3, 900)
+            query = query.limit(scan_limit)
+
+            for snap in query.stream():
+                scanned += 1
+                if len(load_candidates) >= scan_limit:
+                    break
+                _consider_load_snap(snap)
     except Exception as e:
         print(f"[TrackingLoadLocations] Failed to fetch loads: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch load locations")
@@ -1159,6 +1455,7 @@ async def tracking_load_locations(
         "skipped_no_driver": skipped_no_driver,
         "skipped_no_gps": skipped_no_gps,
         "active_only": bool(active_only),
+        "load_id": requested_load_id or None,
     }
 
 
@@ -2467,6 +2764,1518 @@ async def get_compliance_tasks(user: dict = Depends(get_current_user)):
             print(f"Error checking expiring documents: {e}")
     
     return tasks
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        if value is None or value == "":
+            return int(default)
+        return int(value)
+    except Exception:
+        return int(default)
+
+
+_DRIVER_INSIGHTS_METRICS: Dict[str, Any] = {
+    "rules_count": 0,
+    "llm_count": 0,
+    "errors_count": 0,
+    "last_generated_at": 0.0,
+    "last_source": None,
+}
+
+
+def _driver_doc_status_counts(required_items: List[Dict[str, Any]]) -> Dict[str, int]:
+    counts = {"missing": 0, "expired": 0, "expiring_soon": 0, "valid_or_complete": 0}
+    for it in required_items:
+        status = str((it or {}).get("status") or "").strip().lower()
+        kind = str((it or {}).get("kind") or "").strip().lower()
+        if kind != "document":
+            continue
+        if status == "missing":
+            counts["missing"] += 1
+        elif status == "expired":
+            counts["expired"] += 1
+        elif status == "expiring soon":
+            counts["expiring_soon"] += 1
+        elif status in {"valid", "complete"}:
+            counts["valid_or_complete"] += 1
+    return counts
+
+
+def _driver_collect_assigned_loads(uid: str) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    loads_ref = db.collection("loads")
+
+    def _add_stream(stream) -> None:
+        for snap in stream:
+            d = snap.to_dict() or {}
+            load_id = str(d.get("load_id") or snap.id or "").strip()
+            if not load_id or load_id in seen:
+                continue
+            assigned_driver = str(
+                d.get("assigned_driver") or d.get("assigned_driver_id") or d.get("driver_id") or ""
+            ).strip()
+            if assigned_driver != uid:
+                continue
+            d["load_id"] = load_id
+            seen.add(load_id)
+            rows.append(d)
+
+    for field in ["assigned_driver", "assigned_driver_id", "driver_id"]:
+        try:
+            _add_stream(loads_ref.where(field, "==", uid).stream())
+        except Exception:
+            continue
+
+    if not rows:
+        try:
+            _add_stream(loads_ref.stream())
+        except Exception:
+            pass
+
+    def _sort_key(load: Dict[str, Any]) -> float:
+        return _to_epoch_seconds(load.get("updated_at")) or _to_epoch_seconds(load.get("created_at")) or 0.0
+
+    rows.sort(key=_sort_key, reverse=True)
+    return rows
+
+
+def _driver_provider_category(provider: Dict[str, Any]) -> str:
+    raw = str(
+        provider.get("category")
+        or provider.get("service_type")
+        or provider.get("type")
+        or provider.get("tags")
+        or ""
+    ).lower()
+    if any(x in raw for x in ["legal", "attorney", "law"]):
+        return "legal"
+    if any(x in raw for x in ["roadside", "repair", "tow", "wrench", "mechanic"]):
+        return "roadside"
+    if any(x in raw for x in ["parking", "lot"]):
+        return "parking"
+    if any(x in raw for x in ["fuel", "gas", "petrol", "diesel"]):
+        return "fuel"
+    return "other"
+
+
+def _driver_dashboard_provider_cards(limit: int = 4) -> List[Dict[str, Any]]:
+    wanted = ["legal", "roadside", "parking", "fuel"]
+    best_by_cat: Dict[str, Dict[str, Any]] = {}
+    fallback_names = {
+        "legal": "Legal Help",
+        "roadside": "Roadside",
+        "parking": "Parking",
+        "fuel": "Fuel",
+    }
+
+    try:
+        snaps = list(db.collection("service_providers").stream())
+    except Exception:
+        snaps = []
+
+    for snap in snaps:
+        d = snap.to_dict() or {}
+        category = _driver_provider_category(d)
+        if category not in wanted:
+            continue
+        rating = float(d.get("rating") or 0.0)
+        featured = bool(d.get("featured") is True)
+        score = (1.0 if featured else 0.0) * 100.0 + rating
+        current = best_by_cat.get(category)
+        current_score = -1.0
+        if current:
+            current_score = float(current.get("_score") or -1.0)
+        if score > current_score:
+            best_by_cat[category] = {
+                "id": str(d.get("id") or snap.id),
+                "category": category,
+                "name": str(d.get("name") or d.get("company_name") or fallback_names[category]),
+                "rating": rating,
+                "featured": featured,
+                "action_label": "View Provider",
+                "action_type": "nav",
+                "action_target": "marketplace",
+                "_score": score,
+            }
+
+    cards: List[Dict[str, Any]] = []
+    for category in wanted:
+        if category in best_by_cat:
+            payload = dict(best_by_cat[category])
+            payload.pop("_score", None)
+            cards.append(payload)
+        else:
+            cards.append(
+                {
+                    "id": f"fallback_{category}",
+                    "category": category,
+                    "name": fallback_names[category],
+                    "rating": 0.0,
+                    "featured": False,
+                    "action_label": "Browse Marketplace",
+                    "action_type": "nav",
+                    "action_target": "marketplace",
+                }
+            )
+        if len(cards) >= max(1, int(limit or 4)):
+            break
+    return cards
+
+
+def _priority_rank(priority: str) -> int:
+    p = str(priority or "").strip().lower()
+    if p == "high":
+        return 0
+    if p == "medium":
+        return 1
+    return 2
+
+
+def _driver_humanize_status(raw_status: str, default: str = "Unknown") -> str:
+    status = str(raw_status or "").strip().replace("_", " ").replace("-", " ")
+    if not status:
+        return default
+    words = [w for w in status.split(" ") if w]
+    if not words:
+        return default
+    return " ".join(w.capitalize() for w in words)
+
+
+def _driver_location_label(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        city = str(value.get("city") or "").strip()
+        state = str(value.get("state") or "").strip()
+        if city or state:
+            return ", ".join([x for x in [city, state] if x])
+        name = str(value.get("name") or value.get("label") or "").strip()
+        if name:
+            return name
+        address = str(value.get("address") or "").strip()
+        if address:
+            return address
+    return ""
+
+
+def _driver_pick_primary_load(loads: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not loads:
+        return None
+    status_rank = {
+        "in_transit": 0,
+        "in-transit": 0,
+        "in transit": 0,
+        "covered": 1,
+        "assigned": 1,
+        "accepted": 2,
+        "booked": 2,
+        "delivered": 3,
+    }
+
+    def _rank(load: Dict[str, Any]) -> tuple[int, float]:
+        status = str(load.get("status") or "").strip().lower()
+        rank = status_rank.get(status, 4)
+        ts = _to_epoch_seconds(load.get("updated_at")) or _to_epoch_seconds(load.get("created_at")) or 0.0
+        return (rank, -ts)
+
+    return sorted(loads, key=_rank)[0]
+
+
+def _driver_active_trip_payload(
+    *,
+    loads: List[Dict[str, Any]],
+    in_transit_count: int,
+    doc_counts: Dict[str, int],
+    views_count: int,
+    availability_on: bool,
+) -> Dict[str, Any]:
+    load = _driver_pick_primary_load(loads)
+    if load:
+        load_id = str(load.get("load_id") or load.get("id") or "").strip()
+        status_raw = str(load.get("status") or "").strip().lower()
+        status_label = _driver_humanize_status(status_raw, default="Assigned")
+        origin = _driver_location_label(load.get("origin") or load.get("pickup_location"))
+        destination = _driver_location_label(load.get("destination") or load.get("delivery_location"))
+        route = " -> ".join([x for x in [origin, destination] if x]).strip()
+        if not route:
+            route = "Route pending"
+        eta_raw = (
+            load.get("eta")
+            or load.get("delivery_datetime")
+            or load.get("delivery_date")
+            or load.get("pickup_datetime")
+            or load.get("pickup_date")
+        )
+        eta = str(eta_raw).strip() if eta_raw is not None else ""
+    else:
+        load_id = ""
+        status_raw = "idle"
+        status_label = "No Active Load"
+        route = "No active route assigned"
+        eta = ""
+
+    missing_docs = int(doc_counts.get("missing") or 0)
+    expired_docs = int(doc_counts.get("expired") or 0)
+    expiring_docs = int(doc_counts.get("expiring_soon") or 0)
+    docs_attention = missing_docs + expired_docs + expiring_docs
+
+    trip_stats: List[Dict[str, Any]] = []
+    if in_transit_count > 0:
+        trip_stats.append(
+            {
+                "id": "in_transit",
+                "icon": "fa-solid fa-truck",
+                "text": f"{in_transit_count} load(s) currently in transit",
+            }
+        )
+    if docs_attention > 0:
+        trip_stats.append(
+            {
+                "id": "docs_attention",
+                "icon": "fa-solid fa-file-circle-exclamation",
+                "text": f"{docs_attention} document item(s) need attention",
+            }
+        )
+    if availability_on and views_count > 0:
+        trip_stats.append(
+            {
+                "id": "marketplace_views",
+                "icon": "fa-solid fa-eye",
+                "text": f"{views_count} carrier profile view(s) this week",
+            }
+        )
+    elif availability_on:
+        trip_stats.append(
+            {
+                "id": "availability_on",
+                "icon": "fa-solid fa-toggle-on",
+                "text": "Availability is on and profile is discoverable",
+            }
+        )
+    else:
+        trip_stats.append(
+            {
+                "id": "availability_off",
+                "icon": "fa-solid fa-toggle-off",
+                "text": "Availability is off; carriers cannot discover your profile",
+            }
+        )
+
+    return {
+        "load_id": load_id,
+        "status": status_raw or "idle",
+        "status_label": status_label,
+        "route": route,
+        "eta": eta,
+        "trip_stats": trip_stats[:3],
+    }
+
+
+def _driver_smart_alerts_payload(
+    *,
+    doc_counts: Dict[str, int],
+    consent_eligible: bool,
+    availability_on: bool,
+    compliance_tasks_count: int,
+) -> List[Dict[str, Any]]:
+    missing_docs = int(doc_counts.get("missing") or 0)
+    expired_docs = int(doc_counts.get("expired") or 0)
+    expiring_docs = int(doc_counts.get("expiring_soon") or 0)
+
+    alerts: List[Dict[str, Any]] = []
+
+    def _add(
+        *,
+        aid: str,
+        severity: str,
+        title: str,
+        detail: str,
+        icon: str,
+        action_type: str,
+        action_target: str,
+    ) -> None:
+        alerts.append(
+            {
+                "id": aid,
+                "severity": severity,
+                "title": title,
+                "detail": detail,
+                "icon": icon,
+                "action_type": action_type,
+                "action_target": action_target,
+            }
+        )
+
+    if expired_docs > 0:
+        _add(
+            aid="alert_docs_expired",
+            severity="high",
+            title="Expired Documents",
+            detail=f"{expired_docs} required document(s) are expired.",
+            icon="fa-solid fa-triangle-exclamation",
+            action_type="nav",
+            action_target="hiring",
+        )
+    if expiring_docs > 0:
+        _add(
+            aid="alert_docs_expiring",
+            severity="medium",
+            title="Documents Expiring Soon",
+            detail=f"{expiring_docs} document(s) are expiring soon.",
+            icon="fa-solid fa-hourglass-half",
+            action_type="nav",
+            action_target="hiring",
+        )
+    if missing_docs > 0:
+        _add(
+            aid="alert_docs_missing",
+            severity="high",
+            title="Missing Required Documents",
+            detail=f"{missing_docs} required document(s) still missing.",
+            icon="fa-solid fa-file-circle-xmark",
+            action_type="nav",
+            action_target="hiring",
+        )
+    if not consent_eligible:
+        _add(
+            aid="alert_consent_required",
+            severity="high",
+            title="Consent Required",
+            detail="E-sign consent is required for full marketplace usage.",
+            icon="fa-solid fa-pen",
+            action_type="nav",
+            action_target="esign",
+        )
+    if compliance_tasks_count > 0:
+        _add(
+            aid="alert_compliance_tasks",
+            severity="medium",
+            title="Compliance Tasks Pending",
+            detail=f"{compliance_tasks_count} compliance task(s) need review.",
+            icon="fa-solid fa-shield-halved",
+            action_type="nav",
+            action_target="compliance",
+        )
+    if not availability_on:
+        _add(
+            aid="alert_availability_off",
+            severity="low",
+            title="Marketplace Visibility Off",
+            detail="Turn on availability to be visible to carriers.",
+            icon="fa-solid fa-toggle-off",
+            action_type="toggle_availability",
+            action_target="availability",
+        )
+    if not alerts:
+        _add(
+            aid="alert_ready",
+            severity="low",
+            title="All Core Checks Healthy",
+            detail="No urgent alerts right now. Keep profile and docs updated.",
+            icon="fa-solid fa-circle-check",
+            action_type="nav",
+            action_target="settings",
+        )
+
+    return alerts[:4]
+
+
+def _driver_daily_insights_payload(
+    *,
+    in_transit_count: int,
+    doc_counts: Dict[str, int],
+    compliance_tasks_count: int,
+    availability_on: bool,
+    views_count: int,
+) -> List[Dict[str, Any]]:
+    missing_docs = int(doc_counts.get("missing") or 0)
+    expired_docs = int(doc_counts.get("expired") or 0)
+    expiring_docs = int(doc_counts.get("expiring_soon") or 0)
+    docs_attention = missing_docs + expired_docs + expiring_docs
+
+    if in_transit_count > 0:
+        tip_title = "Trip Focus"
+        tip_text = f"Track ETA and stop windows for {in_transit_count} in-transit load(s)."
+        tip_action_type = "nav"
+        tip_action_target = "loads"
+    elif availability_on and views_count <= 0:
+        tip_title = "Visibility Tip"
+        tip_text = "Availability is on but views are low. Refresh profile highlights."
+        tip_action_type = "nav"
+        tip_action_target = "settings"
+    elif not availability_on:
+        tip_title = "Marketplace Tip"
+        tip_text = "Enable availability to appear in carrier discovery results."
+        tip_action_type = "toggle_availability"
+        tip_action_target = "availability"
+    else:
+        tip_title = "Profile Tip"
+        tip_text = "Keep your profile and document set complete to improve match quality."
+        tip_action_type = "nav"
+        tip_action_target = "settings"
+
+    if docs_attention > 0:
+        recap_title = "Document Recap"
+        recap_text = f"{docs_attention} document item(s) need review in onboarding."
+        recap_action_type = "nav"
+        recap_action_target = "hiring"
+    elif compliance_tasks_count > 0:
+        recap_title = "Compliance Recap"
+        recap_text = f"{compliance_tasks_count} compliance task(s) are pending review."
+        recap_action_type = "nav"
+        recap_action_target = "compliance"
+    else:
+        recap_title = "Training Recap"
+        recap_text = "Core compliance checks look healthy. Continue routine checks."
+        recap_action_type = "nav"
+        recap_action_target = "compliance"
+
+    return [
+        {
+            "id": "insight_tip",
+            "title": tip_title,
+            "text": tip_text,
+            "icon": "fa-solid fa-lightbulb",
+            "variant": "tip",
+            "action_type": tip_action_type,
+            "action_target": tip_action_target,
+        },
+        {
+            "id": "insight_recap",
+            "title": recap_title,
+            "text": recap_text,
+            "icon": "fa-solid fa-graduation-cap",
+            "variant": "recap",
+            "action_type": recap_action_type,
+            "action_target": recap_action_target,
+        },
+    ]
+
+
+def _normalize_load_status(value: Any) -> str:
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def _collect_loads_with_filters(uid: str, fields: List[str]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    loads_ref = db.collection("loads")
+
+    def _add_stream(stream, field_name: str) -> None:
+        for snap in stream:
+            d = snap.to_dict() or {}
+            load_id = str(d.get("load_id") or snap.id or "").strip()
+            if not load_id or load_id in seen:
+                continue
+            if field_name:
+                owner = str(d.get(field_name) or "").strip()
+                if owner != uid:
+                    continue
+            d["load_id"] = load_id
+            seen.add(load_id)
+            rows.append(d)
+
+    for field in fields:
+        try:
+            _add_stream(loads_ref.where(field, "==", uid).stream(), field)
+        except Exception:
+            continue
+
+    if rows:
+        rows.sort(
+            key=lambda load: _to_epoch_seconds(load.get("updated_at"))
+            or _to_epoch_seconds(load.get("created_at"))
+            or 0.0,
+            reverse=True,
+        )
+    return rows
+
+
+def _collect_shipper_loads(uid: str) -> List[Dict[str, Any]]:
+    rows = _collect_loads_with_filters(uid, ["created_by", "shipper_id", "owner_uid"])
+    if rows:
+        return rows
+
+    # Fallback for local/dev data store.
+    try:
+        fallback = store.list_loads({"created_by": uid})
+        if isinstance(fallback, list):
+            return [dict(x) for x in fallback if isinstance(x, dict)]
+    except Exception:
+        pass
+    return []
+
+
+def _collect_carrier_loads(uid: str) -> List[Dict[str, Any]]:
+    rows = _collect_loads_with_filters(
+        uid,
+        ["assigned_carrier", "assigned_carrier_id", "carrier_id", "created_by"],
+    )
+    if rows:
+        return rows
+
+    # Fallback for local/dev data store.
+    merged: Dict[str, Dict[str, Any]] = {}
+    try:
+        for item in store.list_loads({"assigned_carrier": uid}) or []:
+            if isinstance(item, dict):
+                lid = str(item.get("load_id") or item.get("id") or uuid.uuid4().hex)
+                merged[lid] = dict(item)
+        for item in store.list_loads({"created_by": uid}) or []:
+            if isinstance(item, dict):
+                lid = str(item.get("load_id") or item.get("id") or uuid.uuid4().hex)
+                merged[lid] = dict(item)
+    except Exception:
+        pass
+    return list(merged.values())
+
+
+def _count_pending_offers(loads: List[Dict[str, Any]]) -> int:
+    total = 0
+    pending_states = {"pending", "offered", "submitted", "new"}
+    for load in loads:
+        offers = load.get("offers")
+        if not isinstance(offers, list):
+            continue
+        for offer in offers:
+            if not isinstance(offer, dict):
+                continue
+            status = _normalize_load_status(offer.get("status"))
+            if status in pending_states:
+                total += 1
+    return total
+
+
+def _load_route_pair(load: Dict[str, Any]) -> Tuple[str, str]:
+    origin = _driver_location_label(load.get("origin") or load.get("pickup_location") or load.get("load_origin"))
+    destination = _driver_location_label(
+        load.get("destination") or load.get("delivery_location") or load.get("load_destination")
+    )
+    return (origin or "Unknown Origin", destination or "Unknown Destination")
+
+
+def _top_lane(loads: List[Dict[str, Any]]) -> Tuple[str, int]:
+    counts: Dict[str, int] = {}
+    for load in loads:
+        origin, destination = _load_route_pair(load)
+        lane = f"{origin} -> {destination}"
+        counts[lane] = int(counts.get(lane) or 0) + 1
+    if not counts:
+        return ("", 0)
+    lane = sorted(counts.items(), key=lambda it: (-it[1], it[0]))[0]
+    return (lane[0], int(lane[1]))
+
+
+def _money_str(value: Any) -> str:
+    try:
+        amount = float(value or 0)
+        return f"${amount:,.0f}"
+    except Exception:
+        return "$0"
+
+
+def _carrier_rule_suggestions(
+    *,
+    active_count: int,
+    in_transit_count: int,
+    delivered_count: int,
+    pending_dispatch_count: int,
+    expiring_docs_count: int,
+) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+
+    def _add(
+        sid: str,
+        title: str,
+        detail: str,
+        action_label: str,
+        action_target: str,
+        priority: str = "medium",
+        reason_codes: Optional[List[str]] = None,
+    ) -> None:
+        rows.append(
+            {
+                "id": sid,
+                "title": title,
+                "detail": detail,
+                "priority": priority,
+                "action_label": action_label,
+                "action_type": "nav",
+                "action_target": action_target,
+                "reason_codes": reason_codes or [],
+            }
+        )
+
+    if expiring_docs_count > 0:
+        _add(
+            "carrier_docs_expiring",
+            "Compliance Renewal Needed",
+            f"{expiring_docs_count} document(s) are expiring soon. Renew to avoid dispatch or billing blockers.",
+            "Open Compliance",
+            "compliance",
+            priority="high",
+            reason_codes=["DOC_EXPIRING"],
+        )
+    if pending_dispatch_count > 0:
+        _add(
+            "carrier_dispatch_followup",
+            "Dispatch Follow-Up",
+            f"{pending_dispatch_count} load(s) are waiting on assignment or acceptance updates.",
+            "Open My Loads",
+            "my-loads",
+            priority="high",
+            reason_codes=["PENDING_DISPATCH"],
+        )
+    if in_transit_count > 0:
+        _add(
+            "carrier_in_transit_watch",
+            "In-Transit Monitoring",
+            f"{in_transit_count} load(s) are currently in transit and need active tracking.",
+            "Open My Loads",
+            "my-loads",
+            priority="medium",
+            reason_codes=["LOAD_IN_TRANSIT"],
+        )
+    if delivered_count > 0:
+        _add(
+            "carrier_invoice_actions",
+            "Invoice Follow-Up",
+            f"{delivered_count} delivered load(s) can move into invoice or factoring workflows.",
+            "Open Factoring",
+            "factoring",
+            priority="medium",
+            reason_codes=["DELIVERED_READY_TO_INVOICE"],
+        )
+    if active_count == 0:
+        _add(
+            "carrier_no_active",
+            "No Active Loads",
+            "No active load operations detected. Review marketplace opportunities or dispatch plans.",
+            "Open Marketplace",
+            "marketplace",
+            priority="low",
+            reason_codes=["NO_ACTIVE_LOADS"],
+        )
+    if not rows:
+        _add(
+            "carrier_profile_tip",
+            "Operations Healthy",
+            "Core operations look stable. Keep compliance and dispatch workflows current.",
+            "Open Dashboard",
+            "home",
+            priority="low",
+            reason_codes=["HEALTHY_STATE"],
+        )
+
+    rows.sort(key=lambda s: (_priority_rank(str(s.get("priority"))), str(s.get("id") or "")))
+    return rows[:5]
+
+
+def _shipper_rule_suggestions(
+    *,
+    active_count: int,
+    posted_count: int,
+    in_transit_count: int,
+    delivered_count: int,
+    pending_offers_count: int,
+    lane_label: str,
+    lane_count: int,
+    compliance_warning_count: int,
+) -> Dict[str, Any]:
+    rows: List[Dict[str, Any]] = []
+
+    def _add(
+        sid: str,
+        title: str,
+        detail: str,
+        action_label: str,
+        action_target: str,
+        priority: str = "medium",
+        reason_codes: Optional[List[str]] = None,
+    ) -> None:
+        rows.append(
+            {
+                "id": sid,
+                "title": title,
+                "detail": detail,
+                "priority": priority,
+                "action_label": action_label,
+                "action_type": "nav",
+                "action_target": action_target,
+                "reason_codes": reason_codes or [],
+            }
+        )
+
+    if pending_offers_count > 0:
+        _add(
+            "shipper_pending_offers",
+            "Offer Review Needed",
+            f"{pending_offers_count} carrier offer(s) are pending review.",
+            "Open Carrier Bids",
+            "carrier-bids",
+            priority="high",
+            reason_codes=["PENDING_OFFERS"],
+        )
+    if in_transit_count > 0:
+        _add(
+            "shipper_tracking_focus",
+            "Tracking Focus",
+            f"{in_transit_count} load(s) are in transit and should be monitored for exceptions.",
+            "Open Tracking",
+            "tracking",
+            priority="medium",
+            reason_codes=["IN_TRANSIT"],
+        )
+    if posted_count > 0 and pending_offers_count == 0:
+        _add(
+            "shipper_posted_no_offers",
+            "Posted Loads Need Coverage",
+            f"{posted_count} posted load(s) are waiting for carrier responses.",
+            "Open Marketplace",
+            "marketplace",
+            priority="medium",
+            reason_codes=["POSTED_NO_OFFERS"],
+        )
+    if compliance_warning_count > 0:
+        _add(
+            "shipper_compliance_alert",
+            "Compliance Attention",
+            f"{compliance_warning_count} compliance warning(s) require review.",
+            "Open Compliance",
+            "compliance",
+            priority="medium",
+            reason_codes=["COMPLIANCE_WARNINGS"],
+        )
+    if delivered_count > 0:
+        _add(
+            "shipper_billing_followup",
+            "Billing Follow-Up",
+            f"{delivered_count} delivered load(s) are ready for invoice workflow checks.",
+            "Open Bills",
+            "bills",
+            priority="low",
+            reason_codes=["DELIVERED_BILLING"],
+        )
+    if active_count == 0:
+        _add(
+            "shipper_no_active_loads",
+            "No Active Loads",
+            "Post or dispatch a new load to start marketplace and tracking workflows.",
+            "Open My Loads",
+            "my-loads",
+            priority="low",
+            reason_codes=["NO_ACTIVE_LOADS"],
+        )
+    if not rows:
+        _add(
+            "shipper_healthy",
+            "Operations Healthy",
+            "Load operations look stable. Continue monitoring bids, tracking, and compliance.",
+            "Open Dashboard",
+            "home",
+            priority="low",
+            reason_codes=["HEALTHY_STATE"],
+        )
+
+    rows.sort(key=lambda s: (_priority_rank(str(s.get("priority"))), str(s.get("id") or "")))
+    rows = rows[:5]
+
+    if lane_label and lane_count > 0:
+        headline = f"Top lane demand: {lane_label} appears in {lane_count} load(s)."
+    elif active_count > 0:
+        headline = f"{active_count} active load(s) in your network right now."
+    else:
+        headline = "No active load lanes right now. Post new loads to increase carrier activity."
+
+    bullets = [str(x.get("detail") or "").strip() for x in rows[:3] if str(x.get("detail") or "").strip()]
+    return {
+        "headline": headline,
+        "bullets": bullets[:3],
+        "ai_suggestions": rows,
+    }
+
+
+def _driver_build_rule_suggestions(
+    *,
+    missing_docs_count: int,
+    expiring_docs_count: int,
+    expired_docs_count: int,
+    consent_eligible: bool,
+    availability_on: bool,
+    views_count: int,
+    active_loads_count: int,
+    in_transit_count: int,
+    compliance_tasks_count: int,
+) -> List[Dict[str, Any]]:
+    suggestions: List[Dict[str, Any]] = []
+    seen_ids: set[str] = set()
+
+    def _add(
+        sid: str,
+        title: str,
+        detail: str,
+        priority: str,
+        action_label: str,
+        action_type: str,
+        action_target: str,
+        reason_codes: List[str],
+    ) -> None:
+        if sid in seen_ids:
+            return
+        seen_ids.add(sid)
+        suggestions.append(
+            {
+                "id": sid,
+                "title": title,
+                "detail": detail,
+                "priority": priority,
+                "action_label": action_label,
+                "action_type": action_type,
+                "action_target": action_target,
+                "reason_codes": reason_codes,
+            }
+        )
+
+    if expired_docs_count > 0:
+        _add(
+            "expired_docs",
+            "Urgent Document Renewal",
+            f"{expired_docs_count} required document(s) are expired and may block opportunities.",
+            "high",
+            "Upload Documents",
+            "nav",
+            "hiring",
+            ["DOC_EXPIRED"],
+        )
+    if expiring_docs_count > 0:
+        _add(
+            "expiring_docs",
+            "Documents Expiring Soon",
+            f"{expiring_docs_count} document(s) are expiring soon. Renew now to stay compliant.",
+            "high",
+            "Review Documents",
+            "nav",
+            "hiring",
+            ["DOC_EXPIRING_SOON"],
+        )
+    if missing_docs_count > 0:
+        _add(
+            "missing_docs",
+            "Complete Missing Documents",
+            f"{missing_docs_count} required document(s) are missing.",
+            "high",
+            "Complete Onboarding",
+            "nav",
+            "hiring",
+            ["DOC_MISSING"],
+        )
+    if not consent_eligible:
+        _add(
+            "consent_pending",
+            "Consent Required",
+            "Sign the required consent form to unlock marketplace actions.",
+            "high",
+            "Complete Consent",
+            "nav",
+            "esign",
+            ["CONSENT_REQUIRED"],
+        )
+    if not availability_on:
+        _add(
+            "availability_off",
+            "Turn On Availability",
+            "Your profile is hidden from carriers while availability is off.",
+            "medium",
+            "Enable Availability",
+            "toggle_availability",
+            "availability",
+            ["AVAILABILITY_OFF"],
+        )
+    if views_count <= 0:
+        _add(
+            "low_visibility",
+            "Improve Marketplace Visibility",
+            "No carrier profile views this week. Update profile and availability.",
+            "medium",
+            "Browse Marketplace",
+            "nav",
+            "marketplace",
+            ["LOW_VIEWS"],
+        )
+    if in_transit_count > 0:
+        _add(
+            "active_trip_focus",
+            "Active Trip Focus",
+            f"You have {in_transit_count} load(s) currently in transit.",
+            "medium",
+            "Open My Loads",
+            "nav",
+            "loads",
+            ["LOAD_IN_TRANSIT"],
+        )
+    if compliance_tasks_count > 0:
+        _add(
+            "compliance_tasks",
+            "Compliance Tasks Pending",
+            f"You have {compliance_tasks_count} compliance task(s) to review.",
+            "medium",
+            "Open Compliance",
+            "nav",
+            "compliance",
+            ["COMPLIANCE_TASKS"],
+        )
+    if active_loads_count == 0 and availability_on and missing_docs_count == 0 and consent_eligible:
+        _add(
+            "marketplace_ready",
+            "Marketplace Ready",
+            "Your profile looks ready. Stay available to attract more carrier opportunities.",
+            "low",
+            "Browse Marketplace",
+            "nav",
+            "marketplace",
+            ["READY_STATE"],
+        )
+
+    suggestions.sort(key=lambda s: (_priority_rank(str(s.get("priority"))), str(s.get("id") or "")))
+    if len(suggestions) < 3:
+        _add(
+            "profile_tip",
+            "Profile Tip",
+            "Keep your profile, availability, and documents up to date for better matching.",
+            "low",
+            "Go to Profile",
+            "nav",
+            "settings",
+            ["PROFILE_OPTIMIZATION"],
+        )
+        suggestions.sort(key=lambda s: (_priority_rank(str(s.get("priority"))), str(s.get("id") or "")))
+    return suggestions[:5]
+
+
+def _driver_try_llm_rewrite_suggestions(
+    suggestions: List[Dict[str, Any]],
+    context: Dict[str, Any],
+) -> tuple[str, List[Dict[str, Any]]]:
+    if not suggestions:
+        return ("rules", suggestions)
+    if not getattr(settings, "GROQ_API_KEY", ""):
+        return ("rules", suggestions)
+
+    try:
+        import re
+        from groq import Groq
+
+        client = Groq(api_key=settings.GROQ_API_KEY)
+        payload = {
+            "instructions": [
+                "Rewrite each suggestion title and detail in concise operational language for truck drivers.",
+                "Preserve intent, urgency, and facts from the input context.",
+                "Do not invent numbers, dates, or policy details.",
+                "Return JSON only.",
+            ],
+            "schema": {
+                "suggestions": [
+                    {"id": "string", "title": "string", "detail": "string"}
+                ]
+            },
+            "context": context,
+            "suggestions": [
+                {
+                    "id": s.get("id"),
+                    "title": s.get("title"),
+                    "detail": s.get("detail"),
+                    "priority": s.get("priority"),
+                }
+                for s in suggestions
+            ],
+        }
+
+        resp = client.chat.completions.create(
+            model=settings.GROQ_TEXT_MODEL,
+            messages=[
+                {"role": "system", "content": "You rewrite dashboard suggestions for clarity. Output JSON only."},
+                {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+            ],
+            temperature=0.2,
+            max_tokens=600,
+        )
+        text = (resp.choices[0].message.content or "").strip()
+        if text.startswith("```"):
+            text = text.strip("`").strip()
+        match = re.search(r"\{[\s\S]*\}", text)
+        raw = match.group(0) if match else text
+        parsed = json.loads(raw)
+        rows = parsed.get("suggestions") if isinstance(parsed, dict) else None
+        if not isinstance(rows, list):
+            return ("rules", suggestions)
+
+        by_id = {str(s.get("id")): dict(s) for s in suggestions}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            sid = str(row.get("id") or "").strip()
+            if not sid or sid not in by_id:
+                continue
+            title = str(row.get("title") or "").strip()
+            detail = str(row.get("detail") or "").strip()
+            if title:
+                by_id[sid]["title"] = title[:120]
+            if detail:
+                by_id[sid]["detail"] = detail[:220]
+
+        merged = [by_id[str(s.get("id"))] for s in suggestions if str(s.get("id")) in by_id]
+        return ("llm", merged)
+    except Exception:
+        return ("rules", suggestions)
+
+
+@app.get("/driver/dashboard/insights")
+async def get_driver_dashboard_insights(user: Dict[str, Any] = Depends(get_current_user)):
+    role = str(user.get("role") or "").strip().lower()
+    if role != "driver":
+        raise HTTPException(status_code=403, detail="Only drivers can access dashboard insights")
+
+    uid = str(user.get("uid") or "").strip()
+    if not uid:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    now = time.time()
+    driver_doc: Dict[str, Any] = {}
+    try:
+        snap = db.collection("drivers").document(uid).get()
+        if snap.exists:
+            driver_doc = snap.to_dict() or {}
+    except Exception:
+        driver_doc = {}
+
+    availability_on = bool(driver_doc.get("is_available", user.get("is_available", False)))
+    views_count = _safe_int(
+        driver_doc.get("marketplace_views_count", user.get("marketplace_views_count", 0)),
+        default=0,
+    )
+
+    required_items: List[Dict[str, Any]] = []
+    consent_eligible = False
+    doc_counts = {"missing": 0, "expired": 0, "expiring_soon": 0, "valid_or_complete": 0}
+    try:
+        from .onboarding import get_driver_required_docs
+
+        docs_payload = await get_driver_required_docs(user=user)
+        required_items = docs_payload.get("required") if isinstance(docs_payload.get("required"), list) else []
+        consent_eligible = bool(((docs_payload.get("consent") or {}).get("eligible")))
+        doc_counts = _driver_doc_status_counts(required_items)
+    except Exception as e:
+        print(f"[DriverInsights] Failed to read required docs: {e}")
+        _DRIVER_INSIGHTS_METRICS["errors_count"] = int(_DRIVER_INSIGHTS_METRICS.get("errors_count") or 0) + 1
+
+    loads = _driver_collect_assigned_loads(uid)
+    active_loads_count = len(loads)
+    in_transit_count = len(
+        [
+            l
+            for l in loads
+            if str(l.get("status") or "").strip().lower() in {"in_transit", "in-transit", "in transit"}
+        ]
+    )
+
+    try:
+        tasks = await get_compliance_tasks(user)
+        compliance_tasks_count = len(tasks) if isinstance(tasks, list) else 0
+    except Exception:
+        compliance_tasks_count = 0
+        _DRIVER_INSIGHTS_METRICS["errors_count"] = int(_DRIVER_INSIGHTS_METRICS.get("errors_count") or 0) + 1
+
+    rule_suggestions = _driver_build_rule_suggestions(
+        missing_docs_count=int(doc_counts.get("missing") or 0),
+        expiring_docs_count=int(doc_counts.get("expiring_soon") or 0),
+        expired_docs_count=int(doc_counts.get("expired") or 0),
+        consent_eligible=consent_eligible,
+        availability_on=availability_on,
+        views_count=views_count,
+        active_loads_count=active_loads_count,
+        in_transit_count=in_transit_count,
+        compliance_tasks_count=compliance_tasks_count,
+    )
+    source, ai_suggestions = _driver_try_llm_rewrite_suggestions(
+        rule_suggestions,
+        context={
+            "views_count": views_count,
+            "availability_on": availability_on,
+            "missing_docs_count": int(doc_counts.get("missing") or 0),
+            "expiring_docs_count": int(doc_counts.get("expiring_soon") or 0),
+            "expired_docs_count": int(doc_counts.get("expired") or 0),
+            "active_loads_count": active_loads_count,
+            "in_transit_count": in_transit_count,
+            "consent_eligible": consent_eligible,
+            "compliance_tasks_count": compliance_tasks_count,
+        },
+    )
+    if source == "llm":
+        _DRIVER_INSIGHTS_METRICS["llm_count"] = int(_DRIVER_INSIGHTS_METRICS.get("llm_count") or 0) + 1
+    else:
+        _DRIVER_INSIGHTS_METRICS["rules_count"] = int(_DRIVER_INSIGHTS_METRICS.get("rules_count") or 0) + 1
+    _DRIVER_INSIGHTS_METRICS["last_generated_at"] = now
+    _DRIVER_INSIGHTS_METRICS["last_source"] = source
+
+    providers = _driver_dashboard_provider_cards(limit=4)
+
+    quick_actions: List[Dict[str, Any]] = []
+    quick_ids: set[str] = set()
+
+    def _add_action(
+        *,
+        aid: str,
+        label: str,
+        icon: str,
+        action_type: str,
+        action_target: str,
+        priority: str = "medium",
+    ) -> None:
+        if aid in quick_ids:
+            return
+        quick_ids.add(aid)
+        quick_actions.append(
+            {
+                "id": aid,
+                "label": label,
+                "icon": icon,
+                "action_type": action_type,
+                "action_target": action_target,
+                "priority": priority,
+            }
+        )
+
+    if int(doc_counts.get("missing") or 0) > 0 or int(doc_counts.get("expired") or 0) > 0:
+        _add_action(
+            aid="upload_missing_docs",
+            label="Upload Missing Documents",
+            icon="fa-solid fa-upload",
+            action_type="nav",
+            action_target="hiring",
+            priority="high",
+        )
+    if not consent_eligible:
+        _add_action(
+            aid="complete_consent",
+            label="Complete Consent",
+            icon="fa-solid fa-pen",
+            action_type="nav",
+            action_target="esign",
+            priority="high",
+        )
+    if not availability_on:
+        _add_action(
+            aid="enable_availability",
+            label="Enable Availability",
+            icon="fa-solid fa-toggle-on",
+            action_type="toggle_availability",
+            action_target="availability",
+            priority="high",
+        )
+    if active_loads_count > 0:
+        _add_action(
+            aid="view_active_loads",
+            label="View Active Loads",
+            icon="fa-solid fa-truck",
+            action_type="nav",
+            action_target="loads",
+            priority="medium",
+        )
+    _add_action(
+        aid="browse_marketplace",
+        label="Browse Marketplace",
+        icon="fa-solid fa-store",
+        action_type="nav",
+        action_target="marketplace",
+        priority="medium",
+    )
+    _add_action(
+        aid="get_support",
+        label="Get Support",
+        icon="fa-solid fa-headset",
+        action_type="open_support",
+        action_target="support",
+        priority="low",
+    )
+    quick_actions = quick_actions[:4]
+
+    if views_count > 0:
+        marketplace_summary = f"{views_count} carrier profile view(s) this week."
+    elif availability_on:
+        marketplace_summary = "Availability is ON. Keep profile and documents updated to improve discoverability."
+    else:
+        marketplace_summary = "No profile views this week. Turn on availability to be discovered by carriers."
+
+    active_trip = _driver_active_trip_payload(
+        loads=loads,
+        in_transit_count=in_transit_count,
+        doc_counts=doc_counts,
+        views_count=views_count,
+        availability_on=availability_on,
+    )
+    smart_alerts = _driver_smart_alerts_payload(
+        doc_counts=doc_counts,
+        consent_eligible=consent_eligible,
+        availability_on=availability_on,
+        compliance_tasks_count=compliance_tasks_count,
+    )
+    daily_insights = _driver_daily_insights_payload(
+        in_transit_count=in_transit_count,
+        doc_counts=doc_counts,
+        compliance_tasks_count=compliance_tasks_count,
+        availability_on=availability_on,
+        views_count=views_count,
+    )
+
+    logger.info(
+        "[DriverInsights] uid=%s source=%s suggestions=%s views=%s active_loads=%s in_transit=%s missing_docs=%s expiring_docs=%s expired_docs=%s smart_alerts=%s",
+        uid,
+        source,
+        len(ai_suggestions or []),
+        views_count,
+        active_loads_count,
+        in_transit_count,
+        int(doc_counts.get("missing") or 0),
+        int(doc_counts.get("expiring_soon") or 0),
+        int(doc_counts.get("expired") or 0),
+        len(smart_alerts or []),
+    )
+
+    return {
+        "generated_at": now,
+        "source": source,
+        "ai_suggestions": ai_suggestions,
+        "active_trip": active_trip,
+        "smart_alerts": smart_alerts,
+        "daily_insights": daily_insights,
+        "marketplace_activity": {
+            "views_count": views_count,
+            "availability_on": availability_on,
+            "active_loads_count": active_loads_count,
+            "in_transit_loads_count": in_transit_count,
+            "missing_docs_count": int(doc_counts.get("missing") or 0),
+            "expiring_docs_count": int(doc_counts.get("expiring_soon") or 0),
+            "expired_docs_count": int(doc_counts.get("expired") or 0),
+            "summary": marketplace_summary,
+        },
+        "service_providers": providers,
+        "quick_actions": quick_actions,
+        "emergency_action": {
+            "id": "emergency_assist",
+            "label": "Emergency Assist",
+            "action_type": "open_support",
+            "action_target": "support",
+        },
+    }
+
+
+@app.get("/admin/driver-dashboard/insights-metrics")
+async def get_driver_dashboard_insights_metrics(user: Dict[str, Any] = Depends(require_admin)):
+    _ = user
+    return {
+        "metrics": {
+            "rules_count": int(_DRIVER_INSIGHTS_METRICS.get("rules_count") or 0),
+            "llm_count": int(_DRIVER_INSIGHTS_METRICS.get("llm_count") or 0),
+            "errors_count": int(_DRIVER_INSIGHTS_METRICS.get("errors_count") or 0),
+            "last_generated_at": float(_DRIVER_INSIGHTS_METRICS.get("last_generated_at") or 0.0),
+            "last_source": _DRIVER_INSIGHTS_METRICS.get("last_source"),
+        }
+    }
+
+
+@app.get("/carrier/dashboard/insights")
+async def get_carrier_dashboard_insights(user: Dict[str, Any] = Depends(get_current_user)):
+    role = str(user.get("role") or "").strip().lower()
+    if role != "carrier":
+        raise HTTPException(status_code=403, detail="Only carriers can access carrier dashboard insights")
+
+    uid = str(user.get("uid") or "").strip()
+    if not uid:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    now = time.time()
+    loads = _collect_carrier_loads(uid)
+
+    active_states = {"posted", "tendered", "covered", "accepted", "assigned", "dispatched", "in_transit"}
+    in_transit_states = {"in_transit"}
+    delivered_states = {"delivered", "completed", "settled"}
+    pending_dispatch_states = {"posted", "tendered", "covered", "assigned"}
+
+    active_count = 0
+    in_transit_count = 0
+    delivered_count = 0
+    pending_dispatch_count = 0
+    total_open_value = 0.0
+
+    for load in loads:
+        status = _normalize_load_status(load.get("status"))
+        if status in active_states:
+            active_count += 1
+            total_open_value += float(load.get("total_rate") or load.get("linehaul_rate") or load.get("rate") or 0.0)
+        if status in in_transit_states:
+            in_transit_count += 1
+        if status in delivered_states:
+            delivered_count += 1
+        if status in pending_dispatch_states:
+            pending_dispatch_count += 1
+
+    expiring_docs_count = 0
+    try:
+        compliance = await get_compliance_status_dashboard(user)
+        documents = compliance.get("documents") if isinstance(compliance.get("documents"), list) else []
+        expiring_docs_count = len(
+            [d for d in documents if str(d.get("status") or "").strip().lower() in {"expired", "expiring soon"}]
+        )
+    except Exception as e:
+        logger.warning("[CarrierInsights] compliance read failed uid=%s err=%s", uid, e)
+
+    suggestions = _carrier_rule_suggestions(
+        active_count=active_count,
+        in_transit_count=in_transit_count,
+        delivered_count=delivered_count,
+        pending_dispatch_count=pending_dispatch_count,
+        expiring_docs_count=expiring_docs_count,
+    )
+
+    logger.info(
+        "[CarrierInsights] uid=%s suggestions=%s active=%s in_transit=%s delivered=%s pending_dispatch=%s expiring_docs=%s",
+        uid,
+        len(suggestions or []),
+        active_count,
+        in_transit_count,
+        delivered_count,
+        pending_dispatch_count,
+        expiring_docs_count,
+    )
+
+    return {
+        "generated_at": now,
+        "source": "rules",
+        "ai_suggestions": suggestions,
+        "summary": {
+            "active_loads": active_count,
+            "in_transit_loads": in_transit_count,
+            "delivered_loads": delivered_count,
+            "pending_dispatch_loads": pending_dispatch_count,
+            "expiring_documents_count": expiring_docs_count,
+            "open_loads_value": total_open_value,
+            "open_loads_value_label": _money_str(total_open_value),
+        },
+    }
+
+
+@app.get("/shipper/dashboard/insights")
+async def get_shipper_dashboard_insights(user: Dict[str, Any] = Depends(get_current_user)):
+    role = str(user.get("role") or "").strip().lower()
+    if role not in {"shipper", "broker"}:
+        raise HTTPException(status_code=403, detail="Only shippers can access shipper dashboard insights")
+
+    uid = str(user.get("uid") or "").strip()
+    if not uid:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    now = time.time()
+    loads = _collect_shipper_loads(uid)
+
+    active_states = {"posted", "tendered", "covered", "accepted", "awarded", "dispatched", "in_transit"}
+    posted_states = {"posted", "tendered"}
+    in_transit_states = {"in_transit"}
+    delivered_states = {"delivered", "completed", "settled"}
+
+    active_rows = [l for l in loads if _normalize_load_status(l.get("status")) in active_states]
+    active_count = len(active_rows)
+    posted_count = len([l for l in loads if _normalize_load_status(l.get("status")) in posted_states])
+    in_transit_count = len([l for l in loads if _normalize_load_status(l.get("status")) in in_transit_states])
+    delivered_count = len([l for l in loads if _normalize_load_status(l.get("status")) in delivered_states])
+    pending_offers_count = _count_pending_offers(loads)
+    lane_label, lane_count = _top_lane(active_rows if active_rows else loads)
+
+    compliance_warning_count = 0
+    try:
+        compliance = await get_compliance_status_dashboard(user)
+        warnings = compliance.get("warnings") if isinstance(compliance.get("warnings"), list) else []
+        compliance_warning_count = len(warnings)
+    except Exception as e:
+        logger.warning("[ShipperInsights] compliance read failed uid=%s err=%s", uid, e)
+
+    built = _shipper_rule_suggestions(
+        active_count=active_count,
+        posted_count=posted_count,
+        in_transit_count=in_transit_count,
+        delivered_count=delivered_count,
+        pending_offers_count=pending_offers_count,
+        lane_label=lane_label,
+        lane_count=lane_count,
+        compliance_warning_count=compliance_warning_count,
+    )
+
+    market_insights: List[Dict[str, Any]] = []
+    if lane_label and lane_count > 0:
+        market_insights.append(
+            {
+                "id": "shipper_top_lane",
+                "title": "Top Lane",
+                "detail": f"{lane_label} currently appears in {lane_count} load(s).",
+                "action_type": "nav",
+                "action_target": "marketplace",
+            }
+        )
+    if pending_offers_count > 0:
+        market_insights.append(
+            {
+                "id": "shipper_pending_offers",
+                "title": "Pending Offers",
+                "detail": f"{pending_offers_count} offer(s) waiting for review.",
+                "action_type": "nav",
+                "action_target": "carrier-bids",
+            }
+        )
+    if delivered_count > 0:
+        market_insights.append(
+            {
+                "id": "shipper_delivered_followup",
+                "title": "Delivered Follow-Up",
+                "detail": f"{delivered_count} delivered load(s) are ready for post-delivery billing checks.",
+                "action_type": "nav",
+                "action_target": "bills",
+            }
+        )
+
+    logger.info(
+        "[ShipperInsights] uid=%s suggestions=%s active=%s posted=%s in_transit=%s delivered=%s pending_offers=%s lane=%s lane_count=%s",
+        uid,
+        len(built.get("ai_suggestions") or []),
+        active_count,
+        posted_count,
+        in_transit_count,
+        delivered_count,
+        pending_offers_count,
+        lane_label or "",
+        lane_count,
+    )
+
+    return {
+        "generated_at": now,
+        "source": "rules",
+        "ai_insights": {
+            "headline": built.get("headline"),
+            "bullets": built.get("bullets") or [],
+        },
+        "ai_suggestions": built.get("ai_suggestions") or [],
+        "market_insights": market_insights[:3],
+        "summary": {
+            "active_loads": active_count,
+            "posted_loads": posted_count,
+            "in_transit_loads": in_transit_count,
+            "delivered_loads": delivered_count,
+            "pending_offers": pending_offers_count,
+            "top_lane": lane_label,
+            "top_lane_count": lane_count,
+            "compliance_warning_count": compliance_warning_count,
+        },
+    }
 
 
 @app.post("/compliance/ai-analyze")
@@ -8629,6 +10438,7 @@ app.include_router(load_workflow_router)
 app.include_router(consents_router)
 app.include_router(calendar_router)
 app.include_router(help_center_router)
+app.include_router(role_chat_router)
 
 @app.on_event("startup")
 def startup_events():

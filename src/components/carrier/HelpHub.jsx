@@ -1,5 +1,51 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import '../../styles/carrier/HelpHub.css';
+import {
+  chatWithRoleAssistant,
+  getRoleAssistantConversation,
+  listRoleAssistantConversations,
+} from '../../api/roleAssistant';
+
+function normalizeMessageText(text) {
+  return String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function isSameMessageApprox(a, b) {
+  const roleA = String(a?.role || '').trim().toLowerCase();
+  const roleB = String(b?.role || '').trim().toLowerCase();
+  if (!roleA || roleA !== roleB) return false;
+
+  const textA = normalizeMessageText(a?.content);
+  const textB = normalizeMessageText(b?.content);
+  if (!textA || textA !== textB) return false;
+
+  const tsA = Number(a?.created_at || 0);
+  const tsB = Number(b?.created_at || 0);
+  if (!Number.isFinite(tsA) || !Number.isFinite(tsB) || tsA <= 0 || tsB <= 0) return true;
+  return Math.abs(tsA - tsB) <= 15;
+}
+
+function mergeRemoteWithLocalPending(remoteMessages, currentMessages) {
+  const remote = Array.isArray(remoteMessages) ? remoteMessages : [];
+  const current = Array.isArray(currentMessages) ? currentMessages : [];
+  const pendingLocal = current.filter((m) => String(m?.id || '').startsWith('local-'));
+  if (pendingLocal.length === 0) return remote;
+  const merged = [...remote];
+  pendingLocal.forEach((m) => {
+    const duplicateExists = remote.some((r) => isSameMessageApprox(r, m));
+    if (!duplicateExists) {
+      merged.push(m);
+    }
+  });
+  merged.sort((a, b) => Number(a?.created_at || 0) - Number(b?.created_at || 0));
+  const deduped = [];
+  merged.forEach((m) => {
+    const last = deduped[deduped.length - 1];
+    if (last && isSameMessageApprox(last, m)) return;
+    deduped.push(m);
+  });
+  return deduped;
+}
 
 const HelpHub = () => {
   const [activeTab, setActiveTab] = useState('ai-assistant');
@@ -10,6 +56,25 @@ const HelpHub = () => {
   const [searchTickets, setSearchTickets] = useState('');
   const [searchResources, setSearchResources] = useState('');
   const [calendarView, setCalendarView] = useState('Monthly');
+  const [conversationId, setConversationId] = useState('');
+  const [messages, setMessages] = useState([
+    {
+      id: 'seed-assistant',
+      role: 'assistant',
+      content:
+        "Hello! I'm your FreightPower AI assistant. I can help you with loads, compliance, documentation, and more. What can I help you with today?",
+      created_at: Date.now() / 1000,
+    },
+  ]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState('');
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const chatEndRef = useRef(null);
+  const historyAbortRef = useRef(null);
+  const listAbortRef = useRef(null);
+  const syncTimerRef = useRef(null);
+  const hasUserInteractedRef = useRef(false);
+  const sendInFlightRef = useRef(false);
 
   // Sample data for tickets
   const tickets = [
@@ -139,16 +204,155 @@ const HelpHub = () => {
     { key: 'schedule-support', label: 'Schedule Support', }
   ];
 
-  const handleSendMessage = () => {
-    if (message.trim()) {
-      // Handle message sending logic here
-      console.log('Sending message:', message);
-      setMessage('');
+  const refreshConversations = useCallback(async () => {
+    if (listAbortRef.current) {
+      listAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    listAbortRef.current = controller;
+    try {
+      const data = await listRoleAssistantConversations(20, { signal: controller.signal });
+      return Array.isArray(data?.conversations) ? data.conversations : [];
+    } catch (e) {
+      if (e?.name === 'AbortError' || String(e?.message || '').toLowerCase().includes('request cancelled')) {
+        return [];
+      }
+      throw e;
+    } finally {
+      if (listAbortRef.current === controller) {
+        listAbortRef.current = null;
+      }
+    }
+  }, []);
+
+  const loadConversation = async (id, options = {}) => {
+    const cid = String(id || '').trim();
+    if (!cid) return;
+    const preserveLocal = Boolean(options?.preserveLocal);
+    const skipIfUserInteracted = Boolean(options?.skipIfUserInteracted);
+    if (historyAbortRef.current) {
+      historyAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    historyAbortRef.current = controller;
+    setHistoryLoading(true);
+    try {
+      const data = await getRoleAssistantConversation(cid, 200, { signal: controller.signal });
+      if (skipIfUserInteracted && hasUserInteractedRef.current) {
+        return;
+      }
+      const rows = Array.isArray(data?.messages) ? data.messages : [];
+      setMessages((prev) => (preserveLocal ? mergeRemoteWithLocalPending(rows, prev) : rows));
+      setConversationId(cid);
+    } catch (e) {
+      if (e?.name === 'AbortError' || String(e?.message || '').toLowerCase().includes('request cancelled')) {
+        return;
+      }
+      setChatError(e?.message || 'Failed to load conversation');
+    } finally {
+      if (historyAbortRef.current === controller) {
+        historyAbortRef.current = null;
+      }
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let alive = true;
+    hasUserInteractedRef.current = false;
+    (async () => {
+      try {
+        const list = await refreshConversations();
+        if (!alive || hasUserInteractedRef.current) return;
+        const first = Array.isArray(list) ? list[0] : null;
+        if (first?.conversation_id) {
+          await loadConversation(first.conversation_id, { preserveLocal: true, skipIfUserInteracted: true });
+        }
+      } catch {
+        // Keep seeded message.
+      }
+    })();
+    return () => {
+      alive = false;
+      if (historyAbortRef.current) {
+        historyAbortRef.current.abort();
+        historyAbortRef.current = null;
+      }
+      if (listAbortRef.current) {
+        listAbortRef.current.abort();
+        listAbortRef.current = null;
+      }
+      if (syncTimerRef.current) {
+        window.clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = null;
+      }
+    };
+  }, [refreshConversations]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, chatLoading, historyLoading]);
+
+  const handleSendMessage = async (raw) => {
+    const text = String(raw ?? message).trim();
+    if (!text || chatLoading || sendInFlightRef.current) return;
+    sendInFlightRef.current = true;
+    hasUserInteractedRef.current = true;
+    if (historyAbortRef.current) {
+      historyAbortRef.current.abort();
+      historyAbortRef.current = null;
+    }
+    if (listAbortRef.current) {
+      listAbortRef.current.abort();
+      listAbortRef.current = null;
+    }
+    setChatError('');
+    setChatLoading(true);
+    setMessage('');
+
+    setMessages((prev) => [
+      ...prev,
+      { id: `local-user-${Date.now()}`, role: 'user', content: text, created_at: Date.now() / 1000 },
+    ]);
+
+    try {
+      const response = await chatWithRoleAssistant({
+        message: text,
+        conversation_id: conversationId || undefined,
+        include_history: true,
+        max_history_messages: 30,
+        auto_tool_inference: true,
+      });
+      const cid = String(response?.conversation_id || '').trim();
+      const assistantMessage = {
+        id: `local-assistant-${Date.now()}`,
+        role: 'assistant',
+        content: String(response?.reply || ''),
+        created_at: Number(response?.created_at || Date.now() / 1000),
+      };
+      if (cid) {
+        setConversationId(cid);
+        setMessages((prev) => [...prev, assistantMessage]);
+        if (syncTimerRef.current) {
+          window.clearTimeout(syncTimerRef.current);
+        }
+        syncTimerRef.current = window.setTimeout(() => {
+          loadConversation(cid, { preserveLocal: true });
+        }, 900);
+      } else {
+        setMessages((prev) => [...prev, assistantMessage]);
+      }
+    } catch (e) {
+      setChatError(e?.message || 'Failed to send message');
+    } finally {
+      setChatLoading(false);
+      sendInFlightRef.current = false;
     }
   };
 
   const handleQuickCommand = (command) => {
     setMessage(command);
+    handleSendMessage(command);
   };
 
   const handleKeyPress = (e) => {
@@ -200,14 +404,47 @@ const HelpHub = () => {
                 </div>
 
                 <div className="chat-messages">
-                  <div className="message ai-message">
-                    <div className="message-avatar">
-                      <i className="fa-solid fa-robot"></i>
+                  {messages.map((m) => (
+                    <div key={m.id} className={`message ${m.role === 'user' ? 'user-message' : 'ai-message'}`}>
+                      <div className="message-avatar">
+                        <i className={`fa-solid ${m.role === 'user' ? 'fa-user' : 'fa-robot'}`}></i>
+                      </div>
+                      <div className="message-content">
+                        <p>{m.content}</p>
+                      </div>
                     </div>
-                    <div className="message-content">
-                      <p>Hello! I'm your FreightPower AI assistant. I can help you with loads, compliance, documentation, and more. What can I help you with today?</p>
+                  ))}
+                  {historyLoading && (
+                    <div className="message ai-message">
+                      <div className="message-avatar">
+                        <i className="fa-solid fa-robot"></i>
+                      </div>
+                      <div className="message-content">
+                        <p>Loading conversation...</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
+                  {chatLoading && (
+                    <div className="message ai-message">
+                      <div className="message-avatar">
+                        <i className="fa-solid fa-robot"></i>
+                      </div>
+                      <div className="message-content">
+                        <p>Thinking...</p>
+                      </div>
+                    </div>
+                  )}
+                  {chatError && (
+                    <div className="message ai-message">
+                      <div className="message-avatar">
+                        <i className="fa-solid fa-triangle-exclamation"></i>
+                      </div>
+                      <div className="message-content">
+                        <p>{chatError}</p>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
                 </div>
 
                 <div className="chat-input-container">
@@ -218,6 +455,7 @@ const HelpHub = () => {
                       onKeyPress={handleKeyPress}
                       placeholder="Type your message..."
                       rows="1"
+                      disabled={chatLoading}
                     />
                     <div className="input-actions">
                       <button className="attach-btn">
@@ -225,8 +463,8 @@ const HelpHub = () => {
                       </button>
                       <button 
                         className="send-btn"
-                        onClick={handleSendMessage}
-                        disabled={!message.trim()}
+                        onClick={() => handleSendMessage()}
+                        disabled={!message.trim() || chatLoading}
                       >
                         <i className="fa-solid fa-paper-plane"></i>
                       </button>
