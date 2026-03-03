@@ -328,11 +328,17 @@ def _send_email(to_email: str, subject: str, body: str, is_html: bool = False) -
 
         msg.attach(MIMEText(body, "html" if is_html else "plain"))
 
-        server = smtplib.SMTP(settings.SMTP_SERVER, settings.SMTP_PORT)
-        server.starttls()
-        server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
-        server.sendmail(settings.EMAIL_FROM, to_email, msg.as_string())
-        server.quit()
+        # Ensure we never hang indefinitely (a common cause of stuck scheduler jobs).
+        server = smtplib.SMTP(settings.SMTP_SERVER, settings.SMTP_PORT, timeout=10)
+        try:
+            server.starttls()
+            server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+            server.sendmail(settings.EMAIL_FROM, to_email, msg.as_string())
+        finally:
+            try:
+                server.quit()
+            except Exception:
+                pass
         return True
     except Exception as e:
         print(f"Error sending email: {e}")
@@ -459,7 +465,7 @@ def queue_delayed_message_emails(
         ref.set(payload, merge=True)
 
 
-def process_pending_message_email_notifications_job(max_batch: int = 30):
+def process_pending_message_email_notifications_job(max_batch: int = 30, *, max_runtime_s: float = 45.0):
     """Scheduled job: send email if message still unread after delay.
 
     Runs in APScheduler thread, so keep it synchronous.
@@ -467,8 +473,14 @@ def process_pending_message_email_notifications_job(max_batch: int = 30):
     if not getattr(settings, "ENABLE_MESSAGE_EMAIL_NOTIFICATIONS", False):
         return
 
+    start = time.monotonic()
+    try:
+        print(f"[EmailNotifJob] start max_batch={int(max_batch or 0)}")
+    except Exception:
+        pass
     now = _now()
     far_future = now + (60 * 60 * 24 * 365 * 10)
+    firestore_timeout_s = float(getattr(settings, "FIRESTORE_JOB_TIMEOUT_SECONDS", 8) or 8)
     # Query only on the time field to avoid requiring a composite index.
     q = (
         db.collection("message_email_notifications")
@@ -478,12 +490,33 @@ def process_pending_message_email_notifications_job(max_batch: int = 30):
     )
 
     try:
-        snaps = list(q.stream())
+        # Firestore network hiccups can otherwise hang this job and block future runs.
+        snaps = list(q.stream(timeout=firestore_timeout_s))
     except Exception as e:
         print(f"Email notification job query error: {e}")
+        try:
+            print(f"[EmailNotifJob] end elapsed_s={time.monotonic() - start:.2f} (query_error)")
+        except Exception:
+            pass
         return
 
+    def _ref_update(ref, payload: dict) -> None:
+        try:
+            ref.update(payload, timeout=firestore_timeout_s)
+        except TypeError:
+            ref.update(payload)
+
+    def _doc_get(ref):
+        try:
+            return ref.get(timeout=firestore_timeout_s)
+        except TypeError:
+            return ref.get()
+
     for snap in snaps:
+        # Keep each run bounded so the 1-minute interval job doesn't overlap and spam logs.
+        if (time.monotonic() - start) > float(max_runtime_s or 45.0):
+            break
+
         ref = snap.reference
         d = snap.to_dict() or {}
         status = (d.get("status") or "").strip().lower()
@@ -494,32 +527,34 @@ def process_pending_message_email_notifications_job(max_batch: int = 30):
         recipient_uid = d.get("recipient_uid")
         msg_created_at = float(d.get("message_created_at") or 0.0)
         if not thread_id or not recipient_uid or not msg_created_at:
-            ref.update({"status": "invalid", "send_after": float(far_future), "updated_at": _now()})
+            _ref_update(ref, {"status": "invalid", "send_after": float(far_future), "updated_at": _now()})
             continue
 
         # Respect the user's Messages toggle at send-time as well.
         try:
             if not _messages_notifications_enabled_for_uid(str(recipient_uid)):
-                ref.update(
+                _ref_update(
+                    ref,
                     {
                         "status": "cancelled",
                         "cancelled_at": _now(),
                         "send_after": float(far_future),
                         "updated_at": _now(),
-                    }
+                    },
                 )
                 continue
         except Exception:
             # If we can't verify prefs, err on the side of not spamming.
-            ref.update({"status": "pending", "send_after": float(_now() + 120), "updated_at": _now()})
+            _ref_update(ref, {"status": "pending", "send_after": float(_now() + 120), "updated_at": _now()})
             continue
 
         # Check unread status using persistent read receipts.
         try:
-            read_doc = db.collection("conversation_reads").document(_conversation_read_doc_id(thread_id, recipient_uid)).get()
+            read_ref = db.collection("conversation_reads").document(_conversation_read_doc_id(thread_id, recipient_uid))
+            read_doc = _doc_get(read_ref)
             last_read_at = float((read_doc.to_dict() or {}).get("last_read_at") or 0.0) if read_doc.exists else 0.0
             if last_read_at and last_read_at >= msg_created_at:
-                ref.update(
+                _ref_update(
                     {
                         "status": "cancelled",
                         "cancelled_at": _now(),
@@ -530,7 +565,7 @@ def process_pending_message_email_notifications_job(max_batch: int = 30):
                 continue
         except Exception:
             # If we can't verify read state, don't send.
-            ref.update({"status": "pending", "send_after": float(_now() + 60), "updated_at": _now()})
+            _ref_update(ref, {"status": "pending", "send_after": float(_now() + 60), "updated_at": _now()})
             continue
 
         # Determine recipient email.
@@ -541,7 +576,7 @@ def process_pending_message_email_notifications_job(max_batch: int = 30):
             email = None
 
         if not email:
-            ref.update({"status": "no_email", "send_after": float(far_future), "updated_at": _now()})
+            _ref_update(ref, {"status": "no_email", "send_after": float(far_future), "updated_at": _now()})
             continue
 
         sender_name = d.get("sender_name") or "Someone"
@@ -568,13 +603,14 @@ def process_pending_message_email_notifications_job(max_batch: int = 30):
 
         attempts = int(d.get("attempts") or 0)
         try:
-            ref.update(
+            _ref_update(
+                ref,
                 {
                     "status": "sending",
                     "attempts": attempts + 1,
                     "send_after": float(_now() + 600),
                     "updated_at": _now(),
-                }
+                },
             )
         except Exception:
             # Another worker might have taken it.
@@ -582,13 +618,18 @@ def process_pending_message_email_notifications_job(max_batch: int = 30):
 
         ok = _send_email(email, subject, html, True)
         if ok:
-            ref.update({"status": "sent", "sent_at": _now(), "send_after": float(far_future), "updated_at": _now()})
+            _ref_update(ref, {"status": "sent", "sent_at": _now(), "send_after": float(far_future), "updated_at": _now()})
         else:
             # Put back to pending for a limited number of retries.
             if attempts + 1 >= 3:
-                ref.update({"status": "failed", "send_after": float(far_future), "updated_at": _now()})
+                _ref_update(ref, {"status": "failed", "send_after": float(far_future), "updated_at": _now()})
             else:
-                ref.update({"status": "pending", "send_after": float(_now() + 120), "updated_at": _now()})
+                _ref_update(ref, {"status": "pending", "send_after": float(_now() + 120), "updated_at": _now()})
+
+    try:
+        print(f"[EmailNotifJob] end elapsed_s={time.monotonic() - start:.2f} candidates={len(snaps)}")
+    except Exception:
+        pass
 
 
 def _ensure_shipper_carrier_relationship(shipper_id: str, carrier_id: str) -> None:
@@ -955,20 +996,19 @@ async def unread_summary(user: Dict[str, Any] = Depends(get_current_user)):
 
     # Threads (membership-based). Use an ordered+limited query to avoid scanning huge sets.
     try:
-        thread_snaps = list(
+        q = (
             db.collection("conversations")
             .where("member_uids", "array_contains", uid)
             .order_by("updated_at", direction=firestore.Query.DESCENDING)
             .limit(500)
-            .stream()
         )
+        thread_snaps = await _fs_to_thread(lambda: list(q.stream()), timeout_s=10.0)
     except Exception:
-        thread_snaps = list(
-            db.collection("conversations")
-            .where("member_uids", "array_contains", uid)
-            .limit(500)
-            .stream()
-        )
+        try:
+            q = db.collection("conversations").where("member_uids", "array_contains", uid).limit(500)
+            thread_snaps = await _fs_to_thread(lambda: list(q.stream()), timeout_s=10.0)
+        except Exception:
+            thread_snaps = []
     read_refs = [db.collection("conversation_reads").document(_conversation_read_doc_id(s.id, uid)) for s in thread_snaps]
     read_docs = {d.id: (d.to_dict() or {}) for d in db.get_all(read_refs)} if read_refs else {}
 
@@ -1008,9 +1048,13 @@ async def unread_summary(user: Dict[str, Any] = Depends(get_current_user)):
                 .order_by("created_at", direction=firestore.Query.DESCENDING)
                 .limit(1)
             )
-            for ms in q.stream():
-                md = ms.to_dict() or {}
-                last_at = float(md.get("created_at") or 0.0)
+            try:
+                ms_snaps = await _fs_to_thread(lambda: list(q.stream()), timeout_s=10.0)
+                for ms in ms_snaps:
+                    md = ms.to_dict() or {}
+                    last_at = float(md.get("created_at") or 0.0)
+            except Exception:
+                pass
 
         read_id = _channel_read_doc_id(cid, uid)
         last_read_at = float((channel_read_docs.get(read_id) or {}).get("last_read_at") or 0.0)
@@ -1055,7 +1099,8 @@ async def list_carrier_drivers(user: Dict[str, Any] = Depends(get_current_user))
 
     rows: List[Dict[str, Any]] = []
     q = db.collection("drivers").where("carrier_id", "==", uid)
-    for snap in q.stream():
+    snaps = await _fs_to_thread(lambda: list(q.stream()), timeout_s=10.0)
+    for snap in snaps:
         d = snap.to_dict() or {}
         driver_id = snap.id
         d["id"] = driver_id
@@ -1171,7 +1216,8 @@ async def list_carrier_shippers(user: Dict[str, Any] = Depends(get_current_user)
     )
 
     shippers: Dict[str, Dict[str, Any]] = {}
-    for snap in q.stream():
+    snaps = await _fs_to_thread(lambda: list(q.stream()), timeout_s=10.0)
+    for snap in snaps:
         rel = snap.to_dict() or {}
         shipper_id = rel.get("shipper_id")
         if not shipper_id:
@@ -1203,7 +1249,8 @@ async def list_shipper_carriers(user: Dict[str, Any] = Depends(get_current_user)
     )
 
     carriers: Dict[str, Dict[str, Any]] = {}
-    for snap in q.stream():
+    snaps = await _fs_to_thread(lambda: list(q.stream()), timeout_s=10.0)
+    for snap in snaps:
         rel = snap.to_dict() or {}
         carrier_id = rel.get("carrier_id")
         if not carrier_id:
@@ -1356,7 +1403,8 @@ async def list_messages(thread_id: str, limit: int = 50, user: Dict[str, Any] = 
     )
 
     items: List[Dict[str, Any]] = []
-    for snap in q.stream():
+    snaps = await _fs_to_thread(lambda: list(q.stream()), timeout_s=10.0)
+    for snap in snaps:
         d = snap.to_dict() or {}
         d["id"] = snap.id
         items.append(d)
@@ -1411,17 +1459,19 @@ async def send_message(
             recipients = [m for m in members if m and m != uid]
             sender_name = _sender_display_name(user)
             thread_label = thread.get("title") or "Conversation"
-            await asyncio.to_thread(
-                queue_delayed_message_emails,
-                thread_id=thread_id,
-                message_id=msg_ref.id,
-                message_created_at=now,
-                sender_uid=uid,
-                sender_role=user.get("role"),
-                sender_name=sender_name,
-                thread_label=thread_label,
-                message_text=msg.get("text") or "",
-                recipient_uids=recipients,
+            await _fs_to_thread(
+                lambda: queue_delayed_message_emails(
+                    thread_id=thread_id,
+                    message_id=msg_ref.id,
+                    message_created_at=now,
+                    sender_uid=uid,
+                    sender_role=user.get("role"),
+                    sender_name=sender_name,
+                    thread_label=thread_label,
+                    message_text=msg.get("text") or "",
+                    recipient_uids=recipients,
+                ),
+                timeout_s=6.0,
             )
         except Exception as e:
             # Never fail sending a chat message due to email issues
@@ -1463,7 +1513,11 @@ async def stream_messages(thread_id: str, token: str, since: float = 0.0):
             )
 
             new_items: List[Dict[str, Any]] = []
-            for snap in q.stream():
+            try:
+                snaps = await _fs_to_thread(lambda: list(q.stream()), timeout_s=10.0)
+            except Exception:
+                snaps = []
+            for snap in snaps:
                 d = snap.to_dict() or {}
                 d["id"] = snap.id
                 new_items.append(d)
@@ -1610,7 +1664,8 @@ async def list_channel_messages(channel_id: str, limit: int = 50, user: Dict[str
     )
 
     items: List[Dict[str, Any]] = []
-    for snap in q.stream():
+    snaps = await _fs_to_thread(lambda: list(q.stream()), timeout_s=10.0)
+    for snap in snaps:
         d = snap.to_dict() or {}
         d["id"] = snap.id
         items.append(d)
@@ -1733,7 +1788,11 @@ async def admin_send_notification(
         if target_role != "all":
             token_q = token_q.where("role", "==", target_role)
         tokens = []
-        for s in token_q.stream():
+        try:
+            token_snaps = await _fs_to_thread(lambda: list(token_q.stream()), timeout_s=10.0)
+        except Exception:
+            token_snaps = []
+        for s in token_snaps:
             d = s.to_dict() or {}
             t = d.get("token")
             if t:

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useUserSettings } from '../../contexts/UserSettingsContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -20,6 +20,114 @@ import '../../styles/driver/DriverDashboard.css';
 import logo from '/src/assets/logo.png';
 import resp_logo from '/src/assets/logo_1.png';
 import { t } from '../../i18n/translate';
+import { getJson, postJson } from '../../api/http';
+
+const WorkflowSignaturePad = React.memo(function WorkflowSignaturePad({ value, onChange, disabled, clearText = 'Clear' }) {
+  const canvasRef = useRef(null);
+  const drawingRef = useRef(false);
+  const lastRef = useRef({ x: 0, y: 0 });
+  const lastEmittedValueRef = useRef('');
+
+  const clear = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    lastEmittedValueRef.current = '';
+    onChange?.('');
+  };
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    // Avoid flicker: when parent just echoes back the value we emitted, do not
+    // clear+reload the canvas (it already contains the drawn signature).
+    if (value === lastEmittedValueRef.current) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!value) return;
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0);
+    };
+    img.src = value;
+  }, [value]);
+
+  const getPoint = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return { x: clientX - rect.left, y: clientY - rect.top };
+  };
+
+  const start = (e) => {
+    if (disabled) return;
+    drawingRef.current = true;
+    lastRef.current = getPoint(e);
+    e.preventDefault?.();
+  };
+
+  const move = (e) => {
+    if (disabled) return;
+    if (!drawingRef.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const pt = getPoint(e);
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#111827';
+    ctx.beginPath();
+    ctx.moveTo(lastRef.current.x, lastRef.current.y);
+    ctx.lineTo(pt.x, pt.y);
+    ctx.stroke();
+    lastRef.current = pt;
+    e.preventDefault?.();
+  };
+
+  const end = () => {
+    if (disabled) return;
+    if (!drawingRef.current) return;
+    drawingRef.current = false;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    try {
+      const dataUrl = canvas.toDataURL('image/png');
+      lastEmittedValueRef.current = dataUrl;
+      onChange?.(dataUrl);
+    } catch {
+      // ignore
+    }
+  };
+
+  return (
+    <div className="dd-workflow-sig">
+      <canvas
+        ref={canvasRef}
+        width={420}
+        height={140}
+        className={`dd-workflow-sig__canvas${disabled ? ' is-disabled' : ''}`}
+        onMouseDown={start}
+        onMouseMove={move}
+        onMouseUp={end}
+        onMouseLeave={end}
+        onTouchStart={start}
+        onTouchMove={move}
+        onTouchEnd={end}
+      />
+      <div className="dd-workflow-sig__actions">
+        <button className="btn small ghost-cd" type="button" onClick={clear} disabled={disabled}>
+          {clearText}
+        </button>
+      </div>
+    </div>
+  );
+});
 
 export default function DriverDashboard() {
   const { currentUser, logout } = useAuth();
@@ -393,6 +501,136 @@ export default function DriverDashboard() {
   const [distanceToDelivery, setDistanceToDelivery] = useState(0);
   const [gpsPermissionGranted, setGpsPermissionGranted] = useState(false);
 
+  // Pickup / Delivery completion modals (required by backend workflow)
+  const [pickupModalOpen, setPickupModalOpen] = useState(false);
+  const [pickupModalLoad, setPickupModalLoad] = useState(null);
+  const [pickupShipperName, setPickupShipperName] = useState('');
+  const [pickupSignatureDataUrl, setPickupSignatureDataUrl] = useState('');
+  const [pickupRemarks, setPickupRemarks] = useState('');
+  const [pickupSubmitting, setPickupSubmitting] = useState(false);
+  const [pickupError, setPickupError] = useState('');
+  const [pickupBolChecked, setPickupBolChecked] = useState(false);
+  const [pickupHasBol, setPickupHasBol] = useState(false);
+  const [pickupBolLoading, setPickupBolLoading] = useState(false);
+
+  const [deliveryModalOpen, setDeliveryModalOpen] = useState(false);
+  const [deliveryModalLoad, setDeliveryModalLoad] = useState(null);
+  const [deliveryReceiverName, setDeliveryReceiverName] = useState('');
+  const [deliverySignatureDataUrl, setDeliverySignatureDataUrl] = useState('');
+  const [deliveryRemarks, setDeliveryRemarks] = useState('');
+  const [deliverySubmitting, setDeliverySubmitting] = useState(false);
+  const [deliveryError, setDeliveryError] = useState('');
+  const [deliveryPodChecked, setDeliveryPodChecked] = useState(false);
+  const [deliveryHasPod, setDeliveryHasPod] = useState(false);
+  const [deliveryPodLoading, setDeliveryPodLoading] = useState(false);
+
+  // Document Vault context (optional): when set, Document Vault shows load documents for this load.
+  const [documentVaultLoadId, setDocumentVaultLoadId] = useState(null);
+
+  const hasDocKind = (docs, kind) => {
+    const target = String(kind || '').trim().toUpperCase();
+    if (!Array.isArray(docs) || !target) return false;
+    return docs.some((d) => {
+      const k = String(d?.kind || d?.document_type || d?.type || '').trim().toUpperCase();
+      if (k !== target) return false;
+      // For workflow gates we care about a real uploaded artifact.
+      return Boolean(String(d?.storage_path || '').trim());
+    });
+  };
+
+  const checkLoadDocsForPickup = useCallback(async (load) => {
+    const loadId = load?.load_id || load?.id || load?._id;
+    if (!loadId) {
+      setPickupBolChecked(true);
+      setPickupHasBol(false);
+      return;
+    }
+    setPickupBolLoading(true);
+    try {
+      const res = await getJson(`/loads/${loadId}/documents`, { timeoutMs: 20000, requestLabel: `GET /loads/${loadId}/documents` });
+      const docs = res?.documents || [];
+      setPickupHasBol(hasDocKind(docs, 'BOL'));
+      setPickupBolChecked(true);
+    } catch {
+      // If we can't verify, don't hard-block (backend will still enforce).
+      setPickupBolChecked(false);
+      setPickupHasBol(false);
+    } finally {
+      setPickupBolLoading(false);
+    }
+  }, []);
+
+  const checkLoadDocsForDelivery = useCallback(async (load) => {
+    const loadId = load?.load_id || load?.id || load?._id;
+    if (!loadId) {
+      setDeliveryPodChecked(true);
+      setDeliveryHasPod(false);
+      return;
+    }
+    setDeliveryPodLoading(true);
+    try {
+      const res = await getJson(`/loads/${loadId}/documents`, { timeoutMs: 20000, requestLabel: `GET /loads/${loadId}/documents` });
+      const docs = res?.documents || [];
+      setDeliveryHasPod(hasDocKind(docs, 'POD'));
+      setDeliveryPodChecked(true);
+    } catch {
+      setDeliveryPodChecked(false);
+      setDeliveryHasPod(false);
+    } finally {
+      setDeliveryPodLoading(false);
+    }
+  }, []);
+
+  const getGpsFix = async () => {
+    if (currentLocation?.latitude != null && currentLocation?.longitude != null) {
+      return { latitude: currentLocation.latitude, longitude: currentLocation.longitude };
+    }
+    if (!navigator?.geolocation) return null;
+    return await new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+        },
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      );
+    });
+  };
+
+  const openPickupModal = (load) => {
+    if (!load) return;
+    setPickupModalLoad(load);
+    setPickupError('');
+    setPickupSignatureDataUrl('');
+    setPickupRemarks('');
+    setPickupBolChecked(false);
+    setPickupHasBol(false);
+    const defaultName = String(currentUser?.displayName || currentUser?.email || '').trim();
+    setPickupShipperName((prev) => (prev ? prev : defaultName));
+    setPickupModalOpen(true);
+    checkLoadDocsForPickup(load);
+  };
+
+  const openDeliveryModal = (load) => {
+    if (!load) return;
+    setDeliveryModalLoad(load);
+    setDeliveryError('');
+    setDeliverySignatureDataUrl('');
+    setDeliveryRemarks('');
+    setDeliveryReceiverName('');
+    setDeliveryPodChecked(false);
+    setDeliveryHasPod(false);
+    setDeliveryModalOpen(true);
+    checkLoadDocsForDelivery(load);
+  };
+
+  // Clear document-vault load context when leaving the docs view.
+  useEffect(() => {
+    if (activeNav !== 'docs' && documentVaultLoadId) {
+      setDocumentVaultLoadId(null);
+    }
+  }, [activeNav, documentVaultLoadId]);
+
   // Fetch onboarding data on mount
   useEffect(() => {
     if (profileRequestAbortRef.current) {
@@ -515,6 +753,15 @@ export default function DriverDashboard() {
   }, [currentUser]);
 
   useEffect(() => {
+    // Avoid constant rerenders while signing / completing workflow.
+    if (pickupModalOpen || deliveryModalOpen) {
+      if (requiredDocsAbortRef.current) {
+        requiredDocsAbortRef.current.abort();
+        requiredDocsAbortRef.current = null;
+      }
+      return;
+    }
+
     if (!shouldLoadRequiredDocs) {
       if (requiredDocsAbortRef.current) {
         requiredDocsAbortRef.current.abort();
@@ -538,10 +785,16 @@ export default function DriverDashboard() {
 
     runRequiredDocsFetch();
 
-    const onDocsUpdated = () => runRequiredDocsFetch();
-    const onConsentUpdated = () => runRequiredDocsFetch();
+    const onDocsUpdated = () => {
+      if (pickupModalOpen || deliveryModalOpen) return;
+      runRequiredDocsFetch();
+    };
+    const onConsentUpdated = () => {
+      if (pickupModalOpen || deliveryModalOpen) return;
+      runRequiredDocsFetch();
+    };
     const onVisibility = () => {
-      if (!document.hidden) runRequiredDocsFetch();
+      if (!document.hidden && !(pickupModalOpen || deliveryModalOpen)) runRequiredDocsFetch();
     };
 
     window.addEventListener('fp:documents-updated', onDocsUpdated);
@@ -556,7 +809,7 @@ export default function DriverDashboard() {
         requiredDocsAbortRef.current = null;
       }
     };
-  }, [fetchRequiredDocs, shouldLoadRequiredDocs]);
+  }, [deliveryModalOpen, fetchRequiredDocs, pickupModalOpen, shouldLoadRequiredDocs]);
 
   // Ensure compliance notifications are generated/cleaned up when enabling the toggle.
   useEffect(() => {
@@ -621,6 +874,15 @@ export default function DriverDashboard() {
 
   useEffect(() => {
     if (!currentUser) return;
+    // Avoid constant rerenders while signing / completing workflow.
+    if (pickupModalOpen || deliveryModalOpen) {
+      if (dashboardInsightsAbortRef.current) {
+        dashboardInsightsAbortRef.current.abort();
+        dashboardInsightsAbortRef.current = null;
+      }
+      return;
+    }
+
     if (activeNav !== 'home') {
       if (dashboardInsightsAbortRef.current) {
         dashboardInsightsAbortRef.current.abort();
@@ -630,13 +892,19 @@ export default function DriverDashboard() {
     }
     fetchDashboardInsights();
 
-    const onDocsUpdated = () => fetchDashboardInsights();
-    const onConsentUpdated = () => fetchDashboardInsights();
+    const onDocsUpdated = () => {
+      if (pickupModalOpen || deliveryModalOpen) return;
+      fetchDashboardInsights();
+    };
+    const onConsentUpdated = () => {
+      if (pickupModalOpen || deliveryModalOpen) return;
+      fetchDashboardInsights();
+    };
     const onFocus = () => {
-      if (activeNav === 'home') fetchDashboardInsights();
+      if (activeNav === 'home' && !(pickupModalOpen || deliveryModalOpen)) fetchDashboardInsights();
     };
     const onVisibility = () => {
-      if (!document.hidden && activeNav === 'home') fetchDashboardInsights();
+      if (!document.hidden && activeNav === 'home' && !(pickupModalOpen || deliveryModalOpen)) fetchDashboardInsights();
     };
 
     window.addEventListener('fp:documents-updated', onDocsUpdated);
@@ -645,7 +913,7 @@ export default function DriverDashboard() {
     document.addEventListener('visibilitychange', onVisibility);
 
     const intervalId = window.setInterval(() => {
-      if (!document.hidden && activeNav === 'home') {
+      if (!document.hidden && activeNav === 'home' && !(pickupModalOpen || deliveryModalOpen)) {
         fetchDashboardInsights();
       }
     }, 60 * 1000);
@@ -661,7 +929,7 @@ export default function DriverDashboard() {
         dashboardInsightsAbortRef.current = null;
       }
     };
-  }, [activeNav, currentUser, fetchDashboardInsights]);
+  }, [activeNav, currentUser, deliveryModalOpen, fetchDashboardInsights, pickupModalOpen]);
 
   // Poll messaging unread summary (used for sidebar badge)
   useEffect(() => {
@@ -672,6 +940,8 @@ export default function DriverDashboard() {
       return;
     }
     if (activeNav === 'help') return;
+    // Avoid constant rerenders while signing / completing workflow.
+    if (pickupModalOpen || deliveryModalOpen) return;
 
     const tick = async () => {
       if (unreadSummaryAbortRef.current) {
@@ -739,7 +1009,7 @@ export default function DriverDashboard() {
         unreadSummaryAbortRef.current = null;
       }
     };
-  }, [activeNav, currentUser, messagesPrefEnabled]);
+  }, [activeNav, currentUser, messagesPrefEnabled, pickupModalOpen, deliveryModalOpen]);
 
   // Reset admin notification watermark when the toggle is disabled.
   useEffect(() => {
@@ -1172,128 +1442,145 @@ export default function DriverDashboard() {
     }
   };
 
+  const selectLoadForDetails = (load) => {
+    if (!load) return;
+    setActiveLoad(load);
+    const status = String(load?.status || '').trim().toLowerCase();
+    const inTransit = status === 'in_transit';
+    const delivered = status === 'delivered' || status === 'completed';
+    setTripStarted(inTransit);
+    setPickupCompleted(Boolean(load?.pickup_confirmed_at || load?.picked_up_at));
+    setDeliveryCompleted(delivered);
+  };
+
   // Start trip
   const handleStartTrip = async (load) => {
     if (!currentUser || !load) return;
-    
-    console.log('🚀 Starting trip for load:', load);
-    
-    // Get the load ID - it could be in different fields
-    const loadId = load.load_id || load.id || load._id;
-    console.log('🆔 Load ID found:', loadId);
-    console.log('🔍 Available fields:', Object.keys(load));
-    
-    if (!loadId) {
-      alert(tr('driverDashboard.alert.loadIdNotFound', 'Load ID not found'));
-      console.error('Load object:', load);
-      return;
-    }
-    
-    try {
-      const token = await currentUser.getIdToken();
-      const url = `${API_URL}/loads/${loadId}/driver-update-status`;
-      console.log('📡 API URL:', url);
-      
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ new_status: 'in_transit' })
-      });
-      
-      if (response.ok) {
-        console.log('✅ Trip started successfully');
-        setTripStarted(true);
-        fetchLoads(); // Refresh loads
-      } else {
-        const error = await response.json();
-        console.error('❌ API Error:', error);
-        alert(error.detail || tr('driverDashboard.alert.startTripFailed', 'Failed to start trip'));
-      }
-    } catch (error) {
-      console.error('❌ Network Error:', error);
-      alert(tr('driverDashboard.alert.startTripError', 'Error starting trip. Please try again.'));
-    }
+    // Backend workflow requires pickup completion (GPS + signature) instead of the deprecated driver-update-status.
+    selectLoadForDetails(load);
+    openPickupModal(load);
   };
 
-  // Mark pickup completed - saves timestamp to database
+  // Mark pickup completed (opens modal; backend enforces BOL + signature + GPS)
   const handleMarkPickup = async () => {
     if (!activeLoad || !currentUser) return;
-    
-    const loadId = activeLoad.load_id || activeLoad.id || activeLoad._id;
+    if (pickupCompleted) return;
+    openPickupModal(activeLoad);
+  };
+
+  // Mark delivery completed (opens modal; backend enforces POD + signature + GPS)
+  const handleMarkDelivery = async () => {
+    if (!activeLoad || !currentUser) return;
+    if (deliveryCompleted) return;
+    openDeliveryModal(activeLoad);
+  };
+
+  const submitPickupComplete = async () => {
+    if (!pickupModalLoad || !currentUser) return;
+    const loadId = pickupModalLoad.load_id || pickupModalLoad.id || pickupModalLoad._id;
     if (!loadId) {
-      alert(tr('driverDashboard.alert.loadIdNotFound', 'Load ID not found'));
+      setPickupError(tr('driverDashboard.alert.loadIdNotFound', 'Load ID not found'));
       return;
     }
-    
+    if (!pickupShipperName.trim()) {
+      setPickupError(tr('driverDashboard.pickup.error.nameRequired', 'Shipper/warehouse name is required.'));
+      return;
+    }
+    if (!pickupSignatureDataUrl) {
+      setPickupError(tr('driverDashboard.pickup.error.signatureRequired', 'Signature is required.'));
+      return;
+    }
+    if (pickupBolChecked && !pickupHasBol) {
+      setPickupError(tr('driverDashboard.pickup.error.bolRequired', 'Upload BOL document before picking up the load.'));
+      return;
+    }
+    setPickupSubmitting(true);
+    setPickupError('');
     try {
-      const token = await currentUser.getIdToken();
-      const payload = {
-        pickup_confirmed: true,
-        pickup_timestamp: new Date().toISOString(),
-        latitude: currentLocation?.latitude || null,
-        longitude: currentLocation?.longitude || null
-      };
-      
-      // Update in Firestore via API
-      const response = await fetch(`${API_URL}/loads/${loadId}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-      
-      if (response.ok) {
-        setPickupCompleted(true);
-        console.log('✅ Pickup timestamp saved:', payload.pickup_timestamp);
-      } else {
-        console.error('Failed to save pickup timestamp');
-        // Still mark as completed locally
-        setPickupCompleted(true);
+      const gps = await getGpsFix();
+      if (!gps) {
+        setPickupError(tr('driverDashboard.pickup.error.gpsRequired', 'GPS location is required. Please enable location services.'));
+        return;
       }
-    } catch (error) {
-      console.error('Error saving pickup timestamp:', error);
-      // Still mark as completed locally
+      await postJson(
+        `/loads/${loadId}/pickup/complete`,
+        {
+          latitude: gps.latitude,
+          longitude: gps.longitude,
+          shipper_name: pickupShipperName.trim(),
+          shipper_signature_data_url: pickupSignatureDataUrl,
+          remarks: pickupRemarks ? pickupRemarks.trim() : null,
+        },
+        { timeoutMs: 60000, requestLabel: `POST /loads/${loadId}/pickup/complete` }
+      );
       setPickupCompleted(true);
+      setTripStarted(true);
+      setPickupModalOpen(false);
+      setPickupModalLoad(null);
+      await fetchLoads();
+    } catch (e) {
+      const msg = String(e?.message || '');
+      if (msg.toLowerCase().includes('timed out')) {
+        setPickupError(tr('driverDashboard.alert.requestTimeout', 'Request timed out. Please try again.'));
+      } else {
+        setPickupError(msg || tr('driverDashboard.alert.startTripError', 'Error starting trip. Please try again.'));
+      }
+    } finally {
+      setPickupSubmitting(false);
     }
   };
 
-  // Mark delivery completed
-  const handleMarkDelivery = async () => {
-    if (!activeLoad || !currentUser) return;
-    
-    const loadId = activeLoad.load_id || activeLoad.id || activeLoad._id;
+  const submitDeliveryComplete = async () => {
+    if (!deliveryModalLoad || !currentUser) return;
+    const loadId = deliveryModalLoad.load_id || deliveryModalLoad.id || deliveryModalLoad._id;
     if (!loadId) {
-      alert(tr('driverDashboard.alert.loadIdNotFound', 'Load ID not found'));
+      setDeliveryError(tr('driverDashboard.alert.loadIdNotFound', 'Load ID not found'));
       return;
     }
-    
+    if (!deliveryReceiverName.trim()) {
+      setDeliveryError(tr('driverDashboard.delivery.error.nameRequired', 'Receiver name is required.'));
+      return;
+    }
+    if (!deliverySignatureDataUrl) {
+      setDeliveryError(tr('driverDashboard.delivery.error.signatureRequired', 'Signature is required.'));
+      return;
+    }
+    if (deliveryPodChecked && !deliveryHasPod) {
+      setDeliveryError(tr('driverDashboard.delivery.error.podRequired', 'Upload POD document before completing delivery.'));
+      return;
+    }
+    setDeliverySubmitting(true);
+    setDeliveryError('');
     try {
-      const token = await currentUser.getIdToken();
-      const response = await fetch(`${API_URL}/loads/${loadId}/driver-update-status`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ new_status: 'delivered' })
-      });
-      
-      if (response.ok) {
-        setDeliveryCompleted(true);
-        fetchLoads();
-        alert(tr('driverDashboard.alert.deliveryMarkedCompleted', 'Delivery marked as completed!'));
-      } else {
-        const error = await response.json();
-        alert(error.detail || tr('driverDashboard.alert.markDeliveryFailed', 'Failed to mark delivery'));
+      const gps = await getGpsFix();
+      if (!gps) {
+        setDeliveryError(tr('driverDashboard.delivery.error.gpsRequired', 'GPS location is required. Please enable location services.'));
+        return;
       }
-    } catch (error) {
-      console.error('Error marking delivery:', error);
-      alert(tr('driverDashboard.alert.markDeliveryError', 'Error marking delivery. Please try again.'));
+      await postJson(
+        `/loads/${loadId}/delivery/complete`,
+        {
+          latitude: gps.latitude,
+          longitude: gps.longitude,
+          receiver_name: deliveryReceiverName.trim(),
+          receiver_signature_data_url: deliverySignatureDataUrl,
+          remarks: deliveryRemarks ? deliveryRemarks.trim() : null,
+        },
+        { timeoutMs: 60000, requestLabel: `POST /loads/${loadId}/delivery/complete` }
+      );
+      setDeliveryCompleted(true);
+      setDeliveryModalOpen(false);
+      setDeliveryModalLoad(null);
+      await fetchLoads();
+    } catch (e) {
+      const msg = String(e?.message || '');
+      if (msg.toLowerCase().includes('timed out')) {
+        setDeliveryError(tr('driverDashboard.alert.requestTimeout', 'Request timed out. Please try again.'));
+      } else {
+        setDeliveryError(msg || tr('driverDashboard.alert.markDeliveryError', 'Error marking delivery. Please try again.'));
+      }
+    } finally {
+      setDeliverySubmitting(false);
     }
   };
 
@@ -1371,6 +1658,8 @@ export default function DriverDashboard() {
 
   // GPS tracking - update location every 30 seconds when trip is active
   useEffect(() => {
+    // Avoid background rerenders while signing / completing workflow.
+    if (pickupModalOpen || deliveryModalOpen) return;
     if (!tripStarted || !activeLoad) return;
     
     // Get initial location
@@ -1382,7 +1671,7 @@ export default function DriverDashboard() {
     }, 30000);
     
     return () => clearInterval(intervalId);
-  }, [tripStarted, activeLoad]);
+  }, [activeLoad, deliveryModalOpen, pickupModalOpen, tripStarted]);
 
   // Fetch loads when switching to post-hire
   useEffect(() => {
@@ -1659,12 +1948,8 @@ export default function DriverDashboard() {
       if (!currentUser) return;
       setHomeComplianceLoading(true);
       try {
-        const token = await currentUser.getIdToken();
-        const res = await fetch(`${API_URL}/compliance/status`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!res.ok) return;
-        setHomeCompliance(await res.json());
+        const data = await getJson('/compliance/status', { requestLabel: 'GET /compliance/status (driver home)' });
+        setHomeCompliance(data);
       } catch {
         // ignore
       } finally {
@@ -1673,12 +1958,18 @@ export default function DriverDashboard() {
     }, [currentUser]);
 
     useEffect(() => {
+      // Avoid constant rerenders while signing / completing workflow.
+      if (pickupModalOpen || deliveryModalOpen) return;
+
       refreshHomeCompliance();
       // Prefer not to poll; update on known events.
-      const onDocsUpdated = () => refreshHomeCompliance();
+      const onDocsUpdated = () => {
+        if (pickupModalOpen || deliveryModalOpen) return;
+        refreshHomeCompliance();
+      };
       window.addEventListener('fp:documents-updated', onDocsUpdated);
       return () => window.removeEventListener('fp:documents-updated', onDocsUpdated);
-    }, [refreshHomeCompliance]);
+    }, [deliveryModalOpen, pickupModalOpen, refreshHomeCompliance]);
 
     useEffect(() => {
       // Keep message previews in sync for Home cards.
@@ -2130,7 +2421,19 @@ export default function DriverDashboard() {
                         <button className="btn small-cd" onClick={() => handleStartTrip(load)}>
                           {tr('driverDashboard.postHire.startTrip', 'Start Trip')}
                         </button>
-                        <button className="btn small ghost-cd">{tr('driverDashboard.postHire.viewDetails', 'View Details')}</button>
+                        <button
+                          className="btn small ghost-cd"
+                          onClick={() => {
+                            selectLoadForDetails(load);
+                            try {
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            } catch {
+                              // ignore
+                            }
+                          }}
+                        >
+                          {tr('driverDashboard.postHire.viewDetails', 'View Details')}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -2255,6 +2558,226 @@ export default function DriverDashboard() {
                 ))}
               </div>
             )}
+
+            {/* Pickup Completion Modal (rendered at the page level) */}
+            {pickupModalOpen && (
+              <div className="modal-overlay dd-workflow-modal" onClick={() => { if (!pickupSubmitting) setPickupModalOpen(false); }}>
+                <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '620px' }}>
+                  <div className="modal-header">
+                    <h2>{tr('driverDashboard.pickup.title', 'Complete Pickup')}</h2>
+                    <button className="modal-close" onClick={() => { if (!pickupSubmitting) setPickupModalOpen(false); }} type="button">
+                      <i className="fa-solid fa-xmark"></i>
+                    </button>
+                  </div>
+
+                  <div className="modal-body">
+                    {pickupError && (
+                      <div className="dd-workflow-modal__error">
+                        {String(pickupError)}
+                      </div>
+                    )}
+
+                    <div className="dd-workflow-modal__field">
+                      <label className="dd-workflow-modal__label">
+                        {tr('driverDashboard.pickup.shipperName', 'Shipper/Warehouse Name')}
+                      </label>
+                      <input
+                        type="text"
+                        value={pickupShipperName}
+                        onChange={(e) => setPickupShipperName(e.target.value)}
+                        className="dd-workflow-input"
+                        placeholder={tr('driverDashboard.pickup.shipperNamePlaceholder', 'Enter shipper/warehouse name')}
+                        disabled={pickupSubmitting}
+                      />
+                    </div>
+
+                    <div className="dd-workflow-modal__field">
+                      <label className="dd-workflow-modal__label">
+                        {tr('driverDashboard.pickup.bolLabel', 'BOL Document (required)')}
+                      </label>
+                      <div className="dd-workflow-modal__hint">
+                        {pickupBolLoading
+                          ? tr('common.loading', 'Loading…')
+                          : pickupBolChecked
+                            ? (pickupHasBol
+                              ? tr('driverDashboard.pickup.bolOk', 'BOL is uploaded.')
+                              : tr('driverDashboard.pickup.bolMissing', 'BOL is missing. Ask shipper/broker to upload it in Documents.'))
+                            : tr('driverDashboard.pickup.bolUnknown', 'Unable to verify BOL status.')}
+                      </div>
+                      <button
+                        type="button"
+                        className="btn small ghost-cd"
+                        onClick={() => {
+                          const loadId = pickupModalLoad?.load_id || pickupModalLoad?.id || pickupModalLoad?._id;
+                          if (loadId) setDocumentVaultLoadId(String(loadId));
+                          setPickupModalOpen(false);
+                          handleNavClick('docs');
+                        }}
+                        disabled={pickupSubmitting}
+                        style={{ marginTop: 8 }}
+                      >
+                        {tr('driverDashboard.pickup.viewDocs', 'View Documents')}
+                      </button>
+                    </div>
+
+                    <div className="dd-workflow-modal__field">
+                      <label className="dd-workflow-modal__label">
+                        {tr('driverDashboard.pickup.signature', 'Shipper Signature')}
+                      </label>
+                      <WorkflowSignaturePad
+                        value={pickupSignatureDataUrl}
+                        onChange={setPickupSignatureDataUrl}
+                        disabled={pickupSubmitting}
+                        clearText={tr('common.clear', 'Clear')}
+                      />
+                    </div>
+
+                    <div className="dd-workflow-modal__field">
+                      <label className="dd-workflow-modal__label">
+                        {tr('driverDashboard.pickup.remarks', 'Remarks (optional)')}
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={pickupRemarks}
+                        onChange={(e) => setPickupRemarks(e.target.value)}
+                        className="dd-workflow-input"
+                        placeholder={tr('driverDashboard.pickup.remarksPlaceholder', 'Add any notes (optional)')}
+                        disabled={pickupSubmitting}
+                      />
+                    </div>
+
+                    <div className="dd-workflow-modal__actions">
+                      <button
+                        type="button"
+                        className="btn small ghost-cd"
+                        onClick={() => setPickupModalOpen(false)}
+                        disabled={pickupSubmitting}
+                      >
+                        {tr('common.cancel', 'Cancel')}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn small-cd"
+                        onClick={submitPickupComplete}
+                        disabled={pickupSubmitting || (pickupBolChecked && !pickupHasBol)}
+                      >
+                        {pickupSubmitting ? tr('common.submitting', 'Submitting…') : tr('driverDashboard.pickup.complete', 'Complete Pickup')}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Delivery Completion Modal (rendered at the page level) */}
+            {deliveryModalOpen && (
+              <div className="modal-overlay dd-workflow-modal" onClick={() => { if (!deliverySubmitting) setDeliveryModalOpen(false); }}>
+                <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '620px' }}>
+                  <div className="modal-header">
+                    <h2>{tr('driverDashboard.delivery.title', 'Complete Delivery')}</h2>
+                    <button className="modal-close" onClick={() => { if (!deliverySubmitting) setDeliveryModalOpen(false); }} type="button">
+                      <i className="fa-solid fa-xmark"></i>
+                    </button>
+                  </div>
+
+                  <div className="modal-body">
+                    {deliveryError && (
+                      <div className="dd-workflow-modal__error">
+                        {String(deliveryError)}
+                      </div>
+                    )}
+
+                    <div className="dd-workflow-modal__field">
+                      <label className="dd-workflow-modal__label">
+                        {tr('driverDashboard.delivery.receiverName', 'Receiver Name')}
+                      </label>
+                      <input
+                        type="text"
+                        value={deliveryReceiverName}
+                        onChange={(e) => setDeliveryReceiverName(e.target.value)}
+                        className="dd-workflow-input"
+                        placeholder={tr('driverDashboard.delivery.receiverNamePlaceholder', 'Enter receiver name')}
+                        disabled={deliverySubmitting}
+                      />
+                    </div>
+
+                    <div className="dd-workflow-modal__field">
+                      <label className="dd-workflow-modal__label">
+                        {tr('driverDashboard.delivery.podLabel', 'POD Document (required)')}
+                      </label>
+                      <div className="dd-workflow-modal__hint">
+                        {deliveryPodLoading
+                          ? tr('common.loading', 'Loading…')
+                          : deliveryPodChecked
+                            ? (deliveryHasPod
+                              ? tr('driverDashboard.delivery.podOk', 'POD is uploaded.')
+                              : tr('driverDashboard.delivery.podMissing', 'POD is missing. Upload it in Documents before completing delivery.'))
+                            : tr('driverDashboard.delivery.podUnknown', 'Unable to verify POD status.')}
+                      </div>
+                      <button
+                        type="button"
+                        className="btn small ghost-cd"
+                        onClick={() => {
+                          const loadId = deliveryModalLoad?.load_id || deliveryModalLoad?.id || deliveryModalLoad?._id;
+                          if (loadId) setDocumentVaultLoadId(String(loadId));
+                          setDeliveryModalOpen(false);
+                          handleNavClick('docs');
+                        }}
+                        disabled={deliverySubmitting}
+                        style={{ marginTop: 8 }}
+                      >
+                        {tr('driverDashboard.delivery.viewDocs', 'View Documents')}
+                      </button>
+                    </div>
+
+                    <div className="dd-workflow-modal__field">
+                      <label className="dd-workflow-modal__label">
+                        {tr('driverDashboard.delivery.signature', 'Receiver Signature')}
+                      </label>
+                      <WorkflowSignaturePad
+                        value={deliverySignatureDataUrl}
+                        onChange={setDeliverySignatureDataUrl}
+                        disabled={deliverySubmitting}
+                        clearText={tr('common.clear', 'Clear')}
+                      />
+                    </div>
+
+                    <div className="dd-workflow-modal__field">
+                      <label className="dd-workflow-modal__label">
+                        {tr('driverDashboard.delivery.remarks', 'Remarks (optional)')}
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={deliveryRemarks}
+                        onChange={(e) => setDeliveryRemarks(e.target.value)}
+                        className="dd-workflow-input"
+                        placeholder={tr('driverDashboard.delivery.remarksPlaceholder', 'Add any notes (optional)')}
+                        disabled={deliverySubmitting}
+                      />
+                    </div>
+
+                    <div className="dd-workflow-modal__actions">
+                      <button
+                        type="button"
+                        className="btn small ghost-cd"
+                        onClick={() => setDeliveryModalOpen(false)}
+                        disabled={deliverySubmitting}
+                      >
+                        {tr('common.cancel', 'Cancel')}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn small-cd"
+                        onClick={submitDeliveryComplete}
+                        disabled={deliverySubmitting || (deliveryPodChecked && !deliveryHasPod)}
+                      >
+                        {deliverySubmitting ? tr('common.submitting', 'Submitting…') : tr('driverDashboard.delivery.complete', 'Complete Delivery')}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </>
@@ -2279,12 +2802,8 @@ export default function DriverDashboard() {
       if (!currentUser) return;
       setLoading(true);
       try {
-        const token = await currentUser.getIdToken();
-        const statusRes = await fetch(`${API_URL}/compliance/status`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (statusRes.ok) {
-          const data = await statusRes.json();
+        const data = await getJson('/compliance/status', { requestLabel: 'GET /compliance/status (driver compliance)' });
+        if (data) {
           setComplianceStatus({
             score: data.compliance_score || 0, breakdown: data.score_breakdown || {},
             status_color: data.status_color || 'Red', documents: data.documents || [],
@@ -2302,10 +2821,8 @@ export default function DriverDashboard() {
             }));
           }
         }
-        const tasksRes = await fetch(`${API_URL}/compliance/tasks`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (tasksRes.ok) setComplianceTasks(await tasksRes.json());
+        const tasks = await getJson('/compliance/tasks', { requestLabel: 'GET /compliance/tasks (driver compliance)' });
+        setComplianceTasks(tasks);
       } catch (e) {
         console.error('Error:', e);
       } finally {
@@ -2337,11 +2854,8 @@ export default function DriverDashboard() {
       if (!currentUser) return;
       setAnalyzingAI(true);
       try {
-        const token = await currentUser.getIdToken();
-        const res = await fetch(`${API_URL}/compliance/ai-analyze`, {
-          method: 'POST', headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.ok) setAiAnalysis(await res.json());
+        const data = await postJson('/compliance/ai-analyze', {}, { requestLabel: 'POST /compliance/ai-analyze (driver)' });
+        setAiAnalysis(data);
       } catch (e) { console.error('AI error:', e); }
       finally { setAnalyzingAI(false); }
     };
@@ -2528,7 +3042,14 @@ export default function DriverDashboard() {
       case 'home':
         return isPostHire ? <PostHireView /> : <HomeView />;
       case 'docs':
-        return <DocumentVault isPostHire={isPostHire} setIsPostHire={setIsPostHire} onNavigate={handleNavClick} />;
+        return (
+          <DocumentVault
+            isPostHire={isPostHire}
+            setIsPostHire={setIsPostHire}
+            onNavigate={handleNavClick}
+            contextLoadId={documentVaultLoadId}
+          />
+        );
       case 'marketplace':
         return (
           <Marketplace 

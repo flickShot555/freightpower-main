@@ -42,6 +42,8 @@ const FactoringInvoicing = () => {
   const [emailTarget, setEmailTarget] = useState(null); // row-like { invoiceId, raw, status, ... }
   const [emailForm, setEmailForm] = useState({ to: '', subject: '', body: '' });
   const [emailSending, setEmailSending] = useState(false);
+  const [showRowActionsModal, setShowRowActionsModal] = useState(false);
+  const [rowActionsTarget, setRowActionsTarget] = useState(null);
   const [eligibleLoads, setEligibleLoads] = useState([]);
   const [eligibleLoading, setEligibleLoading] = useState(false);
   const [createForm, setCreateForm] = useState({
@@ -100,6 +102,16 @@ const FactoringInvoicing = () => {
       total,
     };
   }, [createForm]);
+
+  const openRowActionsModal = (row) => {
+    setRowActionsTarget(row || null);
+    setShowRowActionsModal(true);
+  };
+
+  const closeRowActionsModal = () => {
+    setShowRowActionsModal(false);
+    setRowActionsTarget(null);
+  };
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -1513,6 +1525,7 @@ const FactoringInvoicing = () => {
               <th>Status</th>
               <th>Factoring</th>
               <th>Actions</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -1574,101 +1587,16 @@ const FactoringInvoicing = () => {
                   >
                     <i className="fas fa-file-archive"></i>
                   </button>
+                </td>
 
-                  {String(invoice.status || '') === 'disputed' ? (
-                    <button
-                      className="btn-action edit"
-                      title="Resolve dispute"
-                      onClick={() => handleResolveDispute(invoice)}
-                      disabled={loading}
-                    >
-                      <i className="fas fa-check"></i>
-                    </button>
-                  ) : null}
-
+                <td className="actions">
                   <button
                     className="btn-action download"
-                    title="Email (PDF attached)"
-                    onClick={() => {
-                      handleEmailWithPdf(invoice);
-                    }}
+                    title="More actions"
+                    onClick={() => openRowActionsModal(invoice)}
                     disabled={loading}
                   >
-                    <i className="fas fa-envelope"></i>
-                  </button>
-
-                  <button
-                    className="btn-action download"
-                    title="Copy invoice #"
-                    onClick={async () => {
-                      try {
-                        await copyText(invoice.id);
-                      } catch {
-                        // ignore
-                      }
-                    }}
-                  >
-                    <i className="fas fa-copy"></i>
-                  </button>
-
-                  <button
-                    className="btn-action download"
-                    title="Save local draft copy"
-                    onClick={() => {
-                      try {
-                        saveInvoiceDraftToLocal(invoice.raw);
-                      } catch (e) {
-                        setError(e?.message || 'Failed to save draft');
-                      }
-                    }}
-                  >
-                    <i className="fas fa-bookmark"></i>
-                  </button>
-
-                  {String(invoice.status || '') === 'draft' ? (
-                    <button
-                      className="btn-action edit"
-                      title="Issue"
-                      onClick={() => handleIssue(invoice.invoiceId)}
-                      disabled={loading}
-                    >
-                      <i className="fas fa-stamp"></i>
-                    </button>
-                  ) : null}
-
-                  <button
-                    className="btn-action edit"
-                    title="Send (Email + PDF)"
-                    onClick={() => _openEmailModal(invoice)}
-                    disabled={loading || String(invoice.status || '') !== 'issued'}
-                  >
-                    <i className="fas fa-paper-plane"></i>
-                  </button>
-
-                  <button
-                    className="btn-action download"
-                    title="Void"
-                    onClick={() => handleVoid(invoice.invoiceId)}
-                    disabled={loading || !['draft', 'issued'].includes(String(invoice.status || ''))}
-                  >
-                    <i className="fas fa-ban"></i>
-                  </button>
-
-                  <button
-                    className="btn-action download"
-                    title="Submit to factoring"
-                    onClick={() => handleSubmitFactoring(invoice.invoiceId)}
-                    disabled={true}
-                  >
-                    <i className="fas fa-bolt"></i>
-                  </button>
-                  <button
-                    className="btn-action download"
-                    title="Record payment"
-                    onClick={() => handleRecordPayment(invoice.invoiceId)}
-                    disabled={loading}
-                  >
-                    <i className="fas fa-dollar-sign"></i>
+                    <i className="fas fa-ellipsis-h"></i>
                   </button>
                 </td>
               </tr>
@@ -1676,6 +1604,193 @@ const FactoringInvoicing = () => {
           </tbody>
         </table>
       </div>
+
+      {showRowActionsModal && rowActionsTarget ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fp-dark-modal"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeRowActionsModal();
+          }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.55)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'center',
+            padding: 16,
+            overflow: 'auto',
+            zIndex: 80,
+          }}
+        >
+          <div
+            className="fp-dark-modal"
+            style={{
+              width: 'min(760px, 100%)',
+              background: '#0b1220',
+              border: '1px solid rgba(148, 163, 184, 0.18)',
+              borderRadius: 14,
+              padding: 16,
+              boxShadow: '0 10px 35px rgba(0,0,0,0.35)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#e2e8f0' }}>Invoice actions</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
+                  {rowActionsTarget?.id || rowActionsTarget?.invoiceId || '—'}
+                </div>
+              </div>
+              <button type="button" className="btn small ghost-cd" onClick={closeRowActionsModal}>
+                Close
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
+              {String(rowActionsTarget.status || '') === 'disputed' ? (
+                <button
+                  className="btn small ghost-cd"
+                  type="button"
+                  onClick={() => {
+                    closeRowActionsModal();
+                    handleResolveDispute(rowActionsTarget);
+                  }}
+                  disabled={loading}
+                  title="Resolve dispute"
+                >
+                  <i className="fas fa-check" style={{ marginRight: 8 }}></i>
+                  Resolve dispute
+                </button>
+              ) : null}
+
+              <button
+                className="btn small ghost-cd"
+                type="button"
+                onClick={() => {
+                  closeRowActionsModal();
+                  handleEmailWithPdf(rowActionsTarget);
+                }}
+                disabled={loading}
+                title="Email (PDF attached)"
+              >
+                <i className="fas fa-envelope" style={{ marginRight: 8 }}></i>
+                Email PDF
+              </button>
+
+              <button
+                className="btn small ghost-cd"
+                type="button"
+                onClick={async () => {
+                  try {
+                    await copyText(rowActionsTarget.id);
+                  } catch {
+                    // ignore
+                  } finally {
+                    closeRowActionsModal();
+                  }
+                }}
+                title="Copy invoice #"
+              >
+                <i className="fas fa-copy" style={{ marginRight: 8 }}></i>
+                Copy invoice #
+              </button>
+
+              <button
+                className="btn small ghost-cd"
+                type="button"
+                onClick={() => {
+                  try {
+                    saveInvoiceDraftToLocal(rowActionsTarget.raw);
+                    closeRowActionsModal();
+                  } catch (e) {
+                    setError(e?.message || 'Failed to save draft');
+                    closeRowActionsModal();
+                  }
+                }}
+                title="Save local draft copy"
+              >
+                <i className="fas fa-bookmark" style={{ marginRight: 8 }}></i>
+                Save local draft
+              </button>
+
+              {String(rowActionsTarget.status || '') === 'draft' ? (
+                <button
+                  className="btn small ghost-cd"
+                  type="button"
+                  onClick={() => {
+                    closeRowActionsModal();
+                    handleIssue(rowActionsTarget.invoiceId);
+                  }}
+                  disabled={loading}
+                  title="Issue"
+                >
+                  <i className="fas fa-stamp" style={{ marginRight: 8 }}></i>
+                  Issue
+                </button>
+              ) : null}
+
+              <button
+                className="btn small ghost-cd"
+                type="button"
+                onClick={() => {
+                  closeRowActionsModal();
+                  _openEmailModal(rowActionsTarget);
+                }}
+                disabled={loading || String(rowActionsTarget.status || '') !== 'issued'}
+                title="Send (Email + PDF)"
+              >
+                <i className="fas fa-paper-plane" style={{ marginRight: 8 }}></i>
+                Send
+              </button>
+
+              <button
+                className="btn small ghost-cd"
+                type="button"
+                onClick={() => {
+                  closeRowActionsModal();
+                  handleVoid(rowActionsTarget.invoiceId);
+                }}
+                disabled={loading || !['draft', 'issued'].includes(String(rowActionsTarget.status || ''))}
+                title="Void"
+              >
+                <i className="fas fa-ban" style={{ marginRight: 8 }}></i>
+                Void
+              </button>
+
+              <button
+                className="btn small ghost-cd"
+                type="button"
+                onClick={() => {
+                  closeRowActionsModal();
+                  handleSubmitFactoring(rowActionsTarget.invoiceId);
+                }}
+                disabled={true}
+                title="Submit to factoring"
+              >
+                <i className="fas fa-bolt" style={{ marginRight: 8 }}></i>
+                Submit to factoring
+              </button>
+
+              <button
+                className="btn small ghost-cd"
+                type="button"
+                onClick={() => {
+                  closeRowActionsModal();
+                  handleRecordPayment(rowActionsTarget.invoiceId);
+                }}
+                disabled={loading}
+                title="Record payment"
+              >
+                <i className="fas fa-dollar-sign" style={{ marginRight: 8 }}></i>
+                Record payment
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showEmailModal && (
         <div

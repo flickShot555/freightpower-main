@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_URL } from '../../config';
 import { AUTO_REFRESH_MS } from '../../constants/refresh';
+import { getJson } from '../../api/http';
 import '../../styles/shipper/DocumentVault.css';
 
 // Document type mapping
@@ -56,17 +57,9 @@ export default function DocumentVault() {
   const fetchComplianceScore = useCallback(async () => {
     if (!currentUser) return;
     try {
-      const token = await currentUser.getIdToken();
-      const response = await fetch(`${API_URL}/compliance/status`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        console.log('📊 Compliance Score Data (Shipper):', data);
-        setComplianceScore(data);
-      } else {
-        console.error('Failed to fetch compliance score:', response.status);
-      }
+      const data = await getJson('/compliance/status', { requestLabel: 'GET /compliance/status (shipper vault)' });
+      console.log('📊 Compliance Score Data (Shipper):', data);
+      setComplianceScore(data);
     } catch (error) {
       console.error('Error fetching compliance:', error);
     }
@@ -78,14 +71,8 @@ export default function DocumentVault() {
   const fetchDocuments = useCallback(async () => {
     if (!currentUser) return;
     try {
-      const token = await currentUser.getIdToken();
-      const response = await fetch(`${API_URL}/compliance/status`, {
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setDocs(data.documents || []);
-      }
+      const data = await getJson('/compliance/status', { requestLabel: 'GET /compliance/status (shipper vault docs)' });
+      setDocs(data?.documents || []);
     } catch (error) {
       console.error('Error fetching documents:', error);
     } finally {

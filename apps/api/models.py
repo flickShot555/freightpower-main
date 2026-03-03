@@ -404,6 +404,16 @@ class LoadComplete(BaseModel):
     # Metadata
     metadata: Dict[str, Any] = {}
 
+    # Contract / documents (used by workflow + shipper UI)
+    contract: Optional[Dict[str, Any]] = None
+    rate_confirmation_url: Optional[str] = None
+    rate_confirmation_doc_id: Optional[str] = None
+    rate_confirmation_storage_path: Optional[str] = None
+
+    # Display helpers (optional; may be absent depending on role/view)
+    assigned_carrier_name: Optional[str] = None
+    carrier_name: Optional[str] = None
+
 
 class LoadResponse(BaseModel):
     """Standard load response."""

@@ -17,10 +17,14 @@ export default function TrackingVisibility({ initialLoadId = null }) {
   const [selectedLoadId, setSelectedLoadId] = useState(String(initialLoadId || '').trim() || null);
   const [selectedLoad, setSelectedLoad] = useState(null);
   const [trackingItems, setTrackingItems] = useState([]);
+  const [workflowHistory, setWorkflowHistory] = useState([]);
+  const [workflowHistoryLoading, setWorkflowHistoryLoading] = useState(false);
+  const [workflowHistoryError, setWorkflowHistoryError] = useState('');
   const trackingTimerRef = useRef(null);
   const loadsRequestRef = useRef(null);
   const selectedLoadRequestRef = useRef(null);
   const trackingRequestRef = useRef(null);
+  const workflowHistoryRequestRef = useRef(null);
   const [mapInstance, setMapInstance] = useState(null);
 
   const normalizeStatus = (s) =>
@@ -97,6 +101,16 @@ export default function TrackingVisibility({ initialLoadId = null }) {
     }
     const ms = Date.parse(s);
     return Number.isFinite(ms) ? ms : null;
+  };
+
+  const fmtDateTime = (value) => {
+    const ms = parseDateToMs(value);
+    if (!ms) return '';
+    try {
+      return new Date(ms).toLocaleString();
+    } catch {
+      return '';
+    }
   };
 
   const loadStatusValue = (l) =>
@@ -275,6 +289,47 @@ export default function TrackingVisibility({ initialLoadId = null }) {
     }
   };
 
+  const fetchWorkflowHistory = async (loadId) => {
+    const id = String(loadId || '').trim();
+    if (!currentUser || !id) return;
+
+    if (workflowHistoryRequestRef.current) {
+      workflowHistoryRequestRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    workflowHistoryRequestRef.current = controller;
+    setWorkflowHistoryLoading(true);
+    setWorkflowHistoryError('');
+
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch(
+        `${API_URL}/loads/${encodeURIComponent(id)}/workflow/history?limit=50`,
+        {
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          signal: controller.signal,
+        }
+      );
+      if (!res.ok) {
+        setWorkflowHistory([]);
+        setWorkflowHistoryError('Workflow history is unavailable for this load.');
+        return;
+      }
+      const data = await res.json();
+      setWorkflowHistory(Array.isArray(data?.events) ? data.events : []);
+    } catch (e) {
+      if (e?.name === 'AbortError') return;
+      setWorkflowHistory([]);
+      setWorkflowHistoryError(e?.message || 'Workflow history is unavailable for this load.');
+    } finally {
+      if (workflowHistoryRequestRef.current === controller) {
+        workflowHistoryRequestRef.current = null;
+      }
+      setWorkflowHistoryLoading(false);
+    }
+  };
+
   useEffect(() => {
     const id = String(initialLoadId || '').trim();
     if (id) {
@@ -353,6 +408,10 @@ export default function TrackingVisibility({ initialLoadId = null }) {
       if (trackingRequestRef.current) {
         trackingRequestRef.current.abort();
         trackingRequestRef.current = null;
+      }
+      if (workflowHistoryRequestRef.current) {
+        workflowHistoryRequestRef.current.abort();
+        workflowHistoryRequestRef.current = null;
       }
     };
   }, []);
@@ -496,6 +555,18 @@ export default function TrackingVisibility({ initialLoadId = null }) {
   }, [currentUser, selectedLoadId]);
 
   useEffect(() => {
+    const id = String(selectedLoadId || '').trim();
+    if (!currentUser || !id) {
+      setWorkflowHistory([]);
+      setWorkflowHistoryError('');
+      setWorkflowHistoryLoading(false);
+      return;
+    }
+    fetchWorkflowHistory(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, selectedLoadId]);
+
+  useEffect(() => {
     // Keep selection valid under filtering.
     if (!loads || loads.length === 0) return;
     const wanted = String(selectedLoadId || '').trim();
@@ -612,10 +683,23 @@ export default function TrackingVisibility({ initialLoadId = null }) {
   const deliveredAgo = fmtRelative(effectiveSelected?.delivered_at);
   const showLate = false;
 
+  const offerCarrierName = (l) => {
+    try {
+      const offers = Array.isArray(l?.offers) ? l.offers : [];
+      const accepted = offers.find((o) => String(o?.status || '').toLowerCase() === 'accepted');
+      return String(accepted?.carrier_name || accepted?.carrier_id || '').trim() || '';
+    } catch {
+      return '';
+    }
+  };
+
   const carrierDisplay = String(
     effectiveSelected?.assigned_carrier_name ||
       effectiveSelected?.carrier_name ||
+      offerCarrierName(effectiveSelected) ||
       selectedTrackingItem?.carrier_name ||
+      effectiveSelected?.assigned_carrier_id ||
+      effectiveSelected?.assigned_carrier ||
       'N/A'
   );
 
@@ -876,6 +960,54 @@ export default function TrackingVisibility({ initialLoadId = null }) {
               return route ? `Load #${num} (${route})` : (num ? `Load #${num}` : id);
             }}
           />
+
+          <div className="load-table-card" style={{ marginTop: 12 }}>
+            <h4>Workflow Timeline</h4>
+            {workflowHistoryLoading ? (
+              <div>Loadingâ€¦</div>
+            ) : workflowHistoryError ? (
+              <div>{workflowHistoryError}</div>
+            ) : (workflowHistory || []).length === 0 ? (
+              <div>No workflow events recorded yet.</div>
+            ) : (
+              <div className="timeline">
+                {(workflowHistory || []).map((ev, idx) => {
+                  const key = String(ev?.id || ev?.event_id || ev?.timestamp || idx);
+                  const newStatusRaw = String(ev?.new_status || ev?.workflow_status || ev?.status || '').trim();
+                  const title = newStatusRaw ? newStatusRaw.replace(/_/g, ' ') : 'Update';
+                  const when = fmtDateTime(ev?.timestamp || ev?.created_at || ev?.updated_at);
+                  const actor = String(ev?.actor || '').trim();
+                  const notes = String(ev?.notes || '').trim();
+                  const oldStatusRaw = String(ev?.old_status || '').trim();
+
+                  const subParts = [];
+                  if (oldStatusRaw && newStatusRaw) {
+                    subParts.push(`${oldStatusRaw.replace(/_/g, ' ')} â†’ ${newStatusRaw.replace(/_/g, ' ')}`);
+                  }
+                  if (actor) subParts.push(`Actor: ${actor}`);
+                  if (notes) subParts.push(notes);
+                  const sub = subParts.filter(Boolean).join(' â€¢ ');
+
+                  const isCurrent = idx === (workflowHistory || []).length - 1;
+
+                  return (
+                    <div key={key} className={`tl-item${isCurrent ? ' current' : ''}`}>
+                      <div className="tl-left">
+                        <div className="tl-icon">{idx + 1}</div>
+                      </div>
+                      <div className="tl-right">
+                        <div className="tl-title">
+                          {title}
+                          {when ? <span className="tl-time">{when}</span> : null}
+                        </div>
+                        {sub ? <div className="tl-sub">{sub}</div> : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       ) : null}
 
@@ -915,7 +1047,7 @@ export default function TrackingVisibility({ initialLoadId = null }) {
                         style={{ cursor: id ? 'pointer' : 'default' }}
                       >
                         <td>{shortLoadNo(l)}</td>
-                        <td>{String(l?.assigned_carrier_name || l?.carrier_name || loc?.carrier_name || 'â€”')}</td>
+                        <td>{String(l?.assigned_carrier_name || l?.carrier_name || offerCarrierName(l) || loc?.carrier_name || l?.assigned_carrier_id || l?.assigned_carrier || 'â€”')}</td>
                         <td>{String(l?.assigned_driver_name || l?.driver_name || loc?.driver_name || 'â€”')}</td>
                         <td>{badge.label}</td>
                         <td>{eta}</td>

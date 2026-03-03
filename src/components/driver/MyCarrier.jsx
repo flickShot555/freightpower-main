@@ -3,6 +3,7 @@ import '../../styles/driver/MyCarrier.css';
 import { useAuth } from '../../contexts/AuthContext';
 import { useUserSettings } from '../../contexts/UserSettingsContext';
 import { API_URL } from '../../config';
+import { getJson } from '../../api/http';
 import { t } from '../../i18n/translate';
 
 export default function MyCarrier() {
@@ -188,12 +189,7 @@ export default function MyCarrier() {
     setComplianceLoading(true);
     setComplianceError('');
     try {
-      const token = await getAuthToken();
-      const res = await fetch(`${API_URL}/compliance/status`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.detail || tr('myCarrier.error.loadCompliance', 'Failed to load compliance'));
+      const data = await getJson('/compliance/status', { requestLabel: 'GET /compliance/status (my carrier)' });
       setCompliance(data);
     } catch (e) {
       console.error('Compliance error:', e);

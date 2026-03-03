@@ -60,6 +60,7 @@ from .scheduler import SchedulerWrapper
 from .finance import router as finance_router, init_finance_scheduler
 from .load_documents import router as load_documents_router, create_load_document_from_url, ensure_rate_confirmation_document
 from .load_workflow import router as load_workflow_router
+from .admin_load_dossier import router as admin_load_dossier_router
 from .load_ownership import normalized_fields_for_new_load, normalized_ownership_patch_for_load
 from .load_workflow_utils import is_rate_con_carrier_signed, notify_previous_carriers_new_load, sanitize_load_for_viewer
 from .consents import router as consents_router
@@ -2400,6 +2401,7 @@ async def super_admin_reject_removal_request(
 def _process_due_user_removals() -> None:
     """Deactivate users for approved removal requests that reached deactivate_at."""
     now = time.time()
+    firestore_timeout_s = float(getattr(settings, "FIRESTORE_JOB_TIMEOUT_SECONDS", 8) or 8)
     try:
         # Prefer the newer Firestore API (`filter=`) to avoid warnings.
         # Also avoid requiring a composite index in environments where it isn't created yet.
@@ -2412,7 +2414,10 @@ def _process_due_user_removals() -> None:
                 .where(filter=FieldFilter("deactivate_at", "<=", now))
                 .limit(50)
             )
-            candidate_snaps = composite_query.stream()
+            try:
+                candidate_snaps = list(composite_query.stream(timeout=firestore_timeout_s))
+            except TypeError:
+                candidate_snaps = list(composite_query.stream())
         except Exception as e:
             print(f"[RemovalJob] Falling back to non-indexed query: {e}")
             # Fallback: query only by deactivate_at and filter status in-memory.
@@ -2424,15 +2429,19 @@ def _process_due_user_removals() -> None:
                     db.collection("user_removal_requests")
                     .where(filter=FieldFilter("deactivate_at", "<=", now))
                     .limit(250)
-                    .stream()
+                    .stream(timeout=firestore_timeout_s)
                 )
+                candidate_snaps = list(candidate_snaps)
             except Exception:
-                candidate_snaps = (
+                q = (
                     db.collection("user_removal_requests")
                     .where("deactivate_at", "<=", now)
                     .limit(250)
-                    .stream()
                 )
+                try:
+                    candidate_snaps = list(q.stream(timeout=firestore_timeout_s))
+                except TypeError:
+                    candidate_snaps = list(q.stream())
 
         processed = 0
         for s in candidate_snaps:
@@ -2452,7 +2461,19 @@ def _process_due_user_removals() -> None:
 
             # Mark Firestore user as inactive
             try:
-                db.collection("users").document(tuid).set(
+                try:
+                    db.collection("users").document(tuid).set(
+                        {
+                            "is_active": False,
+                            "disabled_at": now,
+                            "disabled_reason": d.get("reason"),
+                            "updated_at": now,
+                        },
+                        merge=True,
+                        timeout=firestore_timeout_s,
+                    )
+                except TypeError:
+                    db.collection("users").document(tuid).set(
                     {
                         "is_active": False,
                         "disabled_at": now,
@@ -2466,14 +2487,26 @@ def _process_due_user_removals() -> None:
 
             # Mark request executed
             try:
-                db.collection("user_removal_requests").document(rid).set(
-                    {"status": "executed", "executed_at": now, "updated_at": now},
-                    merge=True,
-                )
-                db.collection("users").document(tuid).collection("removal_requests").document(rid).set(
-                    {"status": "executed", "executed_at": now, "updated_at": now},
-                    merge=True,
-                )
+                try:
+                    db.collection("user_removal_requests").document(rid).set(
+                        {"status": "executed", "executed_at": now, "updated_at": now},
+                        merge=True,
+                        timeout=firestore_timeout_s,
+                    )
+                    db.collection("users").document(tuid).collection("removal_requests").document(rid).set(
+                        {"status": "executed", "executed_at": now, "updated_at": now},
+                        merge=True,
+                        timeout=firestore_timeout_s,
+                    )
+                except TypeError:
+                    db.collection("user_removal_requests").document(rid).set(
+                        {"status": "executed", "executed_at": now, "updated_at": now},
+                        merge=True,
+                    )
+                    db.collection("users").document(tuid).collection("removal_requests").document(rid).set(
+                        {"status": "executed", "executed_at": now, "updated_at": now},
+                        merge=True,
+                    )
             except Exception as e:
                 print(f"[RemovalJob] Failed to mark executed {rid}: {e}")
 
@@ -6378,8 +6411,8 @@ async def get_load_details(
         raise HTTPException(status_code=404, detail="Load not found")
     
     # Strict role-based access control
-    uid = user['uid']
-    user_role = user.get("role", "carrier")
+    uid = str(user.get('uid') or '').strip()
+    user_role = str(user.get("role", "carrier") or "carrier").strip().lower()
     
     if user_role in ["admin", "super_admin"]:
         # Admins can view all loads
@@ -6398,28 +6431,40 @@ async def get_load_details(
                 detail="Shippers can only view loads they created"
             )
     elif user_role == "driver":
-        # Drivers can ONLY view loads assigned to them
-        if load.get("assigned_driver") != uid:
+        # Drivers can ONLY view loads assigned to them (support legacy fields)
+        assigned_driver = (
+            load.get("assigned_driver")
+            or load.get("assigned_driver_id")
+            or load.get("driver_id")
+        )
+        if str(assigned_driver or '').strip() != uid:
             raise HTTPException(
                 status_code=403,
                 detail="Drivers can only view loads assigned to them"
             )
     else:
-        # Carriers can view their own loads OR marketplace loads (POSTED loads they can bid on)
-        if load.get("created_by") != uid:
-            # Allow carriers to view POSTED loads (marketplace loads) for bidding
-            if load.get("status") != LoadStatus.POSTED.value:
-                raise HTTPException(
-                    status_code=403,
-                    detail="Not authorized to view this load"
-                )
-            # Also check if carrier has already bid on this load (for viewing their bid)
-            offers = load.get("offers", [])
-            has_bid = any(o.get("carrier_id") == uid for o in offers)
-            # Allow viewing if it's a POSTED load (marketplace) or if they have a bid
-            if not has_bid and load.get("status") == LoadStatus.POSTED.value:
-                # This is a marketplace load, allow viewing for bidding purposes
-                pass
+        # Carriers can view:
+        # - loads assigned to them
+        # - marketplace POSTED loads (for bidding)
+        # - loads they have bid on (to view their bid)
+        assigned_carrier = (
+            load.get("assigned_carrier")
+            or load.get("assigned_carrier_id")
+            or load.get("carrier_id")
+            or load.get("carrier_uid")
+        )
+        is_assigned_carrier = str(assigned_carrier or '').strip() == uid
+
+        status_val = str(load.get("status") or '').strip()
+        is_posted = status_val == getattr(LoadStatus, 'POSTED', LoadStatus.POSTED).value
+
+        offers = load.get("offers", [])
+        if not isinstance(offers, list):
+            offers = []
+        has_bid = any(str((o or {}).get("carrier_id") or '').strip() == uid for o in offers if isinstance(o, dict))
+
+        if not (is_assigned_carrier or is_posted or has_bid):
+            raise HTTPException(status_code=403, detail="Not authorized to view this load")
     
     sanitized = sanitize_load_for_viewer(load, viewer_uid=str(uid), viewer_role=str(user_role))
 
@@ -7276,6 +7321,26 @@ async def assign_driver_to_load(
             "assigned_at": timestamp,
             "updated_at": timestamp
         })
+
+        # Best-effort: advance workflow status for tracking UI.
+        try:
+            current_ws = str(load_data.get("workflow_status") or "").strip()
+            # Do not overwrite later-stage workflow statuses.
+            later = {"In Transit", "Arrived at Delivery", "Delivered", "POD Submitted", "Invoiced", "Payment Settled"}
+            if (not current_ws) or (current_ws not in later):
+                load_ref.set({"workflow_status": "Assigned to Driver", "workflow_status_updated_at": timestamp}, merge=True)
+                load_ref.collection("workflow_status_logs").document().set(
+                    {
+                        "timestamp": timestamp,
+                        "actor_uid": carrier_id,
+                        "actor_role": user_role,
+                        "old_workflow_status": (current_ws or None),
+                        "new_workflow_status": "Assigned to Driver",
+                        "notes": "Carrier assigned driver",
+                    }
+                )
+        except Exception:
+            pass
         
         # Also update driver status if needed
         current_status = driver_data.get("status", "available")
@@ -7365,6 +7430,25 @@ async def driver_accept_load_assignment(
                 "driver_accepted_at": timestamp,
                 "updated_at": timestamp
             })
+
+            # Best-effort: ensure workflow status reflects assignment acceptance.
+            try:
+                current_ws = str(load_data.get("workflow_status") or "").strip()
+                later = {"In Transit", "Arrived at Delivery", "Delivered", "POD Submitted", "Invoiced", "Payment Settled"}
+                if (not current_ws) or (current_ws not in later):
+                    load_ref.set({"workflow_status": "Assigned to Driver", "workflow_status_updated_at": timestamp}, merge=True)
+                    load_ref.collection("workflow_status_logs").document().set(
+                        {
+                            "timestamp": timestamp,
+                            "actor_uid": driver_id,
+                            "actor_role": user_role,
+                            "old_workflow_status": (current_ws or None),
+                            "new_workflow_status": "Assigned to Driver",
+                            "notes": "Driver accepted assignment",
+                        }
+                    )
+            except Exception:
+                pass
             
             # Log action
             log_action(driver_id, "DRIVER_ACCEPTED_LOAD", f"Driver accepted load assignment {load_id}")
@@ -8755,6 +8839,20 @@ async def driver_update_status(
     """
     uid = user['uid']
     user_role = user.get("role", "")
+
+    # IMPORTANT: This endpoint is legacy and does NOT capture required signatures.
+    # Enforce industry workflow via dedicated endpoints that require documents + signatures.
+    # - Pickup:  POST /loads/{load_id}/pickup/complete (requires BOL upload + shipper signature)
+    # - Delivery: POST /loads/{load_id}/delivery/complete (requires POD upload + receiver signature)
+    try:
+        ns = str(request.new_status or "").strip().upper()
+    except Exception:
+        ns = ""
+    if ns in {"IN_TRANSIT", "DELIVERED"}:
+        raise HTTPException(
+            status_code=410,
+            detail="Deprecated: use POST /loads/{load_id}/pickup/complete for pickup and POST /loads/{load_id}/delivery/complete for delivery. These enforce BOL/POD upload order and required signatures.",
+        )
     
     # Role check: Must be driver
     if user_role != "driver":
@@ -8835,22 +8933,7 @@ async def driver_update_status(
             "timestamp": timestamp
         }
     
-    # Add proof of delivery/pickup
-    if request.photo_url:
-        if new_status == LoadStatus.IN_TRANSIT.value.upper():
-            updates["pickup_photo_url"] = request.photo_url
-        elif new_status == LoadStatus.DELIVERED.value.upper():
-            updates["delivery_photo_url"] = request.photo_url
-
-    # Also add proof photo URLs into the load-level document vault (best-effort).
-    try:
-        if request.photo_url and isinstance(request.photo_url, str) and request.photo_url.strip():
-            if new_status == LoadStatus.IN_TRANSIT.value.upper():
-                create_load_document_from_url(load=load, kind="BOL", url=request.photo_url, actor=user, source="driver_status_photo")
-            elif new_status == LoadStatus.DELIVERED.value.upper():
-                create_load_document_from_url(load=load, kind="POD", url=request.photo_url, actor=user, source="driver_status_photo")
-    except Exception as e:
-        print(f"Warning: Could not attach driver photo URL to document vault: {e}")
+    # NOTE: Proof photos are handled via the load document vault upload endpoints.
     
     # Update in Firestore first
     try:
@@ -10435,6 +10518,7 @@ app.include_router(messaging_router)
 app.include_router(finance_router)
 app.include_router(load_documents_router)
 app.include_router(load_workflow_router)
+app.include_router(admin_load_dossier_router)
 app.include_router(consents_router)
 app.include_router(calendar_router)
 app.include_router(help_center_router)
@@ -10455,7 +10539,14 @@ def startup_events():
     scheduler.add_interval_job(_digest_alerts_job, minutes=60, id="alert_digest_hourly")
     scheduler.add_interval_job(_send_admin_email_digest_job, minutes=60 * 24, id="admin_email_digest_daily")
     # Delayed message email notifications (checks every minute).
-    scheduler.add_interval_job(process_pending_message_email_notifications_job, minutes=1, id="message_email_notifications")
+    scheduler.add_interval_job(
+        process_pending_message_email_notifications_job,
+        minutes=1,
+        id="message_email_notifications",
+        max_instances=2,
+        coalesce=True,
+        misfire_grace_time=30,
+    )
     # Execute approved user removals whose grace period elapsed.
     scheduler.add_interval_job(_process_due_user_removals, minutes=10, id="user_removal_processor")
     print(

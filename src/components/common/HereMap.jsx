@@ -1,6 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { HERE_API_KEY_FRONTEND } from '../../config';
 
+function _canUseWebGL() {
+  try {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    return !!gl;
+  } catch (e) {
+    return false;
+  }
+}
+
 /**
  * Base interactive HERE Map component
  * 
@@ -151,15 +161,38 @@ export default function HereMap({
         });
 
         const defaultLayers = platform.createDefaultLayers();
-        const map = new window.H.Map(
-          container,
-          defaultLayers.vector.normal.map,
-          {
-            center: { lat: center.lat, lng: center.lng },
-            zoom: zoom,
-            pixelRatio: window.devicePixelRatio || 1
-          }
-        );
+
+        // Tangram vector rendering relies on WebGL; some devices/drivers fail shader compilation
+        // (e.g., "Style: error compiling program for style 'skybox'").
+        // Fall back to raster tiles when WebGL isn't available or the vector engine errors.
+        const preferredBaseLayer = _canUseWebGL()
+          ? (defaultLayers?.vector?.normal?.map || defaultLayers.raster.normal.map)
+          : defaultLayers.raster.normal.map;
+
+        let map;
+        try {
+          map = new window.H.Map(
+            container,
+            preferredBaseLayer,
+            {
+              center: { lat: center.lat, lng: center.lng },
+              zoom: zoom,
+              pixelRatio: window.devicePixelRatio || 1
+            }
+          );
+        } catch (e) {
+          // Last-resort fallback: raster layer.
+          console.warn('[HERE] Vector map init failed; falling back to raster tiles:', e);
+          map = new window.H.Map(
+            container,
+            defaultLayers.raster.normal.map,
+            {
+              center: { lat: center.lat, lng: center.lng },
+              zoom: zoom,
+              pixelRatio: window.devicePixelRatio || 1
+            }
+          );
+        }
 
         // Add map behavior
         const behavior = new window.H.mapevents.Behavior(

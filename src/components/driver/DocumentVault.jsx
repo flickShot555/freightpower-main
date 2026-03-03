@@ -5,6 +5,7 @@ import { API_URL } from '../../config';
 import { AUTO_REFRESH_MS } from '../../constants/refresh';
 import { t } from '../../i18n/translate';
 import '../../styles/driver/DocumentVault.css';
+import { getJson } from '../../api/http';
 
 // Document type mapping for drivers
 const DOCUMENT_TYPES = [
@@ -18,7 +19,7 @@ const DOCUMENT_TYPES = [
   { value: 'other', labelKey: 'documentVault.docTypes.other', labelFallback: 'Other' }
 ];
 
-export default function DocumentVault({ isPostHire, setIsPostHire, onNavigate }) {
+export default function DocumentVault({ isPostHire, setIsPostHire, onNavigate, contextLoadId = null }) {
   const { currentUser } = useAuth();
   const { settings } = useUserSettings();
   const language = settings?.language || 'English';
@@ -35,6 +36,9 @@ export default function DocumentVault({ isPostHire, setIsPostHire, onNavigate })
   const [docs, setDocs] = useState([]);
   const [tripDocs, setTripDocs] = useState([]);
   const [tripDocsLoading, setTripDocsLoading] = useState(false);
+  const [loadDocs, setLoadDocs] = useState([]);
+  const [loadDocsLoading, setLoadDocsLoading] = useState(false);
+  const [loadDocsError, setLoadDocsError] = useState('');
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -79,9 +83,50 @@ export default function DocumentVault({ isPostHire, setIsPostHire, onNavigate })
   // Background refresh should not disrupt UI. We track last payloads and only update state when data changes.
   const docsPayloadRef = React.useRef('');
   const tripDocsPayloadRef = React.useRef('');
+  const loadDocsPayloadRef = React.useRef('');
   const requiredDocsPayloadRef = React.useRef('');
   const compliancePayloadRef = React.useRef('');
   const consentInfoPayloadRef = React.useRef('');
+
+  const fetchLoadDocuments = useCallback(async ({ silent = false } = {}) => {
+    const loadId = String(contextLoadId || '').trim();
+    if (!currentUser || !loadId) {
+      setLoadDocs([]);
+      setLoadDocsError('');
+      return;
+    }
+    if (!silent) setLoadDocsLoading(true);
+    setLoadDocsError('');
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch(`${API_URL}/loads/${encodeURIComponent(loadId)}/documents`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = String(body?.detail || 'Failed to load load documents');
+        setLoadDocsError(msg);
+        setLoadDocs([]);
+        return;
+      }
+      const items = body?.documents || [];
+      const next = Array.isArray(items) ? items : [];
+      const nextPayload = JSON.stringify(next);
+      if (nextPayload !== loadDocsPayloadRef.current) {
+        loadDocsPayloadRef.current = nextPayload;
+        setLoadDocs(next);
+      }
+    } catch (e) {
+      setLoadDocsError(String(e?.message || 'Failed to load load documents'));
+      setLoadDocs([]);
+    } finally {
+      if (!silent) setLoadDocsLoading(false);
+    }
+  }, [contextLoadId, currentUser]);
+
+  useEffect(() => {
+    fetchLoadDocuments({ silent: false });
+  }, [fetchLoadDocuments]);
 
   const missingRequiredDocumentItems = (Array.isArray(requiredDocs?.required) ? requiredDocs.required : []).filter((x) => {
     const kind = String(x?.kind || '').toLowerCase();
@@ -140,19 +185,13 @@ export default function DocumentVault({ isPostHire, setIsPostHire, onNavigate })
   const fetchComplianceScore = useCallback(async () => {
     if (!currentUser) return;
     try {
-      const token = await currentUser.getIdToken();
-      const response = await fetch(`${API_URL}/compliance/status`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
+      const data = await getJson('/compliance/status', { requestLabel: 'GET /compliance/status (driver vault)' });
+      if (data) {
         const nextPayload = JSON.stringify(data ?? null);
         if (nextPayload !== compliancePayloadRef.current) {
           compliancePayloadRef.current = nextPayload;
           setComplianceScore(data);
         }
-      } else {
-        console.error('Failed to fetch compliance score:', response.status);
       }
     } catch (error) {
       console.error('Error fetching compliance:', error);
@@ -268,11 +307,80 @@ export default function DocumentVault({ isPostHire, setIsPostHire, onNavigate })
         fetchRequiredDocs(),
       ];
       if (isPostHire) tasks.push(fetchTripDocuments({ silent: true }));
+      if (contextLoadId) tasks.push(fetchLoadDocuments({ silent: true }));
       await Promise.allSettled(tasks);
     } finally {
       if (showSpinner) setRefreshing(false);
     }
-  }, [currentUser, fetchDocuments, fetchComplianceScore, fetchRequiredDocs, fetchTripDocuments, isPostHire]);
+  }, [contextLoadId, currentUser, fetchDocuments, fetchComplianceScore, fetchLoadDocuments, fetchRequiredDocs, fetchTripDocuments, isPostHire]);
+
+  const renderLoadDocsCard = () => {
+    const loadId = String(contextLoadId || '').trim();
+    if (!loadId) return null;
+
+    const fmtWhen = (ts) => {
+      const n = Number(ts || 0);
+      if (!n) return '';
+      const d = new Date(n * 1000);
+      if (Number.isNaN(d.getTime())) return '';
+      return d.toLocaleString(locale, { month: 'short', day: 'numeric', year: 'numeric' });
+    };
+
+    return (
+      <div style={{ background: dvTheme.surface, borderRadius: 12, padding: 16, border: `1px solid ${dvTheme.border}`, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontWeight: 800, color: dvTheme.text, fontSize: 14 }}>{tr('myCarrier.docs.loadDocumentsTitle', 'Load Documents')}</div>
+            <div style={{ color: dvTheme.muted, fontSize: 12 }}>{tr('documentVault.loadDocs.subtitle', 'Showing documents for Load ID:')} {loadId}</div>
+          </div>
+          <button
+            type="button"
+            className="btn small ghost-cd"
+            onClick={() => fetchLoadDocuments({ silent: false })}
+            disabled={loadDocsLoading}
+            title={tr('common.refresh', 'Refresh')}
+          >
+            <i className={`fa-solid ${loadDocsLoading ? 'fa-spinner fa-spin' : 'fa-rotate-right'}`}></i>
+            {tr('common.refresh', 'Refresh')}
+          </button>
+        </div>
+
+        {loadDocsError && (
+          <div style={{ marginTop: 10, color: '#ef4444', fontSize: 13 }}>{String(loadDocsError)}</div>
+        )}
+
+        {!loadDocsError && loadDocs.length === 0 && (
+          <div style={{ marginTop: 10, color: dvTheme.muted, fontSize: 13 }}>
+            {tr('documentVault.loadDocs.empty', 'No load documents uploaded yet for this load.')}
+          </div>
+        )}
+
+        {loadDocs.length > 0 && (
+          <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
+            {loadDocs.slice(0, 12).map((d, idx) => {
+              const kind = String(d?.kind || d?.document_type || d?.type || 'OTHER').toUpperCase();
+              const filename = String(d?.filename || d?.name || '').trim();
+              const when = fmtWhen(d?.created_at || d?.uploaded_at);
+              const url = String(d?.url || '').trim();
+              return (
+                <div key={String(d?.doc_id || d?.id || idx)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 12, border: `1px solid ${dvTheme.border}`, borderRadius: 10 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, color: dvTheme.text, fontSize: 13 }}>{kind}{filename ? ` — ${filename}` : ''}</div>
+                    <div style={{ color: dvTheme.muted, fontSize: 12 }}>{when || ''}</div>
+                  </div>
+                  {url ? (
+                    <a className="btn small ghost-cd" href={url} target="_blank" rel="noreferrer">{tr('common.open', 'Open')}</a>
+                  ) : (
+                    <span style={{ color: dvTheme.muted, fontSize: 12 }}>{tr('common.unavailable', 'Unavailable')}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // Time-based auto-refresh (5 minutes) for Document Vault data.
   useEffect(() => {
@@ -643,6 +751,8 @@ export default function DocumentVault({ isPostHire, setIsPostHire, onNavigate })
           <button onClick={() => setIsPostHire(false)} className="btn small dd-back-btn">{tr('documentVault.backToPreHire', 'Back to Pre-Hire')}</button>
         </div>
 
+        {renderLoadDocsCard()}
+
         {/* Compliance Status Card */}
         <div className="dd-compliance-status-card">
           <div className="dd-compliance-card-header">
@@ -934,6 +1044,8 @@ export default function DocumentVault({ isPostHire, setIsPostHire, onNavigate })
           </button>
         </div>
       </div>
+
+      {renderLoadDocsCard()}
 
       {/* Compliance Score & Document Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '20px' }}>

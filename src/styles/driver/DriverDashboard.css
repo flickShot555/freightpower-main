@@ -860,6 +860,88 @@ input:not(:checked) + .dd-toggle-slider:before {
   object-fit: cover;
 }
 
+/* Workflow (Pickup/Delivery) modal tweaks */
+.dd-workflow-modal .modal-content{
+  overflow:hidden;
+}
+
+.dd-workflow-modal__field{margin-bottom:12px;}
+.dd-workflow-modal__label{
+  display:block;
+  margin-bottom:6px;
+  font-weight:800;
+  font-size:13px;
+  color:#1e293b;
+}
+.dark-root .dd-workflow-modal__label{color:#e2e8f0;}
+
+.dd-workflow-input{
+  width:100%;
+  padding:10px;
+  border:1px solid #e2e8f0;
+  border-radius:10px;
+  font-size:14px;
+  color:#0f172a;
+  background:#fff;
+}
+.dd-workflow-input:disabled{opacity:0.75;}
+
+.dark-root .dd-workflow-modal .modal-content{
+  background:#0f172a;
+  color:#e2e8f0;
+}
+.dark-root .dd-workflow-modal .modal-header{border-bottom:1px solid rgba(148,163,184,0.18);}
+.dark-root .dd-workflow-modal .modal-close{background:rgba(148,163,184,0.10); color:#cbd5e1;}
+.dark-root .dd-workflow-modal .modal-close:hover{background:rgba(148,163,184,0.18); color:#e2e8f0;}
+.dark-root .dd-workflow-input{
+  border:1px solid rgba(148,163,184,0.18);
+  background:rgba(148,163,184,0.06);
+  color:#e2e8f0;
+}
+
+.dd-workflow-modal__error{
+  border:1px solid #fecaca;
+  background:#fef2f2;
+  color:#991b1b;
+  padding:10px;
+  border-radius:10px;
+  margin-bottom:12px;
+  font-size:13px;
+  font-weight:700;
+}
+.dark-root .dd-workflow-modal__error{
+  border:1px solid rgba(239,68,68,0.35);
+  background:rgba(239,68,68,0.10);
+  color:#fecaca;
+}
+
+.dd-workflow-modal__hint{
+  font-size:12px;
+  color:#64748b;
+  line-height:1.35;
+}
+.dark-root .dd-workflow-modal__hint{color:#94a3b8;}
+
+.dd-workflow-modal__actions{display:flex; gap:10px; justify-content:flex-end;}
+
+.dd-workflow-sig{display:flex; flex-direction:column; gap:8px;}
+.dd-workflow-sig__canvas{
+  width:100%;
+  max-width:520px;
+  border:1px solid #e2e8f0;
+  border-radius:12px;
+  background:#fff;
+  cursor:crosshair;
+  touch-action:none;
+}
+.dd-workflow-sig__canvas.is-disabled{background:#f8fafc; cursor:not-allowed;}
+.dark-root .dd-workflow-sig__canvas{
+  border:1px solid rgba(148,163,184,0.18);
+  background:rgba(148,163,184,0.06);
+}
+.dark-root .dd-workflow-sig__canvas.is-disabled{background:rgba(148,163,184,0.06);}
+.dd-workflow-sig__actions{display:flex; justify-content:flex-end;}
+
 /* Unread badge for sidebar nav items (e.g., Messaging) */
 .nav-unread-badge{
   margin-left:auto;

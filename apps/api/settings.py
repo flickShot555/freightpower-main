@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     FMCSA_API_KEY: str = Field(default=os.getenv("FMCSA_API_KEY", ""))
     FMCSA_WEB_KEY: str = Field(default=os.getenv("FMCSA_WEB_KEY", ""))
     ALERT_WEBHOOK_URL: str = Field(default=os.getenv("ALERT_WEBHOOK_URL", ""))
+
+    # Firestore / Firebase
+    # Default timeout (seconds) for Firestore operations that otherwise may hang.
+    FIRESTORE_JOB_TIMEOUT_SECONDS: float = Field(default=float(os.getenv("FIRESTORE_JOB_TIMEOUT_SECONDS", "15")))
     
     # Email settings
     SMTP_SERVER: str = Field(default=os.getenv("SMTP_SERVER", "smtp.gmail.com"))

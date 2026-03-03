@@ -3,6 +3,7 @@ import useMediaQuery from '../../hooks/useMediaQuery';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_URL } from '../../config';
 import { AUTO_REFRESH_MS } from '../../constants/refresh';
+import { getJson } from '../../api/http';
 import Toast from '../common/Toast';
 import '../../styles/carrier/DocumentVault.css';
 
@@ -260,17 +261,11 @@ export default function DocumentVault() {
   const fetchComplianceScore = useCallback(async () => {
     if (!currentUser) return;
     try {
-      const token = await currentUser.getIdToken();
-      const response = await fetch(`${API_URL}/compliance/status`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
+      const data = await getJson('/compliance/status', { requestLabel: 'GET /compliance/status (carrier vault)' });
+      if (data) {
         console.log('📊 Compliance Score Data:', data);
         console.log('📄 Documents:', data.documents);
         setComplianceScore(data);
-      } else {
-        console.error('Failed to fetch compliance score:', response.status);
       }
     } catch (error) {
       console.error('Error fetching compliance:', error);

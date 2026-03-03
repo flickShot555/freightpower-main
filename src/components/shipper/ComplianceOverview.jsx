@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { API_URL } from '../../config'
+import { getJson, postJson } from '../../api/http'
 import '../../styles/shipper/ShipperDashboard.css'
 import '../../styles/shipper/ComplianceOverview.css'
 
@@ -39,15 +40,9 @@ export default function ComplianceOverview(){
     const fetchComplianceData = async () => {
       setLoading(true);
       try {
-        const token = await currentUser.getIdToken();
-
         // Fetch compliance status
-        const statusRes = await fetch(`${API_URL}/compliance/status`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (statusRes.ok) {
-          const data = await statusRes.json();
+        const data = await getJson('/compliance/status', { requestLabel: 'GET /compliance/status (shipper compliance)' });
+        if (data) {
           setComplianceStatus({
             score: data.compliance_score || 0,
             breakdown: data.score_breakdown || {},
@@ -73,14 +68,8 @@ export default function ComplianceOverview(){
         }
 
         // Fetch compliance tasks
-        const tasksRes = await fetch(`${API_URL}/compliance/tasks`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (tasksRes.ok) {
-          const tasks = await tasksRes.json();
-          setComplianceTasks(tasks);
-        }
+        const tasks = await getJson('/compliance/tasks', { requestLabel: 'GET /compliance/tasks (shipper compliance)' });
+        setComplianceTasks(tasks);
       } catch (error) {
         console.error('Error fetching compliance data:', error);
       } finally {
@@ -96,15 +85,8 @@ export default function ComplianceOverview(){
     if (!currentUser) return;
     setAnalyzingAI(true);
     try {
-      const token = await currentUser.getIdToken();
-      const res = await fetch(`${API_URL}/compliance/ai-analyze`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setAiAnalysis(data);
-      }
+      const data = await postJson('/compliance/ai-analyze', {}, { requestLabel: 'POST /compliance/ai-analyze (shipper)' })
+      setAiAnalysis(data);
     } catch (error) {
       console.error('AI analysis error:', error);
     } finally {

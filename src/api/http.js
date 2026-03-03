@@ -2,14 +2,46 @@ import { API_URL } from '../config';
 import { auth } from '../firebase';
 import { forceLogoutToLogin, getSessionId, isAccountDeletedMessage, isSessionRevokedMessage } from '../utils/session';
 
-async function getAuthToken() {
+function _decodeJwtPayload(token) {
+  try {
+    const parts = String(token || '').split('.');
+    if (parts.length < 2) return null;
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64.padEnd(b64.length + ((4 - (b64.length % 4)) % 4), '=');
+    const json = atob(padded);
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+async function getAuthToken({ forceRefresh = false } = {}) {
   const user = auth.currentUser;
   if (!user) return null;
-  return user.getIdToken();
+
+  // Firebase SDK usually refreshes automatically, but we defensively refresh when
+  // the JWT is already expired or close to expiring to avoid 401s.
+  const token = await user.getIdToken(Boolean(forceRefresh));
+  if (forceRefresh) return token;
+
+  const payload = _decodeJwtPayload(token);
+  const exp = Number(payload?.exp || 0);
+  const now = Math.floor(Date.now() / 1000);
+  // Refresh if expired or within the next 2 minutes.
+  if (exp && exp <= (now + 120)) {
+    try {
+      return await user.getIdToken(true);
+    } catch {
+      // Fall back to the original token; backend will reject if truly invalid.
+      return token;
+    }
+  }
+
+  return token;
 }
 
 export async function apiFetchBlob(path, options = {}) {
-  const token = await getAuthToken();
+  let token = await getAuthToken();
   const timeoutMs = Number(options.timeoutMs ?? 15000);
   const requestLabel = options.requestLabel || `${String(options.method || 'GET').toUpperCase()} ${path}`;
   const headers = {
@@ -44,6 +76,19 @@ export async function apiFetchBlob(path, options = {}) {
       headers,
       signal,
     });
+
+    if ((res.status === 401 || res.status === 403) && token) {
+      // One best-effort retry with a forced token refresh.
+      token = await getAuthToken({ forceRefresh: true });
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+        res = await fetch(url, {
+          ...options,
+          headers,
+          signal,
+        });
+      }
+    }
   } catch (e) {
     if (timeoutId) clearTimeout(timeoutId);
     const msg = e?.name === 'AbortError'
@@ -90,7 +135,7 @@ export async function openEventSource(path, params = {}) {
 }
 
 export async function apiFetch(path, options = {}) {
-  const token = await getAuthToken();
+  let token = await getAuthToken();
   const timeoutMs = Number(options.timeoutMs ?? 15000);
   const requestLabel = options.requestLabel || `${String(options.method || 'GET').toUpperCase()} ${path}`;
   const headers = {
@@ -126,6 +171,19 @@ export async function apiFetch(path, options = {}) {
       headers,
       signal,
     });
+
+    if ((res.status === 401 || res.status === 403) && token) {
+      // One best-effort retry with a forced token refresh.
+      token = await getAuthToken({ forceRefresh: true });
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+        res = await fetch(url, {
+          ...options,
+          headers,
+          signal,
+        });
+      }
+    }
   } catch (e) {
     if (timeoutId) clearTimeout(timeoutId);
     const msg = e?.name === 'AbortError'

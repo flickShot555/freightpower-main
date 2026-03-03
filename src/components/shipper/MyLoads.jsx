@@ -105,7 +105,14 @@ function Column({ title, items, isLoading, onItemClick, onViewMore }) {
   const hasMore = remainingCount > 0;
   
   return (
-    <div className={`ml-column ${isTender ? 'tender-column' : ''} ${isAccepted ? 'accepted-column' : ''} ${isInTransit ? 'in-transit-column' : ''} ${isDelivered ? 'delivered-column' : ''} ${isPod ? 'pod-column' : ''} ${isInvoiced ? 'invoiced-column' : ''} ${isSettled ? 'settled-column' : ''} ${isDraft ? 'draft-column' : ''}`}>
+    <div
+      className={`ml-column ${isTender ? 'tender-column' : ''} ${isAccepted ? 'accepted-column' : ''} ${isInTransit ? 'in-transit-column' : ''} ${isDelivered ? 'delivered-column' : ''} ${isPod ? 'pod-column' : ''} ${isInvoiced ? 'invoiced-column' : ''} ${isSettled ? 'settled-column' : ''} ${isDraft ? 'draft-column' : ''}`}
+      onClick={() => {
+        if (!hasMore) return;
+        onViewMore && onViewMore();
+      }}
+      style={{ cursor: hasMore && onViewMore ? 'pointer' : 'default' }}
+    >
       <div className="ml-column-inner">
         <div className="ml-column-header">
           <h4>{title}</h4>
@@ -121,15 +128,18 @@ function Column({ title, items, isLoading, onItemClick, onViewMore }) {
               <div 
                 className={`ml-card ${isTender ? 'tender-card' : ''} ${isAccepted ? 'accepted-card' : ''} ${isInTransit ? 'in-transit-card' : ''} ${isDelivered ? 'delivered-card' : ''} ${isPod ? 'pod-card' : ''} ${isInvoiced ? 'invoiced-card' : ''} ${isSettled ? 'settled-card' : ''} ${isDraft ? 'draft-card' : ''}`} 
                 key={displayItem.id} 
-                role="article"
-                onClick={() => {
-                  if (hasMore) {
-                    onViewMore && onViewMore();
-                    return;
-                  }
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
                   onItemClick && onItemClick(displayItem);
                 }}
-                style={{cursor: (hasMore && onViewMore) || onItemClick ? 'pointer' : 'default'}}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.stopPropagation();
+                  onItemClick && onItemClick(displayItem);
+                }}
+                style={{ cursor: onItemClick ? 'pointer' : 'default' }}
               >
                 <div className="ml-card-top">
                   <div className="ml-id">{displayItem.id}</div>
@@ -179,6 +189,7 @@ function Column({ title, items, isLoading, onItemClick, onViewMore }) {
                   }}
                   onKeyDown={(e) => {
                     if (e.key !== 'Enter') return;
+                    e.stopPropagation();
                     onViewMore && onViewMore();
                   }}
                 >
@@ -384,7 +395,7 @@ export default function ShipperMyLoads() {
       {modalOpen ? (
         <LoadsModal
           title={modalOpen.title}
-          items={(loads?.[modalOpen.key] || []).slice(1)}
+          items={(loads?.[modalOpen.key] || [])}
           onClose={() => setModalOpen(null)}
           onItemClick={(it) => {
             setModalOpen(null);

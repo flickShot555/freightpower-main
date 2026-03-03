@@ -26,6 +26,16 @@ export function AuthProvider({ children }) {
   const [isVerified, setIsVerified] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  async function fetchWithTimeout(url, options = {}, timeoutMs = 4000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
   // Background GPS heartbeat (best-effort) to populate users.gps_lat/gps_lng.
   // This powers admin Tracking & Visibility map markers.
   useEffect(() => {
@@ -207,13 +217,13 @@ export function AuthProvider({ children }) {
   async function logLoginToBackend(user) {
     try {
       const token = await user.getIdToken();
-      await fetch(`${API_URL}/auth/log-login`, {
+      await fetchWithTimeout(`${API_URL}/auth/log-login`, {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
-      });
+      }, 3500);
     } catch (err) {
       console.error("Audit Log Failed:", err);
     }
@@ -272,10 +282,10 @@ export function AuthProvider({ children }) {
     
     const token = await auth.currentUser.getIdToken();
     
-    const response = await fetch(`${API_URL}/auth/verify-otp`, {
+    const response = await fetchWithTimeout(`${API_URL}/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
-    });
+    }, 6000);
 
     if (!response.ok) throw new Error("Backend verification failed");
     

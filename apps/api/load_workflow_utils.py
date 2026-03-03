@@ -64,6 +64,48 @@ def set_contract_rate_con_signature(
     return contract
 
 
+def set_contract_bol_signature(
+    *,
+    load: Dict[str, Any],
+    signer_role: str,
+    signer_uid: str,
+    signer_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Record BOL signature state in the load's contract.
+
+    We store signature timestamps and signer identity for:
+    - shipper/broker ("shipper")
+    - driver
+    """
+
+    signer_role = _safe_str(signer_role).lower()
+    signer_uid = _safe_str(signer_uid)
+    signer_name = _safe_str(signer_name) or None
+
+    contract = dict(load.get("contract") or {}) if isinstance(load.get("contract"), dict) else {}
+    bol = dict(contract.get("bol") or {}) if isinstance(contract.get("bol"), dict) else {}
+
+    ts = now_ts()
+    if signer_role in {"shipper", "broker", "admin", "super_admin"}:
+        bol.setdefault("shipper_signed_at", ts)
+        bol.setdefault("shipper_signed_by_uid", signer_uid)
+        if signer_name:
+            bol.setdefault("shipper_signed_by_name", signer_name)
+    elif signer_role == "driver":
+        bol.setdefault("driver_signed_at", ts)
+        bol.setdefault("driver_signed_by_uid", signer_uid)
+        if signer_name:
+            bol.setdefault("driver_signed_by_name", signer_name)
+    else:
+        raise ValueError("invalid signer_role")
+
+    bol["updated_at"] = ts
+    contract["bol"] = bol
+    contract["updated_at"] = ts
+
+    return contract
+
+
 def haversine_distance_meters(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     # Earth radius in meters
     r = 6371000.0

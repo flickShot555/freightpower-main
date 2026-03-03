@@ -12,7 +12,7 @@ import httpx
 
 from firebase_admin import firestore
 
-from ..database import db
+from ..database import bucket, db, signed_download_url
 from ..storage import ResponseStore
 from .factoring_provider import get_provider
 from .models import (
@@ -27,6 +27,52 @@ from .models import (
     WebhookEventRecord,
 )
 from .state import InvoiceRequirements, assert_transition, required_docs_present
+
+
+def _notify_payer_invoice_issued(*, invoice: InvoiceRecord, load: Optional[Dict[str, Any]] = None) -> None:
+    """Best-effort: create an in-app notification for the payer."""
+    try:
+        payer_uid = str(invoice.payer_uid or "").strip()
+        if not payer_uid:
+            return
+
+        now = float(_now())
+        notif_id = str(uuid.uuid4())
+        load_number = None
+        try:
+            load_number = (
+                (str((load or {}).get("load_number") or "").strip() if isinstance(load, dict) else None)
+                or (str(invoice.load_number or "").strip() if invoice.load_number else None)
+            )
+        except Exception:
+            load_number = (str(invoice.load_number or "").strip() if invoice.load_number else None)
+
+        title = f"Invoice issued for Load {load_number or invoice.load_id}"
+        message = f"Invoice {invoice.invoice_number or invoice.invoice_id} was issued and is ready for review."
+        action_url = f"/shipper-dashboard?nav=bills&invoice_id={invoice.invoice_id}"
+
+        db.collection("notifications").document(notif_id).set(
+            {
+                "id": notif_id,
+                "user_id": payer_uid,
+                "notification_type": "invoice_issued",
+                "title": title,
+                "message": message,
+                "resource_type": "invoice",
+                "resource_id": invoice.invoice_id,
+                "action_url": action_url,
+                "is_read": False,
+                "created_at": int(now),
+                "invoice_id": invoice.invoice_id,
+                "invoice_number": invoice.invoice_number,
+                "load_id": invoice.load_id,
+                "load_number": load_number,
+                "issuer_uid": invoice.issuer_uid,
+                "payer_uid": invoice.payer_uid,
+            }
+        )
+    except Exception:
+        return
 
 
 def _load_id(load: Dict[str, Any]) -> str:
@@ -133,9 +179,11 @@ def list_eligible_loads(*, user: Dict[str, Any], store: ResponseStore, limit: in
                 "load_id": lid,
                 "load_number": load.get("load_number"),
                 "status": status,
-                "has_pod": bool(load.get("delivery_photo_url"))
+                # POD eligibility requires a real uploaded file (storage_path).
+                # Do not accept URL placeholders, as delivery + invoicing require storage-backed docs.
+                "has_pod": bool(load.get("pod_storage_path"))
                 or any(
-                    str(d.get("kind") or "").strip().upper() == "POD" and (d.get("url") or d.get("storage_path"))
+                    (str(d.get("kind") or "").strip().upper() == "POD" and bool(d.get("storage_path")))
                     for d in _load_linked_document_vault_docs(lid)
                 ),
                 "creator_role": load.get("creator_role"),
@@ -598,8 +646,10 @@ def _load_linked_document_attachments_for_invoice(load_id: str) -> List[InvoiceA
         kind = str(d.get("kind") or "").strip().upper()
         if kind not in _INVOICE_LOAD_DOC_KINDS:
             continue
-        url = d.get("url") or None
+        storage_path = str(d.get("storage_path") or "").strip()
+        url = signed_download_url(storage_path, filename=(d.get("filename") or None), disposition="attachment", ttl_seconds=3600) if storage_path else None
         if not url:
+            # Only storage-backed docs are allowed for core invoicing attachments.
             continue
         doc_id = d.get("doc_id") or d.get("id") or None
         out.append(
@@ -613,7 +663,7 @@ def _load_linked_document_attachments_for_invoice(load_id: str) -> List[InvoiceA
                     "load_id": str(load_id),
                     "load_document_id": (str(doc_id) if doc_id else None),
                     "uploaded_at": d.get("uploaded_at") or d.get("created_at"),
-                    "storage_path": d.get("storage_path"),
+                    "storage_path": storage_path or None,
                 },
             )
         )
@@ -784,8 +834,8 @@ def create_invoice(*, request: InvoiceCreateRequest, user: Dict[str, Any], store
     )
 
     if not is_draft:
-        if not required_docs_present([a.model_dump() for a in attachments], InvoiceRequirements(require_pod=True, require_bol=False)):
-            raise ValueError("Missing required documents (POD) for invoice issuance")
+        if not required_docs_present([a.model_dump() for a in attachments], InvoiceRequirements(require_pod=True, require_bol=True)):
+            raise ValueError("Missing required documents (POD, BOL) for invoice issuance")
 
     record = InvoiceRecord(
         invoice_id=invoice_id,
@@ -889,6 +939,33 @@ def create_invoice(*, request: InvoiceCreateRequest, user: Dict[str, Any], store
         pass
     try:
         store.update_load(request.load_id, {"invoice_id": invoice_id, "invoice_number": invoice_number, "invoiced_at": now, "updated_at": now})
+    except Exception:
+        pass
+
+    # Workflow: only advance to Invoiced when the invoice is actually issued (not drafts).
+    try:
+        if not is_draft:
+            db.collection("loads").document(request.load_id).set(
+                {"workflow_status": "Invoiced", "workflow_status_updated_at": now, "updated_at": now},
+                merge=True,
+            )
+            db.collection("loads").document(request.load_id).collection("workflow_status_logs").document().set(
+                {
+                    "timestamp": now,
+                    "actor_uid": uid,
+                    "actor_role": str(user.get("role") or ""),
+                    "old_workflow_status": None,
+                    "new_workflow_status": "Invoiced",
+                    "notes": f"Invoice issued ({invoice_number})",
+                }
+            )
+    except Exception:
+        pass
+
+    # Notify payer when an invoice is actually issued (not drafts).
+    try:
+        if not is_draft:
+            _notify_payer_invoice_issued(invoice=record, load=load)
     except Exception:
         pass
 
@@ -1196,6 +1273,7 @@ def build_invoice_package_zip(*, invoice_id: str, user: Dict[str, Any], store: R
         k = str(a.kind or "OTHER").strip().upper()
         if k in _INVOICE_LOAD_DOC_KINDS:
             continue
+        md = a.metadata if isinstance(a.metadata, dict) else {}
         docs.append(
             {
                 "kind": k,
@@ -1203,6 +1281,7 @@ def build_invoice_package_zip(*, invoice_id: str, user: Dict[str, Any], store: R
                 "filename": a.filename,
                 "document_id": a.document_id,
                 "source": (a.metadata or {}).get("source") or "invoice_attachment",
+                "storage_path": md.get("storage_path") or None,
             }
         )
 
@@ -1210,27 +1289,32 @@ def build_invoice_package_zip(*, invoice_id: str, user: Dict[str, Any], store: R
         k = str(d.get("kind") or "").strip().upper()
         if k not in _INVOICE_LOAD_DOC_KINDS:
             continue
-        url = d.get("url") or None
-        if not url:
+        storage_path = str(d.get("storage_path") or "").strip()
+        if not storage_path:
             continue
         docs.append(
             {
                 "kind": k,
-                "url": str(url),
+                # Do not rely on persisted URLs for packaging.
+                "url": None,
                 "filename": d.get("filename"),
                 "document_id": (d.get("doc_id") or d.get("id")),
                 "source": "load_document_vault",
+                "storage_path": storage_path,
             }
         )
 
-    if not any(str(d.get("kind") or "").strip().upper() == "POD" for d in docs):
-        raise ValueError("Missing required documents (POD) linked to this load to build invoice package")
+    required = {"POD", "BOL"}
+    have = {str(d.get("kind") or "").strip().upper() for d in docs if d.get("storage_path")}
+    missing = sorted(list(required - have))
+    if missing:
+        raise ValueError(f"Missing required documents ({', '.join(missing)}) linked to this load to build invoice package")
 
-    # De-dupe by (kind,url)
+    # De-dupe by (kind,storage_path,url)
     seen = set()
     deduped: List[Dict[str, Any]] = []
     for d in docs:
-        key = (d.get("kind"), d.get("url"))
+        key = (d.get("kind"), d.get("storage_path"), d.get("url"))
         if key in seen:
             continue
         seen.add(key)
@@ -1252,14 +1336,21 @@ def build_invoice_package_zip(*, invoice_id: str, user: Dict[str, Any], store: R
         z.writestr("manifest.json", json.dumps(manifest, indent=2))
 
         for i, d in enumerate(deduped, start=1):
-            url = d.get("url")
-            content, _ct, guessed = _download_bytes(url) if url else (None, None, None)
+            storage_path = str(d.get("storage_path") or "").strip()
+            if not storage_path:
+                # Skip non-storage attachments to avoid SSRF.
+                continue
+            try:
+                blob = bucket.blob(storage_path)
+                content = blob.download_as_bytes()
+            except Exception:
+                continue
             if not content:
                 continue
 
             kind = str(d.get("kind") or "OTHER").strip().upper()
-            filename = d.get("filename") or guessed or f"doc_{i}"
-            safe = filename.replace("/", "_").replace("\\", "_")
+            filename = d.get("filename") or f"doc_{i}"
+            safe = str(filename).replace("/", "_").replace("\\", "_")
             z.writestr(f"documents/{kind}_{safe}", content)
 
     out = buf.getvalue()
@@ -1292,16 +1383,42 @@ def issue_invoice(*, invoice_id: str, user: Dict[str, Any], store: ResponseStore
         error_context="issue invoice",
     )
 
-    if not required_docs_present([a.model_dump() for a in attachments], InvoiceRequirements(require_pod=True, require_bol=False)):
-        raise ValueError("Missing required documents (POD) for invoice issuance")
+    if not required_docs_present([a.model_dump() for a in attachments], InvoiceRequirements(require_pod=True, require_bol=True)):
+        raise ValueError("Missing required documents (POD, BOL) for invoice issuance")
 
     now = _now()
-    return _update_invoice_status(
+    updated = _update_invoice_status(
         invoice_id=invoice_id,
         new_status=InvoiceStatus.ISSUED,
         now=now,
         extra={"issued_at": now, "attachments": [a.model_dump(mode="json") for a in attachments]},
     )
+
+    # Best-effort: advance load workflow status.
+    try:
+        db.collection("loads").document(str(inv.load_id)).set(
+            {"workflow_status": "Invoiced", "workflow_status_updated_at": now, "invoiced_at": now, "updated_at": now},
+            merge=True,
+        )
+        db.collection("loads").document(str(inv.load_id)).collection("workflow_status_logs").document().set(
+            {
+                "timestamp": now,
+                "actor_uid": uid,
+                "actor_role": str(user.get("role") or ""),
+                "old_workflow_status": None,
+                "new_workflow_status": "Invoiced",
+                "notes": f"Invoice issued ({updated.invoice_number or invoice_id})",
+            }
+        )
+    except Exception:
+        pass
+
+    try:
+        _notify_payer_invoice_issued(invoice=updated, load=load)
+    except Exception:
+        pass
+
+    return updated
 
 
 def void_invoice(*, invoice_id: str, user: Dict[str, Any]) -> InvoiceRecord:
@@ -1323,8 +1440,8 @@ def submit_to_factoring(*, invoice_id: str, user: Dict[str, Any], provider_name:
         raise ValueError("Factoring not enabled for this invoice")
 
     # Enforce minimal document requirement before factoring.
-    if not required_docs_present([a.model_dump() for a in inv.attachments], InvoiceRequirements(require_pod=True, require_bol=False)):
-        raise ValueError("Missing required documents (POD) for factoring submission")
+    if not required_docs_present([a.model_dump() for a in inv.attachments], InvoiceRequirements(require_pod=True, require_bol=True)):
+        raise ValueError("Missing required documents (POD, BOL) for factoring submission")
 
     provider = get_provider(provider_name)
 

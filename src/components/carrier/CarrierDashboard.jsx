@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_URL } from '../../config';
+import { getJson } from '../../api/http';
 import '../../styles/carrier/CarrierDashboard.css';
 import peopleIcon from '../../assets/ai_driver.svg';
 import MyLoads from './MyLoads';
@@ -218,12 +219,8 @@ export default function CarrierDashboard() {
         }
         
         // Fetch compliance status for expiring documents
-        const complianceRes = await fetch(`${API_URL}/compliance/status`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (complianceRes.ok) {
-          const cData = await complianceRes.json();
+        try {
+          const cData = await getJson('/compliance/status', { requestLabel: 'GET /compliance/status (carrier dashboard)' });
           
           // Extract expiring documents from compliance data
           const expiring = [];
@@ -248,6 +245,8 @@ export default function CarrierDashboard() {
           // Sort by days until expiry
           expiring.sort((a, b) => a.days - b.days);
           setExpiringDocuments(expiring.slice(0, 3)); // Show top 3
+        } catch {
+          // ignore
         }
         
         // Earnings: sum paid (and partially paid) invoices
@@ -551,21 +550,20 @@ export default function CarrierDashboard() {
         }
 
         // also fetch compliance status to show current compliance score
-        const complianceRes = await fetch(`${API_URL}/compliance/status`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (complianceRes.ok) {
-          const cData = await complianceRes.json();
-          if (typeof cData.compliance_score !== 'undefined') {
+        try {
+          const cData = await getJson('/compliance/status', { requestLabel: 'GET /compliance/status (carrier profile)' });
+          if (typeof cData?.compliance_score !== 'undefined') {
             setComplianceScore(cData.compliance_score);
           }
           // Set DOT and MC numbers from the extracted document values
-          if (cData.dot_number) {
+          if (cData?.dot_number) {
             setDotNumber(cData.dot_number);
           }
-          if (cData.mc_number) {
+          if (cData?.mc_number) {
             setMcNumber(cData.mc_number);
           }
+        } catch {
+          // ignore
         }
       } catch (error) {
         console.error('Error fetching profile:', error);
