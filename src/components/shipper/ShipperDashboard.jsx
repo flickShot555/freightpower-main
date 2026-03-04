@@ -22,6 +22,7 @@ import CarrierBids from './CarrierBids';
 import ShipperMyLoads from './MyLoads';
 import Bills from './Bills';
 import '../../styles/shipper/InviteCarrierModal.css';
+import '../../styles/shipper/Settings.css';
 // OnboardingCoach removed - compliance data now shown in Compliance & Safety page
 import logo from '/src/assets/logo.png';
 import resp_logo from '/src/assets/logo_1.png';
@@ -172,6 +173,25 @@ export default function ShipperDashboard() {
   // Onboarding data state
   const [shipperProfile, setShipperProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState(null);
+  const [profileForm, setProfileForm] = useState({
+    businessType: '',
+    businessName: '',
+    taxId: '',
+    businessAddress: '',
+    businessPhone: '',
+    businessEmail: '',
+    website: '',
+    contactFullName: '',
+    contactTitle: '',
+    contactPhone: '',
+    contactEmail: '',
+    freightType: '',
+    preferredEquipment: '',
+    avgMonthlyVolume: '',
+    regionsOfOperation: '',
+  });
 
   // Dashboard stats state
   const [dashboardStats, setDashboardStats] = useState(null);
@@ -417,6 +437,145 @@ export default function ShipperDashboard() {
     fetchProfile();
   }, [currentUser]);
 
+  // Keep editable form in sync with loaded profile
+  useEffect(() => {
+    const d = shipperProfile?.data || {};
+    setProfileForm((prev) => ({
+      ...prev,
+      businessType: d.businessType || prev.businessType,
+      businessName: d.businessName || prev.businessName,
+      taxId: d.taxId || prev.taxId,
+      businessAddress: d.businessAddress || prev.businessAddress,
+      businessPhone: d.businessPhone || prev.businessPhone,
+      businessEmail: d.businessEmail || prev.businessEmail,
+      website: d.website || prev.website,
+      contactFullName: d.contactFullName || prev.contactFullName,
+      contactTitle: d.contactTitle || prev.contactTitle,
+      contactPhone: d.contactPhone || prev.contactPhone,
+      contactEmail: d.contactEmail || prev.contactEmail,
+      freightType: d.freightType || prev.freightType,
+      preferredEquipment: d.preferredEquipment || prev.preferredEquipment,
+      avgMonthlyVolume: d.avgMonthlyVolume || prev.avgMonthlyVolume,
+      regionsOfOperation: d.regionsOfOperation || prev.regionsOfOperation,
+    }));
+  }, [shipperProfile]);
+
+  const refreshShipperProfile = async () => {
+    if (!currentUser) return;
+    setProfileLoading(true);
+    try {
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`${API_URL}/onboarding/data`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setShipperProfile(data);
+      }
+    } catch (error) {
+      console.error('Error refreshing profile:', error);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const setProfileField = (key, value) => {
+    setProfileForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const saveShipperProfile = async () => {
+    if (!currentUser) return;
+    setProfileSaving(true);
+    setProfileMessage(null);
+
+    try {
+      const token = await currentUser.getIdToken();
+
+      // Persist shipper-specific profile fields into onboarding_data (same mechanism as ShipperOnboarding).
+      const onboardingPayload = {
+        role: 'shipper',
+        data: {
+          businessType: profileForm.businessType,
+          businessName: profileForm.businessName,
+          taxId: profileForm.taxId,
+          businessAddress: profileForm.businessAddress,
+          businessPhone: profileForm.businessPhone,
+          businessEmail: profileForm.businessEmail,
+          website: profileForm.website,
+          contactFullName: profileForm.contactFullName,
+          contactTitle: profileForm.contactTitle,
+          contactPhone: profileForm.contactPhone,
+          contactEmail: profileForm.contactEmail,
+          freightType: profileForm.freightType,
+          preferredEquipment: profileForm.preferredEquipment,
+          avgMonthlyVolume: profileForm.avgMonthlyVolume,
+          regionsOfOperation: profileForm.regionsOfOperation,
+        }
+      };
+
+      const onboardingRes = await fetch(`${API_URL}/onboarding/save`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(onboardingPayload),
+      });
+
+      if (!onboardingRes.ok) {
+        let detail = 'Failed to save profile.';
+        try {
+          const err = await onboardingRes.json();
+          detail = err?.detail || err?.message || detail;
+        } catch {
+          // ignore
+        }
+        throw new Error(detail);
+      }
+
+      // Also mirror a small subset onto the canonical user profile.
+      // This matches the driver pattern of using /auth/profile/update for account-level info.
+      const profileUpdate = {
+        company_name: profileForm.businessName || undefined,
+        name: profileForm.contactFullName || undefined,
+        phone: profileForm.contactPhone || undefined,
+        address: profileForm.businessAddress || undefined,
+      };
+      if (profileForm.contactFullName) {
+        const parts = String(profileForm.contactFullName).trim().split(/\s+/).filter(Boolean);
+        if (parts.length) {
+          profileUpdate.first_name = parts[0];
+          if (parts.length > 1) profileUpdate.last_name = parts.slice(1).join(' ');
+        }
+      }
+
+      const authRes = await fetch(`${API_URL}/auth/profile/update`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(profileUpdate),
+      });
+
+      if (!authRes.ok) {
+        // Non-fatal: onboarding_data is still persisted; surface warning.
+        setProfileMessage({ type: 'warn', text: 'Profile saved. Some account fields may not have updated.' });
+      } else {
+        setProfileMessage({ type: 'success', text: 'Profile saved.' });
+      }
+
+      await refreshShipperProfile();
+    } catch (e) {
+      setProfileMessage({ type: 'error', text: e?.message || 'Failed to save profile.' });
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
   // Poll messaging unread summary (used for sidebar badge)
   useEffect(() => {
     let alive = true;
@@ -579,7 +738,7 @@ export default function ShipperDashboard() {
 
     return (
       <>
-        <header className="fp-header">
+        <header className="fp-header fp-header-actions">
           <div className="fp-header-controls">
             <button className="btn small-cd" onClick={() => setShowAddLoads(true)}>+ Create Load</button>
             <button className="btn small ghost-cd" onClick={() => setIsInviteCarrierOpen(true)}>Invite Carrier</button>
@@ -634,7 +793,7 @@ export default function ShipperDashboard() {
                   <div><strong>Regions:</strong> {shipperProfile.data.regionsOfOperation}</div>
                 )}
               </div>
-              {!shipperProfile.onboarding_completed && (
+              {!shipperProfile?.data?.onboarding_completed && (
                 <div style={{ marginTop: '16px', padding: '12px', background: '#fef3c7', borderRadius: '8px', color: '#92400e' }}>
                   <i className="fa-solid fa-exclamation-triangle" style={{ marginRight: '8px' }}></i>
                   Onboarding not complete. <button onClick={() => setActiveNav('profile')} style={{ background: 'none', border: 'none', color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>Complete your profile</button>
@@ -874,7 +1033,7 @@ export default function ShipperDashboard() {
     if (activeNav === 'carrier-bids') return <CarrierBids />;
     if (activeNav === 'alerts') return (
       <div>
-        <header className="fp-header">
+        <header className="fp-header fp-alerts-header">
           <div className="fp-header-titles">
             <h2>Alerts &amp; Notifications</h2>
             <p className="fp-subtitle">Updates, reminders, and important alerts.</p>
@@ -890,7 +1049,7 @@ export default function ShipperDashboard() {
             </button>
           </div>
         </header>
-        <section className="fp-grid">
+        <section className="fp-grid fp-grid-single">
           <div className="card">
             <div className="card-header"><h3>Notifications</h3></div>
             <div style={{ maxHeight: 560, overflowY: 'auto', padding: 14 }}>
@@ -958,12 +1117,102 @@ export default function ShipperDashboard() {
             <h2>Profile</h2>
             <p className="fp-subtitle">Complete your business profile and onboarding information.</p>
           </div>
+          <div className="fp-header-controls">
+            <button className="btn small ghost-cd" onClick={refreshShipperProfile} disabled={profileLoading || profileSaving}>
+              Refresh
+            </button>
+            <button className="btn small-cd" onClick={saveShipperProfile} disabled={profileLoading || profileSaving}>
+              {profileSaving ? 'Saving…' : 'Save Profile'}
+            </button>
+          </div>
         </header>
-        <section className="fp-grid">
+        <section className="fp-grid fp-grid-single">
           <div className="card">
-            <div className="card-header"><h3>Profile Component</h3></div>
+            <div className="card-header"><h3>Business & Contact</h3></div>
             <div style={{ padding: 20 }}>
-              <p>Profile component will be added here. This is where users can complete their onboarding details.</p>
+              {profileMessage?.text ? (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontWeight: 800, marginBottom: 4 }}>
+                    {profileMessage.type === 'error' ? 'Unable to save' : profileMessage.type === 'warn' ? 'Saved with warnings' : 'Saved'}
+                  </div>
+                  <div className="muted">{profileMessage.text}</div>
+                </div>
+              ) : null}
+
+              {profileLoading ? (
+                <div className="muted">Loading profile…</div>
+              ) : (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+                    <div>
+                      <label>Business Name</label>
+                      <input className="ss-input" value={profileForm.businessName} onChange={(e) => setProfileField('businessName', e.target.value)} />
+                    </div>
+                    <div>
+                      <label>Business Type</label>
+                      <input className="ss-input" value={profileForm.businessType} onChange={(e) => setProfileField('businessType', e.target.value)} />
+                    </div>
+                    <div>
+                      <label>Tax ID</label>
+                      <input className="ss-input" value={profileForm.taxId} onChange={(e) => setProfileField('taxId', e.target.value)} />
+                    </div>
+                    <div>
+                      <label>Website</label>
+                      <input className="ss-input" value={profileForm.website} onChange={(e) => setProfileField('website', e.target.value)} />
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <label>Business Address</label>
+                      <textarea className="ss-textarea" rows={3} value={profileForm.businessAddress} onChange={(e) => setProfileField('businessAddress', e.target.value)} />
+                    </div>
+                    <div>
+                      <label>Business Phone</label>
+                      <input className="ss-input" value={profileForm.businessPhone} onChange={(e) => setProfileField('businessPhone', e.target.value)} />
+                    </div>
+                    <div>
+                      <label>Business Email</label>
+                      <input className="ss-input" value={profileForm.businessEmail} onChange={(e) => setProfileField('businessEmail', e.target.value)} />
+                    </div>
+                    <div>
+                      <label>Primary Contact Name</label>
+                      <input className="ss-input" value={profileForm.contactFullName} onChange={(e) => setProfileField('contactFullName', e.target.value)} />
+                    </div>
+                    <div>
+                      <label>Primary Contact Title</label>
+                      <input className="ss-input" value={profileForm.contactTitle} onChange={(e) => setProfileField('contactTitle', e.target.value)} />
+                    </div>
+                    <div>
+                      <label>Primary Contact Phone</label>
+                      <input className="ss-input" value={profileForm.contactPhone} onChange={(e) => setProfileField('contactPhone', e.target.value)} />
+                    </div>
+                    <div>
+                      <label>Primary Contact Email</label>
+                      <input className="ss-input" value={profileForm.contactEmail} onChange={(e) => setProfileField('contactEmail', e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div style={{ height: 16 }} />
+
+                  <div style={{ fontWeight: 800, marginBottom: 10 }}>Freight Preferences</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+                    <div>
+                      <label>Freight Type</label>
+                      <input className="ss-input" value={profileForm.freightType} onChange={(e) => setProfileField('freightType', e.target.value)} />
+                    </div>
+                    <div>
+                      <label>Preferred Equipment</label>
+                      <input className="ss-input" value={profileForm.preferredEquipment} onChange={(e) => setProfileField('preferredEquipment', e.target.value)} />
+                    </div>
+                    <div>
+                      <label>Avg Monthly Volume</label>
+                      <input className="ss-input" value={profileForm.avgMonthlyVolume} onChange={(e) => setProfileField('avgMonthlyVolume', e.target.value)} />
+                    </div>
+                    <div>
+                      <label>Regions of Operation</label>
+                      <input className="ss-input" value={profileForm.regionsOfOperation} onChange={(e) => setProfileField('regionsOfOperation', e.target.value)} />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </section>

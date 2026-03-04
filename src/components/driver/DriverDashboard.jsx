@@ -8,6 +8,7 @@ import { AUTO_REFRESH_MS } from '../../constants/refresh';
 import DocumentVault from './DocumentVault';
 import Marketplace from './Marketplace';
 import MyCarrier from './MyCarrier';
+import PodUploadModal from './PodUploadModal';
 import HiringOnboarding from './HiringOnboarding';
 import AccountSettings from './AccountSettings';
 import AiHub from './AiHub';
@@ -134,7 +135,7 @@ export default function DriverDashboard() {
   const { settings: userSettings } = useUserSettings();
   const language = userSettings?.language || 'English';
   const locale = language === 'Spanish' ? 'es-ES' : language === 'Arabic' ? 'ar' : 'en-US';
-  const tr = (key, fallback) => t(language, key, fallback);
+  const tr = useCallback((key, fallback) => t(language, key, fallback), [language]);
   const messagesPrefEnabled = Boolean(userSettings?.notification_preferences?.messages);
   const compliancePrefEnabled = Boolean(userSettings?.notification_preferences?.compliance_alerts);
   const navigate = useNavigate();
@@ -487,16 +488,13 @@ export default function DriverDashboard() {
   });
   
   // Load tracking state
-  const [loads, setLoads] = useState([]);
   const [activeLoad, setActiveLoad] = useState(null);
   const [assignedLoads, setAssignedLoads] = useState([]);
   const [completedLoads, setCompletedLoads] = useState([]);
-  const [loadsLoading, setLoadsLoading] = useState(false);
   const [tripStarted, setTripStarted] = useState(false);
   const [pickupCompleted, setPickupCompleted] = useState(false);
   const [deliveryCompleted, setDeliveryCompleted] = useState(false);
   const [currentLocation, setCurrentLocation] = useState(null);
-  const [distanceLeft, setDistanceLeft] = useState(0);
   const [distanceToPickup, setDistanceToPickup] = useState(0);
   const [distanceToDelivery, setDistanceToDelivery] = useState(0);
   const [gpsPermissionGranted, setGpsPermissionGranted] = useState(false);
@@ -506,6 +504,7 @@ export default function DriverDashboard() {
   const [pickupModalLoad, setPickupModalLoad] = useState(null);
   const [pickupShipperName, setPickupShipperName] = useState('');
   const [pickupSignatureDataUrl, setPickupSignatureDataUrl] = useState('');
+  const [pickupDriverSignatureDataUrl, setPickupDriverSignatureDataUrl] = useState('');
   const [pickupRemarks, setPickupRemarks] = useState('');
   const [pickupSubmitting, setPickupSubmitting] = useState(false);
   const [pickupError, setPickupError] = useState('');
@@ -515,14 +514,6 @@ export default function DriverDashboard() {
 
   const [deliveryModalOpen, setDeliveryModalOpen] = useState(false);
   const [deliveryModalLoad, setDeliveryModalLoad] = useState(null);
-  const [deliveryReceiverName, setDeliveryReceiverName] = useState('');
-  const [deliverySignatureDataUrl, setDeliverySignatureDataUrl] = useState('');
-  const [deliveryRemarks, setDeliveryRemarks] = useState('');
-  const [deliverySubmitting, setDeliverySubmitting] = useState(false);
-  const [deliveryError, setDeliveryError] = useState('');
-  const [deliveryPodChecked, setDeliveryPodChecked] = useState(false);
-  const [deliveryHasPod, setDeliveryHasPod] = useState(false);
-  const [deliveryPodLoading, setDeliveryPodLoading] = useState(false);
 
   // Document Vault context (optional): when set, Document Vault shows load documents for this load.
   const [documentVaultLoadId, setDocumentVaultLoadId] = useState(null);
@@ -560,27 +551,6 @@ export default function DriverDashboard() {
     }
   }, []);
 
-  const checkLoadDocsForDelivery = useCallback(async (load) => {
-    const loadId = load?.load_id || load?.id || load?._id;
-    if (!loadId) {
-      setDeliveryPodChecked(true);
-      setDeliveryHasPod(false);
-      return;
-    }
-    setDeliveryPodLoading(true);
-    try {
-      const res = await getJson(`/loads/${loadId}/documents`, { timeoutMs: 20000, requestLabel: `GET /loads/${loadId}/documents` });
-      const docs = res?.documents || [];
-      setDeliveryHasPod(hasDocKind(docs, 'POD'));
-      setDeliveryPodChecked(true);
-    } catch {
-      setDeliveryPodChecked(false);
-      setDeliveryHasPod(false);
-    } finally {
-      setDeliveryPodLoading(false);
-    }
-  }, []);
-
   const getGpsFix = async () => {
     if (currentLocation?.latitude != null && currentLocation?.longitude != null) {
       return { latitude: currentLocation.latitude, longitude: currentLocation.longitude };
@@ -602,6 +572,7 @@ export default function DriverDashboard() {
     setPickupModalLoad(load);
     setPickupError('');
     setPickupSignatureDataUrl('');
+    setPickupDriverSignatureDataUrl('');
     setPickupRemarks('');
     setPickupBolChecked(false);
     setPickupHasBol(false);
@@ -614,15 +585,17 @@ export default function DriverDashboard() {
   const openDeliveryModal = (load) => {
     if (!load) return;
     setDeliveryModalLoad(load);
-    setDeliveryError('');
-    setDeliverySignatureDataUrl('');
-    setDeliveryRemarks('');
-    setDeliveryReceiverName('');
-    setDeliveryPodChecked(false);
-    setDeliveryHasPod(false);
     setDeliveryModalOpen(true);
-    checkLoadDocsForDelivery(load);
   };
+
+  useEffect(() => {
+    if (!pickupModalOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [pickupModalOpen]);
 
   // Clear document-vault load context when leaving the docs view.
   useEffect(() => {
@@ -1136,21 +1109,6 @@ export default function DriverDashboard() {
     if (isSidebarOpen) setIsSidebarOpen(false);
   };
 
-  const openMessaging = (threadId = null) => {
-    setNotifOpen(false);
-    if (threadId) setInitialThreadId(threadId);
-    setActiveNav('messaging');
-    if (isSidebarOpen) setIsSidebarOpen(false);
-  };
-
-  const fmtMsgWhen = (ts) => {
-    const n = Number(ts || 0);
-    if (!n) return '';
-    const d = new Date(n * 1000);
-    if (Number.isNaN(d.getTime())) return '';
-    return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  };
-
   const missingRequiredDocsCount = useMemo(() => {
     const required = Array.isArray(requiredDocsSnapshot?.required) ? requiredDocsSnapshot.required : [];
     return required.filter((x) => {
@@ -1406,7 +1364,6 @@ export default function DriverDashboard() {
   const fetchLoads = async () => {
     if (!currentUser) return;
     try {
-      setLoadsLoading(true);
       const token = await currentUser.getIdToken();
       const response = await fetch(`${API_URL}/loads`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -1417,12 +1374,28 @@ export default function DriverDashboard() {
         const allLoads = data.loads || [];
         console.log('📦 Fetched loads:', allLoads);
         console.log('📦 First load structure:', allLoads[0]);
-        setLoads(allLoads);
         
         // Filter loads by status
-        const active = allLoads.find(l => l.status === 'in_transit');
-        const assigned = allLoads.filter(l => l.status === 'covered' || l.status === 'assigned');
-        const completed = allLoads.filter(l => l.status === 'delivered');
+        const normStatus = (s) => String(s || '').trim().toLowerCase();
+        const isDelivered = (l) => {
+          const st = normStatus(l?.status);
+          return st === 'delivered' || st === 'completed';
+        };
+        const isPickedUpOrInTransit = (l) => {
+          const st = normStatus(l?.status);
+          if (st === 'in_transit' || st === 'in-transit' || st === 'in transit') return true;
+          if (st === 'picked_up' || st === 'picked up' || st === 'pickedup') return true;
+          if (l?.picked_up_at || l?.pickup_confirmed_at) return true;
+          return false;
+        };
+
+        const active = allLoads.find((l) => !isDelivered(l) && isPickedUpOrInTransit(l));
+        const assigned = allLoads.filter((l) => {
+          if (isDelivered(l) || isPickedUpOrInTransit(l)) return false;
+          const st = normStatus(l?.status);
+          return st === 'covered' || st === 'assigned' || st === 'accepted';
+        });
+        const completed = allLoads.filter((l) => isDelivered(l));
         
         setActiveLoad(active || null);
         setAssignedLoads(assigned);
@@ -1431,14 +1404,20 @@ export default function DriverDashboard() {
         // If there's an active load, check its state
         if (active) {
           setTripStarted(true);
-          setPickupCompleted(!!active.pickup_confirmed_at);
-          setDeliveryCompleted(active.status === 'delivered');
+          {
+            const st = normStatus(active?.status);
+            const pickupImplied = st === 'in_transit' || st === 'in-transit' || st === 'in transit' || st === 'picked_up' || st === 'picked up' || st === 'pickedup';
+            setPickupCompleted(Boolean(active.pickup_confirmed_at || active.picked_up_at || pickupImplied));
+          }
+          setDeliveryCompleted(isDelivered(active));
+        } else {
+          setTripStarted(false);
+          setPickupCompleted(false);
+          setDeliveryCompleted(false);
         }
       }
     } catch (error) {
       console.error('Error fetching loads:', error);
-    } finally {
-      setLoadsLoading(false);
     }
   };
 
@@ -1446,10 +1425,13 @@ export default function DriverDashboard() {
     if (!load) return;
     setActiveLoad(load);
     const status = String(load?.status || '').trim().toLowerCase();
-    const inTransit = status === 'in_transit';
+    const inTransit = status === 'in_transit' || status === 'picked_up' || status === 'picked up' || status === 'pickedup' || Boolean(load?.picked_up_at || load?.pickup_confirmed_at);
     const delivered = status === 'delivered' || status === 'completed';
     setTripStarted(inTransit);
-    setPickupCompleted(Boolean(load?.pickup_confirmed_at || load?.picked_up_at));
+    // Some backends only persist status transitions (e.g. in_transit) even when
+    // timestamps aren't present in the payload. If status implies pickup, treat it as complete.
+    const pickupImplied = status === 'in_transit' || status === 'picked_up' || status === 'picked up' || status === 'pickedup';
+    setPickupCompleted(Boolean(load?.pickup_confirmed_at || load?.picked_up_at || pickupImplied));
     setDeliveryCompleted(delivered);
   };
 
@@ -1490,6 +1472,10 @@ export default function DriverDashboard() {
       setPickupError(tr('driverDashboard.pickup.error.signatureRequired', 'Signature is required.'));
       return;
     }
+    if (!pickupDriverSignatureDataUrl) {
+      setPickupError(tr('driverDashboard.pickup.error.driverSignatureRequired', 'Driver signature is required.'));
+      return;
+    }
     if (pickupBolChecked && !pickupHasBol) {
       setPickupError(tr('driverDashboard.pickup.error.bolRequired', 'Upload BOL document before picking up the load.'));
       return;
@@ -1509,6 +1495,7 @@ export default function DriverDashboard() {
           longitude: gps.longitude,
           shipper_name: pickupShipperName.trim(),
           shipper_signature_data_url: pickupSignatureDataUrl,
+          driver_signature_data_url: pickupDriverSignatureDataUrl,
           remarks: pickupRemarks ? pickupRemarks.trim() : null,
         },
         { timeoutMs: 60000, requestLabel: `POST /loads/${loadId}/pickup/complete` }
@@ -1527,60 +1514,6 @@ export default function DriverDashboard() {
       }
     } finally {
       setPickupSubmitting(false);
-    }
-  };
-
-  const submitDeliveryComplete = async () => {
-    if (!deliveryModalLoad || !currentUser) return;
-    const loadId = deliveryModalLoad.load_id || deliveryModalLoad.id || deliveryModalLoad._id;
-    if (!loadId) {
-      setDeliveryError(tr('driverDashboard.alert.loadIdNotFound', 'Load ID not found'));
-      return;
-    }
-    if (!deliveryReceiverName.trim()) {
-      setDeliveryError(tr('driverDashboard.delivery.error.nameRequired', 'Receiver name is required.'));
-      return;
-    }
-    if (!deliverySignatureDataUrl) {
-      setDeliveryError(tr('driverDashboard.delivery.error.signatureRequired', 'Signature is required.'));
-      return;
-    }
-    if (deliveryPodChecked && !deliveryHasPod) {
-      setDeliveryError(tr('driverDashboard.delivery.error.podRequired', 'Upload POD document before completing delivery.'));
-      return;
-    }
-    setDeliverySubmitting(true);
-    setDeliveryError('');
-    try {
-      const gps = await getGpsFix();
-      if (!gps) {
-        setDeliveryError(tr('driverDashboard.delivery.error.gpsRequired', 'GPS location is required. Please enable location services.'));
-        return;
-      }
-      await postJson(
-        `/loads/${loadId}/delivery/complete`,
-        {
-          latitude: gps.latitude,
-          longitude: gps.longitude,
-          receiver_name: deliveryReceiverName.trim(),
-          receiver_signature_data_url: deliverySignatureDataUrl,
-          remarks: deliveryRemarks ? deliveryRemarks.trim() : null,
-        },
-        { timeoutMs: 60000, requestLabel: `POST /loads/${loadId}/delivery/complete` }
-      );
-      setDeliveryCompleted(true);
-      setDeliveryModalOpen(false);
-      setDeliveryModalLoad(null);
-      await fetchLoads();
-    } catch (e) {
-      const msg = String(e?.message || '');
-      if (msg.toLowerCase().includes('timed out')) {
-        setDeliveryError(tr('driverDashboard.alert.requestTimeout', 'Request timed out. Please try again.'));
-      } else {
-        setDeliveryError(msg || tr('driverDashboard.alert.markDeliveryError', 'Error marking delivery. Please try again.'));
-      }
-    } finally {
-      setDeliverySubmitting(false);
     }
   };
 
@@ -2181,15 +2114,70 @@ export default function DriverDashboard() {
                 </div>
 
                 <div className="dd-load-actions">
-                  <button className="btn small ghost-cd dd-btn">
+                  <button
+                    className="btn small ghost-cd dd-btn"
+                    type="button"
+                    onClick={() => {
+                      const dest = String(deliveryLoc?.full || '').trim();
+                      if (!dest) return;
+                      const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`;
+                      window.open(url, '_blank', 'noopener,noreferrer');
+                    }}
+                  >
                     <i className="fa-solid fa-location-arrow"></i>
                     {tr('driverDashboard.postHire.navigate', 'Navigate')}
                   </button>
-                  <button className="btn small ghost-cd dd-btn">
+                  <button
+                    className="btn small ghost-cd dd-btn"
+                    type="button"
+                    onClick={() => {
+                      if (!pickupCompleted) return;
+                      handleMarkDelivery();
+                    }}
+                    disabled={!pickupCompleted}
+                  >
                     <i className="fa-solid fa-upload"></i>
                     {tr('driverDashboard.postHire.uploadPod', 'Upload POD')}
                   </button>
-                  <button className="btn small ghost-cd dd-btn">
+                  <button
+                    className="btn small ghost-cd dd-btn"
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const loadId = String(activeLoad?.load_id || activeLoad?.id || activeLoad?.loadId || '').trim();
+                        if (!loadId) {
+                          setToast({
+                            title: tr('driverDashboard.postHire.messageDispatch', 'Message Dispatch'),
+                            body: tr('driverDashboard.messaging.missingLoadId', 'Unable to open chat: missing load id.'),
+                          });
+                          return;
+                        }
+
+                        const res = await postJson(
+                          '/messaging/driver/threads/load-transit',
+                          { load_id: loadId },
+                          { timeoutMs: 30000, requestLabel: 'POST /messaging/driver/threads/load-transit' }
+                        );
+
+                        const tid = String(res?.thread?.id || '').trim();
+                        if (!tid) {
+                          setToast({
+                            title: tr('driverDashboard.postHire.messageDispatch', 'Message Dispatch'),
+                            body: tr('driverDashboard.messaging.failedOpenChat', 'Unable to open shipper chat for this load.'),
+                          });
+                          return;
+                        }
+
+                        setInitialThreadId(tid);
+                        setActiveNav('messaging');
+                      } catch (e) {
+                        setToast({
+                          title: tr('driverDashboard.postHire.messageDispatch', 'Message Dispatch'),
+                          body: String(e?.message || tr('driverDashboard.messaging.failedOpenChat', 'Unable to open shipper chat for this load.')),
+                        });
+                      }
+                    }}
+                  >
                     <i className="fa-solid fa-comment"></i>
                     {tr('driverDashboard.postHire.messageDispatch', 'Message Dispatch')}
                   </button>
@@ -2634,6 +2622,18 @@ export default function DriverDashboard() {
 
                     <div className="dd-workflow-modal__field">
                       <label className="dd-workflow-modal__label">
+                        {tr('driverDashboard.pickup.driverSignature', 'Driver Signature')}
+                      </label>
+                      <WorkflowSignaturePad
+                        value={pickupDriverSignatureDataUrl}
+                        onChange={setPickupDriverSignatureDataUrl}
+                        disabled={pickupSubmitting}
+                        clearText={tr('common.clear', 'Clear')}
+                      />
+                    </div>
+
+                    <div className="dd-workflow-modal__field">
+                      <label className="dd-workflow-modal__label">
                         {tr('driverDashboard.pickup.remarks', 'Remarks (optional)')}
                       </label>
                       <textarea
@@ -2669,115 +2669,6 @@ export default function DriverDashboard() {
               </div>
             )}
 
-            {/* Delivery Completion Modal (rendered at the page level) */}
-            {deliveryModalOpen && (
-              <div className="modal-overlay dd-workflow-modal" onClick={() => { if (!deliverySubmitting) setDeliveryModalOpen(false); }}>
-                <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '620px' }}>
-                  <div className="modal-header">
-                    <h2>{tr('driverDashboard.delivery.title', 'Complete Delivery')}</h2>
-                    <button className="modal-close" onClick={() => { if (!deliverySubmitting) setDeliveryModalOpen(false); }} type="button">
-                      <i className="fa-solid fa-xmark"></i>
-                    </button>
-                  </div>
-
-                  <div className="modal-body">
-                    {deliveryError && (
-                      <div className="dd-workflow-modal__error">
-                        {String(deliveryError)}
-                      </div>
-                    )}
-
-                    <div className="dd-workflow-modal__field">
-                      <label className="dd-workflow-modal__label">
-                        {tr('driverDashboard.delivery.receiverName', 'Receiver Name')}
-                      </label>
-                      <input
-                        type="text"
-                        value={deliveryReceiverName}
-                        onChange={(e) => setDeliveryReceiverName(e.target.value)}
-                        className="dd-workflow-input"
-                        placeholder={tr('driverDashboard.delivery.receiverNamePlaceholder', 'Enter receiver name')}
-                        disabled={deliverySubmitting}
-                      />
-                    </div>
-
-                    <div className="dd-workflow-modal__field">
-                      <label className="dd-workflow-modal__label">
-                        {tr('driverDashboard.delivery.podLabel', 'POD Document (required)')}
-                      </label>
-                      <div className="dd-workflow-modal__hint">
-                        {deliveryPodLoading
-                          ? tr('common.loading', 'Loading…')
-                          : deliveryPodChecked
-                            ? (deliveryHasPod
-                              ? tr('driverDashboard.delivery.podOk', 'POD is uploaded.')
-                              : tr('driverDashboard.delivery.podMissing', 'POD is missing. Upload it in Documents before completing delivery.'))
-                            : tr('driverDashboard.delivery.podUnknown', 'Unable to verify POD status.')}
-                      </div>
-                      <button
-                        type="button"
-                        className="btn small ghost-cd"
-                        onClick={() => {
-                          const loadId = deliveryModalLoad?.load_id || deliveryModalLoad?.id || deliveryModalLoad?._id;
-                          if (loadId) setDocumentVaultLoadId(String(loadId));
-                          setDeliveryModalOpen(false);
-                          handleNavClick('docs');
-                        }}
-                        disabled={deliverySubmitting}
-                        style={{ marginTop: 8 }}
-                      >
-                        {tr('driverDashboard.delivery.viewDocs', 'View Documents')}
-                      </button>
-                    </div>
-
-                    <div className="dd-workflow-modal__field">
-                      <label className="dd-workflow-modal__label">
-                        {tr('driverDashboard.delivery.signature', 'Receiver Signature')}
-                      </label>
-                      <WorkflowSignaturePad
-                        value={deliverySignatureDataUrl}
-                        onChange={setDeliverySignatureDataUrl}
-                        disabled={deliverySubmitting}
-                        clearText={tr('common.clear', 'Clear')}
-                      />
-                    </div>
-
-                    <div className="dd-workflow-modal__field">
-                      <label className="dd-workflow-modal__label">
-                        {tr('driverDashboard.delivery.remarks', 'Remarks (optional)')}
-                      </label>
-                      <textarea
-                        rows={3}
-                        value={deliveryRemarks}
-                        onChange={(e) => setDeliveryRemarks(e.target.value)}
-                        className="dd-workflow-input"
-                        placeholder={tr('driverDashboard.delivery.remarksPlaceholder', 'Add any notes (optional)')}
-                        disabled={deliverySubmitting}
-                      />
-                    </div>
-
-                    <div className="dd-workflow-modal__actions">
-                      <button
-                        type="button"
-                        className="btn small ghost-cd"
-                        onClick={() => setDeliveryModalOpen(false)}
-                        disabled={deliverySubmitting}
-                      >
-                        {tr('common.cancel', 'Cancel')}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn small-cd"
-                        onClick={submitDeliveryComplete}
-                        disabled={deliverySubmitting || (deliveryPodChecked && !deliveryHasPod)}
-                      >
-                        {deliverySubmitting ? tr('common.submitting', 'Submitting…') : tr('driverDashboard.delivery.complete', 'Complete Delivery')}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </>
@@ -3504,9 +3395,25 @@ export default function DriverDashboard() {
         {isSidebarOpen && <div className="overlay" onClick={() => setIsSidebarOpen(false)} />}
 
         <main className="fp-main">
-          <ContentView activeNav={activeNav} />
+          {ContentView({ activeNav })}
         </main>
       </div>
+
+      {/* POD modal is rendered at the dashboard root to avoid remount/reset during view refreshes */}
+      <PodUploadModal
+        open={deliveryModalOpen}
+        load={deliveryModalLoad}
+        onClose={() => {
+          setDeliveryModalOpen(false);
+          setDeliveryModalLoad(null);
+        }}
+        onSuccess={async () => {
+          setDeliveryCompleted(true);
+          await fetchLoads();
+        }}
+        tr={tr}
+        locale={locale}
+      />
 
       {/* Support Modal */}
       {showSupportModal && (

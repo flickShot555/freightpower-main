@@ -863,6 +863,15 @@ input:not(:checked) + .dd-toggle-slider:before {
 /* Workflow (Pickup/Delivery) modal tweaks */
 .dd-workflow-modal .modal-content{
   overflow:hidden;
+  max-height:86vh;
+  display:flex;
+  flex-direction:column;
+}
+
+.dd-workflow-modal .modal-body{
+  flex:1 1 auto;
+  min-height:0;
+  overflow:auto;
 }
 
 .dd-workflow-modal__field{margin-bottom:12px;}

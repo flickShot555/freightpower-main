@@ -12,6 +12,9 @@ from .database import bucket, db, log_action
 from .load_documents import (
     create_load_document_from_url,
     ensure_rate_confirmation_document,
+    generate_bol_pdf_bytes,
+    stamp_bol_signatures_pdf_bytes,
+    stamp_pod_from_bol_pdf_bytes,
     stamp_rate_confirmation_signatures_pdf_bytes,
     upload_load_document_bytes,
 )
@@ -195,6 +198,8 @@ class PickupCompleteRequest(BaseModel):
     shipper_name: str = Field(..., min_length=1, max_length=120)
     shipper_signature_data_url: str = Field(..., min_length=20, description="data:image/png;base64,...")
 
+    driver_signature_data_url: str = Field(..., min_length=20, description="data:image/png;base64,...")
+
     bol_photo_url: Optional[str] = None
     remarks: Optional[str] = None
     picked_up_at: Optional[float] = None
@@ -337,7 +342,7 @@ async def driver_arrive_pickup(
     if not load:
         raise HTTPException(status_code=404, detail="Load not found")
 
-    if str(load.get("assigned_driver") or load.get("assigned_driver_id") or "").strip() != str(user.get("uid") or "").strip():
+    if str(load.get("assigned_driver") or load.get("assigned_driver_id") or load.get("driver_id") or "").strip() != str(user.get("uid") or "").strip():
         raise HTTPException(status_code=403, detail="Load is not assigned to you")
 
     # Basic guard: arrival at pickup must occur before in_transit.
@@ -378,7 +383,7 @@ async def driver_arrive_delivery(
     if not load:
         raise HTTPException(status_code=404, detail="Load not found")
 
-    if str(load.get("assigned_driver") or load.get("assigned_driver_id") or "").strip() != str(user.get("uid") or "").strip():
+    if str(load.get("assigned_driver") or load.get("assigned_driver_id") or load.get("driver_id") or "").strip() != str(user.get("uid") or "").strip():
         raise HTTPException(status_code=403, detail="Load is not assigned to you")
 
     s = str(load.get("status") or "").strip().lower()
@@ -500,7 +505,7 @@ async def driver_complete_pickup(
         pass
 
     # Must be assigned to this driver.
-    if str(load.get("assigned_driver") or load.get("assigned_driver_id") or "").strip() != str(user.get("uid") or "").strip():
+    if str(load.get("assigned_driver") or load.get("assigned_driver_id") or load.get("driver_id") or "").strip() != str(user.get("uid") or "").strip():
         raise HTTPException(status_code=403, detail="Load is not assigned to you")
 
     # Minimal state-machine guard: if this load uses contract workflow, require carrier signature before pickup.
@@ -578,8 +583,8 @@ async def driver_complete_pickup(
     if not eta_ok:
         raise HTTPException(status_code=400, detail=f"Pickup ETA check failed: pickup time differs by {eta_diff_hours:.1f}h")
 
-    # Require a real BOL file upload before pickup completion.
-    # This prevents completing pickup via external URLs and keeps strict ordering.
+    # Require a storage-backed BOL document exists before pickup completion.
+    # This keeps strict ordering and ensures there is a vault artifact.
     try:
         bol_ok = False
         firestore_timeout_s = float(getattr(settings, "FIRESTORE_JOB_TIMEOUT_SECONDS", 8) or 8)
@@ -598,15 +603,79 @@ async def driver_complete_pickup(
     except Exception:
         raise HTTPException(status_code=500, detail="Unable to verify BOL document (timeout or connectivity). Try again.")
 
-    # Upload shipper/warehouse signature as a document (best-effort).
+    # Decode signature images (required).
+    try:
+        shipper_sig_png, shipper_ct = decode_data_url_base64(req.shipper_signature_data_url)
+        driver_sig_png, driver_ct = decode_data_url_base64(req.driver_signature_data_url)
+        if "png" not in (shipper_ct or "").lower() or "png" not in (driver_ct or "").lower():
+            raise HTTPException(status_code=400, detail="Signatures must be PNG data URLs")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid signature data")
+
+    # Generate a signed BOL PDF and store it as a separate BOL doc.
+    # This avoids clashing with an uploaded/legacy BOL and gives us a canonical signed artifact.
+    try:
+        shipper_uid = str(load.get("created_by") or "").strip()
+        carrier_uid = str(load.get("assigned_carrier") or load.get("assigned_carrier_id") or "").strip()
+        driver_uid = str(user.get("uid") or "").strip()
+
+        shipper_profile = snapshot_user(shipper_uid) if shipper_uid else {"uid": shipper_uid or None}
+        carrier_profile = snapshot_user(carrier_uid) if carrier_uid else {"uid": carrier_uid or None}
+        driver_profile = snapshot_user(driver_uid) if driver_uid else {"uid": driver_uid or None}
+
+        bol_pdf = generate_bol_pdf_bytes(load=load, shipper=shipper_profile, carrier=carrier_profile, driver=driver_profile)
+        bol_pdf = stamp_bol_signatures_pdf_bytes(
+            pdf_bytes=bol_pdf,
+            shipper_signature_png=shipper_sig_png,
+            driver_signature_png=driver_sig_png,
+            shipper_name=str(req.shipper_name or "").strip() or None,
+            driver_name=str(user.get("display_name") or user.get("email") or "").strip() or None,
+            shipper_signed_at=picked_up_ts,
+            driver_signed_at=picked_up_ts,
+        )
+        bol_filename = f"bol_signed_{load.get('load_number') or load_id}_{int(picked_up_ts)}.pdf"
+        bol_record = upload_load_document_bytes(load=load, kind="BOL", filename=bol_filename, data=bol_pdf, actor=user, source="pickup_signed")
+
+        if not bol_record or not str(bol_record.get("storage_path") or "").strip():
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Unable to store signed BOL document (Cloud Storage upload failed). "
+                    "Check Firebase/Google Cloud Storage configuration and billing status, then retry."
+                ),
+            )
+        try:
+            if bol_record and bol_record.get("doc_id"):
+                db.collection("loads").document(str(load_id)).set(
+                    {
+                        "bol_doc_id": bol_record.get("doc_id"),
+                        "bol_storage_path": bol_record.get("storage_path"),
+                        "bol_uploaded_at": bol_record.get("uploaded_at"),
+                    },
+                    merge=True,
+                )
+        except Exception:
+            pass
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate signed BOL: {e}")
+
+    # Upload shipper/warehouse + driver signatures as separate artifacts (best-effort).
     # This can be slow/hang if storage is misconfigured, so run it in the background.
     def _bg_upload_pickup_signature() -> None:
         try:
             latest = _get_load(load_id) or load
-            raw, content_type = decode_data_url_base64(req.shipper_signature_data_url)
-            ext = "png" if "png" in (content_type or "").lower() else "bin"
-            filename = f"bol_signature_{load_id}_{int(picked_up_ts)}.{ext}"
-            upload_load_document_bytes(load=latest, kind="BOL_SIGNATURE", filename=filename, data=raw, actor=user, source="pickup")
+            sraw, sct = decode_data_url_base64(req.shipper_signature_data_url)
+            draw, dct = decode_data_url_base64(req.driver_signature_data_url)
+            sext = "png" if "png" in (sct or "").lower() else "bin"
+            dext = "png" if "png" in (dct or "").lower() else "bin"
+            sfn = f"bol_shipper_signature_{load_id}_{int(picked_up_ts)}.{sext}"
+            dfn = f"bol_driver_signature_{load_id}_{int(picked_up_ts)}.{dext}"
+            upload_load_document_bytes(load=latest, kind="BOL_SIGNATURE", filename=sfn, data=sraw, actor=user, source="pickup")
+            upload_load_document_bytes(load=latest, kind="BOL_DRIVER_SIGNATURE", filename=dfn, data=draw, actor=user, source="pickup")
         except Exception:
             return
 
@@ -896,7 +965,7 @@ async def driver_complete_delivery(
         pass
 
     # Must be assigned to this driver.
-    if str(load.get("assigned_driver") or load.get("assigned_driver_id") or "").strip() != str(user.get("uid") or "").strip():
+    if str(load.get("assigned_driver") or load.get("assigned_driver_id") or load.get("driver_id") or "").strip() != str(user.get("uid") or "").strip():
         raise HTTPException(status_code=403, detail="Load is not assigned to you")
 
     # Minimal state-machine guard: delivery should come after pickup/in-transit.
@@ -909,33 +978,15 @@ async def driver_complete_delivery(
     except Exception:
         pass
 
-    # Require a real POD file upload before delivery completion.
-    # This prevents completing delivery with only an ePOD marker (e.g. url='epod:...') and no actual POD document.
+    # Decode receiver signature (required).
     try:
-        pod_ok = False
-        driver_uid = str(user.get("uid") or "").strip()
-        firestore_timeout_s = float(getattr(settings, "FIRESTORE_JOB_TIMEOUT_SECONDS", 8) or 8)
-        snaps = list(
-            db.collection("loads").document(str(load_id)).collection("documents").where("kind", "==", "POD").stream(timeout=firestore_timeout_s)
-        )
-        for sdoc in snaps:
-            d = sdoc.to_dict() or {}
-            if not d.get("storage_path"):
-                continue
-
-            # Enforce responsibility: the driver completing delivery must have uploaded the POD.
-            uploaded_by_uid = str(d.get("uploaded_by_uid") or "").strip()
-            uploaded_by_role = str(d.get("uploaded_by_role") or "").strip().lower()
-            if driver_uid and (uploaded_by_uid == driver_uid or uploaded_by_role == "driver"):
-                pod_ok = True
-                break
-        if not pod_ok:
-            raise HTTPException(status_code=400, detail="Driver must upload POD document before completing delivery")
+        receiver_sig_png, receiver_ct = decode_data_url_base64(req.receiver_signature_data_url)
+        if "png" not in (receiver_ct or "").lower():
+            raise HTTPException(status_code=400, detail="Receiver signature must be a PNG data URL")
     except HTTPException:
         raise
     except Exception:
-        # If we cannot check docs (e.g. transient Firestore issues), fail closed.
-        raise HTTPException(status_code=500, detail="Unable to verify POD document (timeout or connectivity). Try again")
+        raise HTTPException(status_code=400, detail="Invalid receiver signature data")
 
     # Delivery checks (mock-friendly): enforce only when we have enough info.
     delivered_ts = float(req.delivered_at) if req.delivered_at is not None else now_ts()
@@ -999,6 +1050,71 @@ async def driver_complete_delivery(
             background_tasks.add_task(_bg_upload_delivery_signature)
     except Exception:
         pass
+
+    # Generate and store POD as a separate document derived from the BOL.
+    try:
+        bol_storage_path = None
+        firestore_timeout_s = float(getattr(settings, "FIRESTORE_JOB_TIMEOUT_SECONDS", 8) or 8)
+        snaps = list(
+            db.collection("loads").document(str(load_id)).collection("documents").where("kind", "==", "BOL").stream(timeout=firestore_timeout_s)
+        )
+        # Pick the newest storage-backed BOL.
+        snaps.sort(key=lambda s: float((s.to_dict() or {}).get("created_at") or (s.to_dict() or {}).get("uploaded_at") or 0.0), reverse=True)
+        for sdoc in snaps:
+            d = sdoc.to_dict() or {}
+            sp = str(d.get("storage_path") or "").strip()
+            if sp:
+                bol_storage_path = sp
+                break
+        if not bol_storage_path:
+            raise HTTPException(status_code=400, detail="BOL document not found to generate POD")
+
+        try:
+            bol_bytes = bucket.blob(bol_storage_path).download_as_bytes()
+        except Exception as e:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Unable to fetch BOL from Cloud Storage to generate POD. "
+                    "This is usually caused by Storage/billing configuration issues. "
+                    f"Error: {e}"
+                ),
+            )
+        pod_pdf = stamp_pod_from_bol_pdf_bytes(
+            bol_pdf_bytes=bol_bytes,
+            receiver_signature_png=receiver_sig_png,
+            receiver_name=str(req.receiver_name or "").strip() or None,
+            delivered_at=delivered_ts,
+            load_id=str(load_id),
+            load_number=str(load.get("load_number") or "").strip() or None,
+        )
+        pod_filename = f"pod_{load.get('load_number') or load_id}_{int(delivered_ts)}.pdf"
+        pod_record = upload_load_document_bytes(load=load, kind="POD", filename=pod_filename, data=pod_pdf, actor=user, source="epod_generated")
+
+        if not pod_record or not str(pod_record.get("storage_path") or "").strip():
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Unable to store POD document (Cloud Storage upload failed). "
+                    "Check Firebase/Google Cloud Storage configuration and billing status, then retry."
+                ),
+            )
+        try:
+            if pod_record and pod_record.get("doc_id"):
+                db.collection("loads").document(str(load_id)).set(
+                    {
+                        "pod_doc_id": pod_record.get("doc_id"),
+                        "pod_storage_path": pod_record.get("storage_path"),
+                        "pod_uploaded_at": pod_record.get("uploaded_at"),
+                    },
+                    merge=True,
+                )
+        except Exception:
+            pass
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate POD from BOL: {e}")
 
     updates = {
         "status": "delivered",

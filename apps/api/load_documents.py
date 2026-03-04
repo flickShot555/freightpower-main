@@ -51,6 +51,10 @@ def _notify_payer_pod_uploaded(*, load: Dict[str, Any], doc: Dict[str, Any], act
         if str(doc.get("kind") or "").strip().upper() != "POD":
             return
 
+        # If the upload failed, do not notify.
+        if not str(doc.get("storage_path") or "").strip() and not str(doc.get("url") or "").strip():
+            return
+
         payer_uid, payer_role = normalize_payer_fields(load)
         if not payer_uid:
             return
@@ -166,7 +170,9 @@ def _can_access_load_documents(load: Dict[str, Any], uid: str, role: str) -> boo
     if role == "carrier" and assigned_carrier and assigned_carrier == uid:
         return True
 
-    assigned_driver = str(load.get("assigned_driver") or load.get("assigned_driver_id") or "").strip()
+    # Some load records (and older endpoints) use `driver_id` instead of the
+    # `assigned_driver` / `assigned_driver_id` fields.
+    assigned_driver = str(load.get("assigned_driver") or load.get("assigned_driver_id") or load.get("driver_id") or "").strip()
     if role == "driver" and assigned_driver and assigned_driver == uid:
         return True
 
@@ -271,6 +277,7 @@ def upload_load_document_bytes(
     content_type = _content_type_for_filename(filename)
     storage_path = _storage_path_for_load_doc(load_id, doc_id, filename)
     url: Optional[str] = None
+    uploaded_ok = False
 
     upload_timeout_s = float(getattr(settings, "STORAGE_UPLOAD_TIMEOUT_SECONDS", 10) or 10)
 
@@ -281,8 +288,13 @@ def upload_load_document_bytes(
         except TypeError:
             blob.upload_from_string(data, content_type=content_type)
         url = signed_download_url(storage_path, filename=filename, disposition="attachment", ttl_seconds=3600)
+        uploaded_ok = True
     except Exception:
         url = None
+        uploaded_ok = False
+
+    if not uploaded_ok:
+        storage_path = None
 
     record = {
         "doc_id": doc_id,
@@ -596,7 +608,7 @@ def ensure_bol_document(*, load_id: str, actor: Dict[str, Any]) -> Optional[Dict
 
     shipper_uid = str(load.get("created_by") or "").strip()
     carrier_uid = str(load.get("assigned_carrier") or load.get("assigned_carrier_id") or "").strip()
-    driver_uid = str(load.get("assigned_driver") or load.get("assigned_driver_id") or "").strip()
+    driver_uid = str(load.get("assigned_driver") or load.get("assigned_driver_id") or load.get("driver_id") or "").strip()
 
     shipper = _get_user_profile(shipper_uid) if shipper_uid else {"uid": shipper_uid or None}
     carrier = _get_user_profile(carrier_uid) if carrier_uid else {"uid": carrier_uid or None}
@@ -621,6 +633,116 @@ def ensure_bol_document(*, load_id: str, actor: Dict[str, Any]) -> Optional[Dict
         pass
 
     return record
+
+
+def stamp_bol_signatures_pdf_bytes(
+    *,
+    pdf_bytes: bytes,
+    shipper_signature_png: Optional[bytes] = None,
+    driver_signature_png: Optional[bytes] = None,
+    shipper_name: Optional[str] = None,
+    driver_name: Optional[str] = None,
+    shipper_signed_at: Optional[float] = None,
+    driver_signed_at: Optional[float] = None,
+) -> bytes:
+    """Embed shipper + driver signature PNG images into a BOL PDF.
+
+    Coordinates are aligned with the placeholders added by `generate_bol_pdf_bytes`.
+    """
+
+    if fitz is None:
+        raise RuntimeError("PyMuPDF (fitz) is not available")
+
+    def _fmt_ts(ts: Optional[float]) -> str:
+        try:
+            if ts is None:
+                return ""
+            return time.strftime("%Y-%m-%d %H:%M", time.localtime(float(ts)))
+        except Exception:
+            return ""
+
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    try:
+        page = doc[-1]
+
+        shipper_rect = fitz.Rect(54, 680, 280, 730)
+        driver_rect = fitz.Rect(330, 680, 558, 730)
+
+        if shipper_signature_png:
+            page.insert_image(shipper_rect, stream=shipper_signature_png, keep_proportion=True)
+        if driver_signature_png:
+            page.insert_image(driver_rect, stream=driver_signature_png, keep_proportion=True)
+
+        shipper_meta = " ".join([p for p in [shipper_name or "", _fmt_ts(shipper_signed_at)] if p]).strip()
+        driver_meta = " ".join([p for p in [driver_name or "", _fmt_ts(driver_signed_at)] if p]).strip()
+        if shipper_meta:
+            page.insert_text((54, 744), shipper_meta, fontsize=8)
+        if driver_meta:
+            page.insert_text((330, 744), driver_meta, fontsize=8)
+
+        return doc.tobytes()
+    finally:
+        doc.close()
+
+
+def stamp_pod_from_bol_pdf_bytes(
+    *,
+    bol_pdf_bytes: bytes,
+    receiver_signature_png: bytes,
+    receiver_name: Optional[str] = None,
+    delivered_at: Optional[float] = None,
+    load_id: Optional[str] = None,
+    load_number: Optional[str] = None,
+) -> bytes:
+    """Create a POD PDF as a separate copy derived from a BOL PDF.
+
+    The output keeps the original BOL pages intact and stamps receiver signature
+    onto the last page (POD copy) without overwriting the original BOL file.
+    """
+
+    if fitz is None:
+        raise RuntimeError("PyMuPDF (fitz) is not available")
+
+    def _fmt_ts(ts: Optional[float]) -> str:
+        try:
+            if ts is None:
+                return ""
+            return time.strftime("%Y-%m-%d %H:%M", time.localtime(float(ts)))
+        except Exception:
+            return ""
+
+    doc = fitz.open(stream=bol_pdf_bytes, filetype="pdf")
+    try:
+        # Stamp on last page.
+        page = doc[-1]
+
+        # Place receiver signature in the lower area to avoid clobbering header tables.
+        # (The BOL generator doesn't currently reserve a dedicated receiver slot.)
+        x = 54
+        y = 600
+        page.insert_text((x, y), "PROOF OF DELIVERY (POD)", fontsize=14)
+        y += 18
+        if load_number or load_id:
+            page.insert_text((x, y), f"Load: {str(load_number or load_id or '').strip()}", fontsize=9)
+            y += 12
+        if receiver_name:
+            page.insert_text((x, y), f"Receiver: {str(receiver_name).strip()}", fontsize=9)
+            y += 12
+        if delivered_at is not None:
+            page.insert_text((x, y), f"Delivered At: {_fmt_ts(delivered_at)}", fontsize=9)
+            y += 16
+
+        page.insert_text((x, y), "Receiver Signature:", fontsize=10)
+        sig_rect = fitz.Rect(x, y + 8, x + 260, y + 78)
+        page.insert_image(sig_rect, stream=receiver_signature_png, keep_proportion=True)
+
+        meta = " ".join([p for p in [str(receiver_name or "").strip(), _fmt_ts(delivered_at)] if p]).strip()
+        if meta:
+            page.insert_text((x, y + 90), meta, fontsize=8)
+
+        return doc.tobytes()
+    finally:
+        doc.close()
 
 
 @router.post("/loads/{load_id}/documents/generate-bol")
@@ -674,7 +796,7 @@ async def generate_bol(load_id: str, user: Dict[str, Any] = Depends(get_current_
                 "participants": {
                     "shipper": snapshot_user(str(load.get("created_by") or "")),
                     "carrier": snapshot_user(str(load.get("assigned_carrier") or load.get("assigned_carrier_id") or "")),
-                    "driver": snapshot_user(str(load.get("assigned_driver") or load.get("assigned_driver_id") or "")),
+                    "driver": snapshot_user(str(load.get("assigned_driver") or load.get("assigned_driver_id") or load.get("driver_id") or "")),
                 },
                 "documents_index": {"BOL": {"doc_id": record.get("doc_id"), "uploaded_at": record.get("uploaded_at"), "source": record.get("source")}},
             },
@@ -878,7 +1000,7 @@ async def upload_load_document(
         # POD is submitted by the assigned driver as proof at delivery.
         if role != "driver":
             raise HTTPException(status_code=403, detail="Only the assigned driver can upload POD")
-        assigned_driver = str(load.get("assigned_driver") or load.get("assigned_driver_id") or "").strip()
+        assigned_driver = str(load.get("assigned_driver") or load.get("assigned_driver_id") or load.get("driver_id") or "").strip()
         if assigned_driver and uid and assigned_driver != uid:
             raise HTTPException(status_code=403, detail="Load is not assigned to you")
         # Keep order: POD should only happen after pickup/in transit.
@@ -950,7 +1072,7 @@ async def upload_load_document(
                 "participants": {
                     "shipper": snapshot_user(str(load.get("created_by") or "")),
                     "carrier": snapshot_user(str(load.get("assigned_carrier") or load.get("assigned_carrier_id") or "")),
-                    "driver": snapshot_user(str(load.get("assigned_driver") or load.get("assigned_driver_id") or "")),
+                    "driver": snapshot_user(str(load.get("assigned_driver") or load.get("assigned_driver_id") or load.get("driver_id") or "")),
                 },
                 "documents_index": {
                     kind_upper: {
