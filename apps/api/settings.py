@@ -40,6 +40,10 @@ class Settings(BaseSettings):
         default=(os.getenv("ENABLE_MESSAGE_EMAIL_NOTIFICATIONS", "false").strip().lower() == "true")
     )
 
+    # If true, backend will send Firebase Cloud Messaging (FCM) push notifications.
+    # Used for background/offline notifications (web/mobile).
+    ENABLE_FCM: bool = Field(default=(os.getenv("ENABLE_FCM", "false").strip().lower() == "true"))
+
     # If true, backend can send invoice emails (with PDF attachment) via SMTP.
     ENABLE_INVOICE_EMAILS: bool = Field(default=(os.getenv("ENABLE_INVOICE_EMAILS", "false").strip().lower() == "true"))
 

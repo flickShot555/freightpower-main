@@ -1,8 +1,15 @@
 import firebase_admin
 from firebase_admin import credentials, firestore, storage
 import os
+from pathlib import Path
+import dotenv
 from typing import Any, Dict
 from datetime import timedelta
+
+# Always load apps/.env (same behavior as apps/api/settings.py) so emulator/proxy
+# vars work regardless of where the process is started from.
+_APPS_DIR = Path(__file__).resolve().parents[1]
+dotenv.load_dotenv(dotenv_path=_APPS_DIR / ".env", override=False)
 
 # Initialize Firebase only once
 if not firebase_admin._apps:

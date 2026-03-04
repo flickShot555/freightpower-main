@@ -10,12 +10,16 @@ import uuid
 import hashlib
 import secrets
 import smtplib
+import os
 from typing import Optional, Dict, Any
 from functools import wraps
 import httpx
 from pydantic import BaseModel, EmailStr
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+
+from google.api_core import retry as g_retry
+from google.api_core.exceptions import DeadlineExceeded, ResourceExhausted, ServiceUnavailable
 
 # Use relative imports
 from .database import db, log_action, record_profile_update
@@ -53,6 +57,11 @@ async def _to_thread(fn, timeout_s: float = 25.0):
 # These are best-effort and process-local (fine for single-instance dev).
 _TOKEN_CACHE: dict[str, tuple[float, dict]] = {}
 _USER_CACHE: dict[str, tuple[float, dict]] = {}
+
+# Firestore SDK retries can mask the real error (e.g. quota exceeded) and also
+# cause request handlers to time out. For auth/profile reads we prefer to fail
+# fast with a clear error.
+_NO_RETRY = g_retry.Retry(predicate=lambda exc: False)
 
 
 def _cache_get(cache: dict, key: str):
@@ -1005,14 +1014,39 @@ async def get_current_user(
         user_data = _cache_get(_USER_CACHE, uid)
         user_doc = None
         if not user_data:
-            user_doc = await _to_thread(user_ref.get, timeout_s=25.0)
+            # Fail fast (no SDK retries) so callers see the underlying Firestore error.
+            user_doc = await _to_thread(lambda: user_ref.get(retry=_NO_RETRY, timeout=10.0), timeout_s=12.0)
         
             if not user_doc.exists:
-                # Treat as unauthorized so clients can cleanly log out.
-                raise HTTPException(status_code=401, detail="Account deleted or profile missing")
+                # In local dev with the Firestore emulator, the DB starts empty.
+                # Auto-create a minimal profile so authenticated requests can proceed.
+                if os.getenv("FIRESTORE_EMULATOR_HOST"):
+                    email = (decoded_token.get("email") or "").strip().lower()
+                    now = time.time()
+                    seed = {
+                        "uid": uid,
+                        "email": email,
+                        "role": "carrier",
+                        "is_verified": bool(decoded_token.get("email_verified")),
+                        "email_verified": bool(decoded_token.get("email_verified")),
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                    await _to_thread(lambda: user_ref.set(seed, merge=True), timeout_s=12.0)
+                    user_data = seed
+                else:
+                    # Treat as unauthorized so clients can cleanly log out.
+                    raise HTTPException(status_code=401, detail="Account deleted or profile missing")
 
-            user_data = user_doc.to_dict()
-            _cache_set(_USER_CACHE, uid, user_data, ttl_s=15.0)
+            if not user_data:
+                user_data = user_doc.to_dict()
+            # Authenticated clients often poll multiple endpoints; keeping a slightly
+            # longer cache here dramatically reduces Firestore reads.
+            _cache_set(_USER_CACHE, uid, user_data, ttl_s=60.0)
+
+        # Ensure uid is always present (some callers do user['uid']).
+        if isinstance(user_data, dict):
+            user_data.setdefault("uid", uid)
         
         # --- AUTO-VERIFY EMAIL ---
         # If Firebase says email is verified, but DB says unverified -> Update DB
@@ -1029,7 +1063,7 @@ async def get_current_user(
             )
             user_data['is_verified'] = True
             user_data['email_verified'] = True
-            _cache_set(_USER_CACHE, uid, user_data, ttl_s=15.0)
+            _cache_set(_USER_CACHE, uid, user_data, ttl_s=60.0)
             log_action(uid, "VERIFICATION", "User verified via Email Link")
 
         # --- ENFORCE VERIFICATION ---
@@ -1043,7 +1077,7 @@ async def get_current_user(
         if "role" not in user_data:
             user_data["role"] = "carrier"
             await _to_thread(lambda: user_ref.update({"role": "carrier"}), timeout_s=25.0)
-            _cache_set(_USER_CACHE, uid, user_data, ttl_s=15.0)
+            _cache_set(_USER_CACHE, uid, user_data, ttl_s=60.0)
         
         # Best-effort admin session enforcement + tracking.
         # Only enforce if the client sent X-Session-Id (keeps older clients working).
@@ -1082,6 +1116,24 @@ async def get_current_user(
 
         return user_data
         
+    except ResourceExhausted as e:
+        # Firestore quota exceeded (reads/writes) or project is rate-limited.
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "Firestore quota exceeded (429). Your Firebase/GCP project is being rate-limited. "
+                "Check Firestore quotas/billing for the service account project, reduce polling, "
+                "or switch to the emulator for local dev."
+            ),
+        )
+    except (ServiceUnavailable, DeadlineExceeded) as e:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Firestore service unavailable or deadline exceeded. This usually means transient Google API issues "
+                "or blocked network/proxy. Try again and verify outbound access to Google APIs."
+            ),
+        )
     except asyncio.TimeoutError:
         raise HTTPException(
             status_code=503,

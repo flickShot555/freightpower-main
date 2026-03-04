@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import '../../styles/carrier/Messaging.css';
 import { getJson, openEventSource, postJson } from '../../api/http';
-import { AUTO_REFRESH_MS } from '../../constants/refresh';
 
 function initials(value) {
   const s = String(value || '').trim();
@@ -207,7 +206,6 @@ export default function Messaging({ initialThreadId = null } = {}) {
               if (!next.find(m => m.id === payload.message.id)) next.push(payload.message);
               return next;
             });
-            refreshThreads().catch(() => {});
             // If user is currently viewing this thread, mark it read.
             postJson(`/messaging/threads/${thread.id}/read`, {}).then(() => refreshUnread().catch(() => {})).catch(() => {});
           }
@@ -227,9 +225,7 @@ export default function Messaging({ initialThreadId = null } = {}) {
     setMessage('');
     await postJson(`/messaging/threads/${selectedThread.id}/messages`, { text }, { timeoutMs: 30000 });
     postJson(`/messaging/threads/${selectedThread.id}/read`, {}).catch(() => {});
-    await refreshThreads();
     refreshUnread().catch(() => {});
-    await selectThread({ ...selectedThread });
   };
 
   useEffect(() => {
@@ -318,24 +314,32 @@ export default function Messaging({ initialThreadId = null } = {}) {
           if (cancelled) return;
           try {
             const payload = JSON.parse(evt.data);
-            if (payload?.type !== 'threads' || !Array.isArray(payload.threads)) return;
-            const incoming = payload.threads;
-            setThreads((prev) => {
-              const map = new Map((prev || []).map(t => [t.id, t]));
-              incoming.forEach((t) => {
-                if (!t?.id) return;
-                map.set(t.id, { ...(map.get(t.id) || {}), ...t });
+            if (payload?.type === 'threads' && Array.isArray(payload.threads)) {
+              const incoming = payload.threads;
+              setThreads((prev) => {
+                const map = new Map((prev || []).map(t => [t.id, t]));
+                incoming.forEach((t) => {
+                  if (!t?.id) return;
+                  map.set(t.id, { ...(map.get(t.id) || {}), ...t });
+                });
+                const out = Array.from(map.values());
+                out.sort((a, b) => Number(b.updated_at || 0) - Number(a.updated_at || 0));
+                return out;
               });
-              const out = Array.from(map.values());
-              out.sort((a, b) => Number(b.updated_at || 0) - Number(a.updated_at || 0));
-              return out;
-            });
 
-            // Debounced unread refresh (keeps badges in sync)
-            if (unreadRefreshTimerRef.current) clearTimeout(unreadRefreshTimerRef.current);
-            unreadRefreshTimerRef.current = setTimeout(() => {
-              refreshUnread().catch(() => {});
-            }, 400);
+              if (unreadRefreshTimerRef.current) clearTimeout(unreadRefreshTimerRef.current);
+              unreadRefreshTimerRef.current = setTimeout(() => {
+                refreshUnread().catch(() => {});
+              }, 400);
+              return;
+            }
+
+            if (payload?.type === 'unread_changed') {
+              if (unreadRefreshTimerRef.current) clearTimeout(unreadRefreshTimerRef.current);
+              unreadRefreshTimerRef.current = setTimeout(() => {
+                refreshUnread().catch(() => {});
+              }, 250);
+            }
           } catch {
             // ignore
           }
@@ -350,23 +354,73 @@ export default function Messaging({ initialThreadId = null } = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Poll admin notifications so broadcasts show up without hard refresh
+  // Real-time admin broadcasts via SSE (replaces interval polling)
   useEffect(() => {
-    let alive = true;
-    const intervalId = setInterval(() => {
-      refreshAdminThreads().catch(() => {});
-      refreshUnread().catch(() => {});
-      if (selectedThread?.kind === 'admin_channel') {
-        getJson(`/messaging/notifications/channels/${selectedThread.channel_id}/messages?limit=200`)
-          .then((data) => { if (alive) setMessages(data.messages || []); })
-          .catch(() => {});
+    let cancelled = false;
+    let es;
+    (async () => {
+      try {
+        const since = (adminThreads || []).reduce((m, t) => Math.max(m, Number(t.last_message_at || 0)), 0);
+        es = await openEventSource('/messaging/notifications/stream', { since });
+        es.onmessage = (evt) => {
+          if (cancelled) return;
+          try {
+            const payload = JSON.parse(evt.data);
+            if (payload?.type !== 'admin_channel_message') return;
+            const channelId = String(payload.channel_id || '').trim();
+            if (!channelId) return;
+
+            const msg = payload.message || null;
+            const lastAt = Number(payload?.channel?.last_message_at || msg?.created_at || 0);
+            const last = payload?.channel?.last_message || (msg ? { text: msg.text, title: msg.title, sender_role: msg.sender_role } : null);
+            const lastText = last
+              ? (last.title ? `${last.title}: ${last.text || ''}` : (last.text || ''))
+              : '';
+
+            setAdminThreads((prev) => {
+              const map = new Map((prev || []).map(t => [t.id, t]));
+              const key = `admin:${channelId}`;
+              const existing = map.get(key) || { id: key, kind: 'admin_channel', channel_id: channelId, title: channelId, display_title: channelId, pinned: true };
+              map.set(key, {
+                ...existing,
+                last_message_at: lastAt || existing.last_message_at || null,
+                last_message: last ? { text: lastText } : (existing.last_message || null),
+              });
+              const out = Array.from(map.values());
+              out.sort((a, b) => (b.last_message_at || 0) - (a.last_message_at || 0));
+              return out;
+            });
+
+            if (selectedThread?.kind === 'admin_channel' && selectedThread.channel_id === channelId && msg?.id) {
+              setMessages((prev) => {
+                const next = [...(prev || [])];
+                if (!next.find(m => m.id === msg.id)) next.push(msg);
+                next.sort((a, b) => Number(a?.created_at || 0) - Number(b?.created_at || 0));
+                return next;
+              });
+            }
+
+            if (unreadRefreshTimerRef.current) clearTimeout(unreadRefreshTimerRef.current);
+            unreadRefreshTimerRef.current = setTimeout(() => {
+              refreshUnread().catch(() => {});
+            }, 300);
+          } catch {
+            // ignore
+          }
+        };
+      } catch {
+        // ignore
       }
-    }, AUTO_REFRESH_MS);
+    })();
+
     return () => {
-      alive = false;
-      clearInterval(intervalId);
+      cancelled = true;
+      if (es) {
+        try { es.close(); } catch { /* ignore */ }
+      }
     };
-  }, [selectedThread]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedThread?.kind, selectedThread?.channel_id, adminThreads.length]);
 
   // Handle selecting a chat (mobile: show chat screen)
   const handleSelectChat = (chat) => {

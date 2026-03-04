@@ -13,6 +13,7 @@ import {
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { clearSessionId } from "../utils/session";
+import { ensureFcmRegistered } from "../fcm";
 
 const AuthContext = React.createContext();
 
@@ -317,6 +318,12 @@ export function AuthProvider({ children }) {
     });
     return unsubscribe;
   }, []);
+
+  // Best-effort push registration (web): lets Firebase notify the app about new messages.
+  useEffect(() => {
+    if (!currentUser) return;
+    ensureFcmRegistered().catch(() => {});
+  }, [currentUser]);
 
   const value = {
     currentUser,

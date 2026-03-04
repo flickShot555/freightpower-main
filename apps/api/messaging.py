@@ -5,7 +5,7 @@ import json
 import smtplib
 import time
 import uuid
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -21,6 +21,7 @@ from firebase_admin import messaging as fcm
 
 from .auth import get_current_user, require_admin
 from .database import db, log_action
+from .realtime import hub as realtime_hub
 from .settings import settings
 
 
@@ -838,6 +839,55 @@ def _send_push(tokens: List[str], title: str, body: str) -> Dict[str, Any]:
     return {"attempted": attempted, "success": success, "failure": failure}
 
 
+def _topic_for_uid(uid: str) -> str:
+    # Topic names allow: [a-zA-Z0-9-_.~%]
+    safe_uid = quote(str(uid or "").strip(), safe="")
+    return f"uid_{safe_uid}" if safe_uid else "uid_unknown"
+
+
+def _topic_for_role(role: str) -> str:
+    safe_role = quote(str(role or "").strip().lower(), safe="")
+    return f"role_{safe_role}" if safe_role else "role_unknown"
+
+
+def _send_push_to_topic(topic: str, title: str, body: str, data: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    if not topic:
+        return {"attempted": 0, "success": 0, "failure": 0}
+    try:
+        msg = fcm.Message(
+            topic=topic,
+            notification=fcm.Notification(title=title, body=body),
+            data={k: str(v) for k, v in (data or {}).items()},
+        )
+        fcm.send(msg)
+        return {"attempted": 1, "success": 1, "failure": 0}
+    except Exception as e:
+        print(f"FCM topic push error: {e}")
+        return {"attempted": 1, "success": 0, "failure": 1}
+
+
+def _send_push_to_topics(topics: List[str], title: str, body: str, data: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    topics = [str(t or "").strip() for t in (topics or [])]
+    topics = [t for t in topics if t]
+    if not topics:
+        return {"attempted": 0, "success": 0, "failure": 0}
+
+    messages = [
+        fcm.Message(
+            topic=t,
+            notification=fcm.Notification(title=title, body=body),
+            data={k: str(v) for k, v in (data or {}).items()},
+        )
+        for t in topics
+    ]
+    try:
+        resp = fcm.send_all(messages)
+        return {"attempted": len(messages), "success": int(resp.success_count), "failure": int(resp.failure_count)}
+    except Exception as e:
+        print(f"FCM send_all error: {e}")
+        return {"attempted": len(messages), "success": 0, "failure": len(messages)}
+
+
 async def _get_user_from_query_token(token: str) -> Dict[str, Any]:
     token = str(token or "").strip()
     if not token:
@@ -1202,6 +1252,10 @@ async def mark_thread_read(thread_id: str, user: Dict[str, Any] = Depends(get_cu
         },
         merge=True,
     )
+    try:
+        await realtime_hub.publish_uid(uid, {"type": "unread_changed", "cursor": now})
+    except Exception:
+        pass
     return {"ok": True, "thread_id": thread_id, "last_read_at": now}
 
 
@@ -1667,6 +1721,38 @@ async def send_message(
 
     log_action(uid, "MESSAGE_SENT", f"Sent message in thread {thread_id}")
 
+    # Push real-time events to participants (no Firestore polling).
+    try:
+        member_uids = list(thread.get("member_uids") or [])
+        msg_with_id = {**msg, "id": msg_ref.id}
+        await realtime_hub.publish_uids(
+            member_uids,
+            {"type": "message", "thread_id": thread_id, "message": msg_with_id},
+        )
+        await realtime_hub.publish_uids(
+            member_uids,
+            {
+                "type": "threads",
+                "threads": [
+                    {
+                        "id": thread_id,
+                        "updated_at": now,
+                        "last_message": {
+                            "text": msg["text"],
+                            "sender_id": uid,
+                            "sender_role": msg.get("sender_role"),
+                        },
+                        "last_message_at": now,
+                    }
+                ],
+                "cursor": now,
+            },
+        )
+        await realtime_hub.publish_uids(member_uids, {"type": "unread_changed", "cursor": now})
+    except Exception:
+        # Best-effort; never fail sending a message due to realtime.
+        pass
+
     # Optional delayed email notifications (persistent):
     # Send an email ONLY if the message is still unread after N seconds.
     if getattr(settings, "ENABLE_MESSAGE_EMAIL_NOTIFICATIONS", False):
@@ -1691,6 +1777,33 @@ async def send_message(
             # Never fail sending a chat message due to email issues
             print(f"Delayed email notification queue error: {e}")
 
+    # Optional push notifications (FCM): best for background/offline users.
+    # Uses topic messaging to avoid Firestore token lookups.
+    if getattr(settings, "ENABLE_FCM", False):
+        try:
+            members = list(thread.get("member_uids") or [])
+            recipients = [m for m in members if m and m != uid]
+            if recipients:
+                sender_name = _sender_display_name(user)
+                thread_label = thread.get("title") or thread.get("display_title") or "Conversation"
+                body = (payload.text or "").strip()
+                if len(body) > 140:
+                    body = body[:140].rstrip() + "…"
+                topics = [_topic_for_uid(r) for r in recipients]
+                _send_push_to_topics(
+                    topics,
+                    title=f"{sender_name}: {thread_label}",
+                    body=body or "New message",
+                    data={
+                        "type": "chat_message",
+                        "thread_id": thread_id,
+                        "message_id": msg_ref.id,
+                        "sender_uid": str(uid),
+                    },
+                )
+        except Exception as e:
+            print(f"FCM message push error: {e}")
+
     return {"ok": True, "message": {**msg, "id": msg_ref.id}}
 
 
@@ -1712,32 +1825,52 @@ async def stream_messages(thread_id: str, token: str, since: float = 0.0):
 
     async def event_gen():
         cursor = float(since or 0.0)
-        # Keep connection alive; client auto-reconnects.
-        while True:
-            # Heartbeat
-            yield ": ping\n\n"
+        sub = await realtime_hub.subscribe(uid=uid, role=str(user.get("role") or ""))
+        try:
+            # One-time catch-up for reconnects.
+            if cursor:
+                try:
+                    q = (
+                        db.collection("conversations")
+                        .document(thread_id)
+                        .collection("messages")
+                        .where("created_at", ">", cursor)
+                        .order_by("created_at", direction=firestore.Query.ASCENDING)
+                        .limit(200)
+                    )
+                    snaps = await _fs_to_thread(lambda: list(q.stream()), timeout_s=10.0)
+                    for snap in snaps:
+                        d = snap.to_dict() or {}
+                        d["id"] = snap.id
+                        cursor = max(cursor, float(d.get("created_at") or 0.0))
+                        payload = {"type": "message", "thread_id": thread_id, "message": d}
+                        yield f"data: {json.dumps(payload)}\n\n"
+                except Exception:
+                    # If Firestore is slow/unavailable/quota-blocked, still allow live push.
+                    pass
 
-            q = (
-                db.collection("conversations")
-                .document(thread_id)
-                .collection("messages")
-                .where("created_at", ">", cursor)
-                .order_by("created_at", direction=firestore.Query.ASCENDING)
-                .limit(50)
-            )
+            last_ping = 0.0
+            while True:
+                try:
+                    evt = await asyncio.wait_for(sub.queue.get(), timeout=15.0)
+                except asyncio.TimeoutError:
+                    evt = None
 
-            new_items: List[Dict[str, Any]] = []
-            for snap in q.stream():
-                d = snap.to_dict() or {}
-                d["id"] = snap.id
-                new_items.append(d)
+                now = _now()
+                if evt is None:
+                    if now - last_ping > 15:
+                        last_ping = now
+                        yield "event: ping\ndata: {}\n\n"
+                    continue
 
-            for item in new_items:
-                cursor = max(cursor, float(item.get("created_at") or 0.0))
-                payload = {"type": "message", "thread_id": thread_id, "message": item}
-                yield f"data: {json.dumps(payload)}\n\n"
+                if evt.get("type") != "message":
+                    continue
+                if evt.get("thread_id") != thread_id:
+                    continue
 
-            await asyncio.sleep(2)
+                yield f"data: {json.dumps(evt)}\n\n"
+        finally:
+            await realtime_hub.unsubscribe(sub)
 
     return StreamingResponse(event_gen(), media_type="text/event-stream")
 
@@ -1762,56 +1895,40 @@ async def stream_thread_updates(token: str, since: float = 0.0, limit: int = 200
     if role not in {"carrier", "driver", "shipper"}:
         raise HTTPException(status_code=403, detail="Messaging not enabled for this role")
 
-    limit = max(1, min(int(limit or 200), 500))
+    _ = max(1, min(int(limit or 200), 500))
     cursor = float(since or 0.0)
 
     async def event_gen():
         nonlocal cursor
-        last_ping = 0.0
-        while True:
-            try:
-                q = (
-                    db.collection("conversations")
-                    .where("member_uids", "array_contains", uid)
-                    .order_by("updated_at", direction=firestore.Query.DESCENDING)
-                    .limit(limit)
-                )
-                snaps = await _fs_to_thread(lambda: list(q.stream()), timeout_s=10.0)
-            except Exception:
+        sub = await realtime_hub.subscribe(uid=uid, role=str(role or ""))
+        try:
+            last_ping = 0.0
+            while True:
                 try:
-                    q = db.collection("conversations").where("member_uids", "array_contains", uid).limit(limit)
-                    snaps = await _fs_to_thread(lambda: list(q.stream()), timeout_s=10.0)
-                except Exception:
-                    snaps = []
+                    evt = await asyncio.wait_for(sub.queue.get(), timeout=15.0)
+                except asyncio.TimeoutError:
+                    evt = None
 
-            updated: List[Dict[str, Any]] = []
-            max_seen = cursor
-            for snap in snaps:
-                d = snap.to_dict() or {}
-                d["id"] = snap.id
-                upd = float(d.get("updated_at") or d.get("last_message_at") or 0.0)
-                if upd <= cursor:
-                    continue
-                max_seen = max(max_seen, upd)
-                try:
-                    updated.append(_thread_view_for_user(user, d))
-                except Exception:
-                    # best-effort; skip malformed docs
+                now = _now()
+                if evt is None:
+                    if now - last_ping > 15:
+                        last_ping = now
+                        yield "event: ping\ndata: {}\n\n"
                     continue
 
-            if updated:
-                # Send a single payload containing all updates since cursor.
-                payload = {"type": "threads", "threads": updated, "cursor": max_seen}
-                cursor = max_seen
-                yield f"data: {json.dumps(payload)}\n\n"
+                evt_type = evt.get("type")
+                if evt_type not in {"threads", "unread_changed"}:
+                    continue
 
-            # Heartbeat to keep connections alive.
-            now = _now()
-            if now - last_ping > 15:
-                last_ping = now
-                yield "event: ping\ndata: {}\n\n"
+                evt_cursor = float(evt.get("cursor") or 0.0)
+                if evt_cursor and evt_cursor <= cursor:
+                    continue
+                if evt_cursor:
+                    cursor = max(cursor, evt_cursor)
 
-            await asyncio.sleep(3)
+                yield f"data: {json.dumps(evt)}\n\n"
+        finally:
+            await realtime_hub.unsubscribe(sub)
 
     return StreamingResponse(event_gen(), media_type="text/event-stream")
 
@@ -1903,6 +2020,10 @@ async def mark_channel_read(channel_id: str, user: Dict[str, Any] = Depends(get_
         },
         merge=True,
     )
+    try:
+        await realtime_hub.publish_uid(uid, {"type": "unread_changed", "cursor": now})
+    except Exception:
+        pass
     return {"ok": True, "channel_id": channel_id, "last_read_at": now}
 
 
@@ -1992,20 +2113,90 @@ async def admin_send_notification(
 
     push_result = {"attempted": 0, "success": 0, "failure": 0}
     if getattr(settings, "ENABLE_FCM", False):
-        # Fetch all tokens by role
-        token_q = db.collection("device_tokens")
-        if target_role != "all":
-            token_q = token_q.where("role", "==", target_role)
-        tokens = []
-        for s in token_q.stream():
-            d = s.to_dict() or {}
-            t = d.get("token")
-            if t:
-                tokens.append(t)
-        push_result = _send_push(tokens, payload.title or "FreightPower", payload.text.strip())
+        # Prefer topic messaging to avoid querying tokens.
+        topic = _topic_for_role("all" if target_role == "all" else target_role)
+        push_result = _send_push_to_topic(topic, payload.title or "FreightPower", payload.text.strip(), data={"type": "admin_broadcast"})
 
     log_action(user.get("uid"), "ADMIN_NOTIFICATION_SENT", f"Channel={channel_id}")
+
+    # Push to connected clients (avoids frontend polling).
+    try:
+        evt = {
+            "type": "admin_channel_message",
+            "channel_id": channel_id,
+            "message": {**msg, "id": ref.id},
+            "channel": {
+                "id": channel_id,
+                "last_message_at": now,
+                "last_message": {
+                    "text": msg["text"],
+                    "title": msg.get("title"),
+                    "sender_role": msg.get("sender_role"),
+                },
+            },
+            "cursor": now,
+        }
+        if target_role == "all":
+            await realtime_hub.broadcast(evt)
+        else:
+            await realtime_hub.publish_roles([target_role], evt)
+    except Exception:
+        pass
+
     return {"ok": True, "message": {**msg, "id": ref.id}, "push": push_result}
+
+
+@router.get("/notifications/stream")
+async def stream_admin_notifications(token: str, since: float = 0.0):
+    """SSE stream of admin channel notifications for the current user.
+
+    Note: EventSource cannot send Authorization headers, so we accept an ID token
+    as a query param. Use only over HTTPS in production.
+    """
+
+    user = await _get_user_from_query_token(token)
+    uid = user.get("uid")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    role = str(user.get("role") or "")
+    if role not in {"carrier", "driver", "shipper", "broker", "admin", "super_admin"}:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    cursor = float(since or 0.0)
+
+    async def event_gen():
+        nonlocal cursor
+        sub = await realtime_hub.subscribe(uid=uid, role=role)
+        try:
+            last_ping = 0.0
+            while True:
+                try:
+                    evt = await asyncio.wait_for(sub.queue.get(), timeout=15.0)
+                except asyncio.TimeoutError:
+                    evt = None
+
+                now = _now()
+                if evt is None:
+                    if now - last_ping > 15:
+                        last_ping = now
+                        yield "event: ping\ndata: {}\n\n"
+                    continue
+
+                if evt.get("type") != "admin_channel_message":
+                    continue
+
+                evt_cursor = float(evt.get("cursor") or 0.0)
+                if evt_cursor and evt_cursor <= cursor:
+                    continue
+                if evt_cursor:
+                    cursor = max(cursor, evt_cursor)
+
+                yield f"data: {json.dumps(evt)}\n\n"
+        finally:
+            await realtime_hub.unsubscribe(sub)
+
+    return StreamingResponse(event_gen(), media_type="text/event-stream")
 
 
 # -----------------------------
@@ -2036,5 +2227,20 @@ async def register_device_token(
         },
         merge=True,
     )
+
+    # Best-effort: topic subscriptions so we can push without querying tokens.
+    # - uid topic: direct message pushes
+    # - role topic: admin broadcasts by role
+    # - role_all: admin broadcasts to everyone
+    if getattr(settings, "ENABLE_FCM", False):
+        try:
+            topics = [_topic_for_uid(uid), _topic_for_role(user.get("role") or ""), _topic_for_role("all")]
+            for t in topics:
+                try:
+                    fcm.subscribe_to_topic([token], t)
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     return {"ok": True}
